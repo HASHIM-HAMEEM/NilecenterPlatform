@@ -8257,14 +8257,34 @@
       grid-template-columns: 1fr;
     }
 
+    .auth-gateway,
+    .auth-login-panel {
+      order: 1;
+      align-content: start;
+    }
+
     .auth-brand-rail {
+      order: 2;
       position: relative;
       min-height: auto;
       padding: 24px;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 0.68fr);
+      align-items: center;
+      align-content: start;
+      gap: 18px;
+    }
+
+    .auth-brand-rail .auth-modern-logo {
+      grid-column: 1 / -1;
+    }
+
+    .auth-brand-copy {
+      max-width: none;
     }
 
     .auth-brand-copy h2 {
-      font-size: 30px;
+      font-size: clamp(26px, 5vw, 36px);
+      line-height: 1.05;
     }
 
     .auth-brand-copy p,
@@ -8275,6 +8295,7 @@
 
     .auth-calligraphy-panel {
       max-width: none;
+      min-height: 150px;
     }
 
     .auth-calligraphy-panel::after {
@@ -8288,9 +8309,52 @@
   }
 
   @media (max-width: 640px) {
+    .auth-modern-page {
+      min-height: 100svh;
+    }
+
     .auth-gateway,
     .auth-login-panel {
+      padding: 16px;
+    }
+
+    .auth-login-card {
       padding: 18px;
+      gap: 15px;
+    }
+
+    .auth-brand-rail {
+      grid-template-columns: 1fr;
+      padding: 16px;
+    }
+
+    .auth-brand-copy {
+      gap: 8px;
+    }
+
+    .auth-brand-copy > span {
+      font-size: 10px;
+    }
+
+    .auth-brand-copy h2 {
+      font-size: 24px;
+    }
+
+    .auth-calligraphy-panel {
+      min-height: 0;
+      padding: 12px;
+    }
+
+    .auth-calligraphy-panel::before {
+      font-size: 64px;
+    }
+
+    .auth-calligraphy-panel strong {
+      font-size: 26px;
+    }
+
+    .auth-calligraphy-panel p {
+      font-size: 12px;
     }
 
     .auth-gateway-copy h1 {
@@ -8309,6 +8373,10 @@
     .auth-login-options {
       display: grid;
       justify-items: start;
+    }
+
+    .auth-login-options select {
+      width: 100%;
     }
   }
 
@@ -8378,6 +8446,8 @@
     }
 
     .platform-breadcrumb {
+      grid-column: 1 / 3;
+      grid-row: 1;
       min-width: 0;
       flex: 0 1 auto;
       max-width: 190px;
@@ -8397,6 +8467,11 @@
       min-width: 0;
       max-width: none;
       flex: 1 1 100%;
+    }
+
+    .platform-topbar-actions {
+      grid-column: 3;
+      grid-row: 1;
     }
 
     .platform-language {
@@ -8596,6 +8671,11 @@
       margin-left: auto;
     }
 
+    .platform-menu-button {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
     .platform-topbar {
       top: auto;
       margin: 8px 10px 0;
@@ -8645,6 +8725,8 @@
     }
 
     .platform-breadcrumb {
+      grid-column: 2;
+      grid-row: 1;
       min-width: 0;
     }
 
@@ -8657,6 +8739,8 @@
     }
 
     .platform-topbar-actions {
+      grid-column: 3;
+      grid-row: 1;
       margin-left: auto;
     }
 
@@ -9247,11 +9331,7 @@
     }
 
     .platform-breadcrumb strong {
-      max-width: none;
-      overflow: visible;
-      overflow-wrap: anywhere;
-      text-overflow: clip;
-      white-space: normal;
+      display: none;
     }
 
     .platform-language {
