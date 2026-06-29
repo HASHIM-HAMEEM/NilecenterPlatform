@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import app from "./index";
+import app from "./index.js";
 
 type VercelCatchAllRequest = IncomingMessage & {
   query?: {

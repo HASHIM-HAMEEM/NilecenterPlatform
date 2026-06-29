@@ -3,17 +3,17 @@ import path from "node:path";
 import {
   applyPlatformWorkflowAction as applyWorkflowMutation,
   type PlatformWorkflowAction,
-} from "../client/src/lib/domain/actions";
-import { seedPlatformState } from "../client/src/lib/domain/seed";
+} from "../client/src/lib/domain/actions.js";
+import { seedPlatformState } from "../client/src/lib/domain/seed.js";
 import type {
   AttendanceStatus,
   CalendarEventType,
   CommunicationLog,
   Lead,
   PlatformState,
-} from "../client/src/lib/domain/types";
-import type { ServerSession } from "./auth";
-import { supabaseAdminRestFetch } from "./supabase";
+} from "../client/src/lib/domain/types.js";
+import type { ServerSession } from "./auth.js";
+import { supabaseAdminRestFetch } from "./supabase.js";
 
 const DATA_DIR = process.env.VERCEL ? "/tmp" : path.resolve(process.cwd(), ".local-data");
 const STATE_FILE = path.join(DATA_DIR, "platform-state.json");

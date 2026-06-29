@@ -1,5 +1,5 @@
-import { rolePermissions } from "../platformData";
-import type { PlatformState } from "./types";
+import { rolePermissions } from "../platformData.js";
+import type { PlatformState } from "./types.js";
 
 export const seedPlatformState: PlatformState = {
   users: [

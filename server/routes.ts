@@ -1,9 +1,9 @@
 import express, { type Express } from "express";
-import { attachSession, endRequestSession, getRequestSession, isServerRole, signIn } from "./auth";
-import { loadServerEnv } from "./env";
-import { getPlatformBackendState, savePlatformBackendRecord } from "./platformRecords";
-import { applyPlatformLearningAction, getPlatformStateSnapshot, parsePlatformLearningAction } from "./platformState";
-import { getSupabaseServerStatus } from "./supabase";
+import { attachSession, endRequestSession, getRequestSession, isServerRole, signIn } from "./auth.js";
+import { loadServerEnv } from "./env.js";
+import { getPlatformBackendState, savePlatformBackendRecord } from "./platformRecords.js";
+import { applyPlatformLearningAction, getPlatformStateSnapshot, parsePlatformLearningAction } from "./platformState.js";
+import { getSupabaseServerStatus } from "./supabase.js";
 
 export function registerApiRoutes(app: Express) {
   loadServerEnv();

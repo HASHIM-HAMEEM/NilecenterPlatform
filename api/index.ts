@@ -1,5 +1,5 @@
 import express from "express";
-import { registerApiRoutes } from "../server/routes";
+import { registerApiRoutes } from "../server/routes.js";
 
 const app = express();
 
