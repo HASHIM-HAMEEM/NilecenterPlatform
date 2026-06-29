@@ -7850,6 +7850,8 @@
 
   .auth-login-panel {
     justify-items: center;
+    align-content: start;
+    padding-top: clamp(36px, 11vh, 96px);
   }
 
   .auth-login-card {
@@ -8261,6 +8263,7 @@
     .auth-login-panel {
       order: 1;
       align-content: start;
+      padding-top: clamp(18px, 5vw, 32px);
     }
 
     .auth-brand-rail {
@@ -8305,6 +8308,29 @@
 
     .auth-calligraphy-panel strong {
       font-size: 30px;
+    }
+  }
+
+  @media (max-height: 760px) and (min-width: 981px) {
+    .auth-brand-rail {
+      align-content: start;
+      gap: 22px;
+      padding-top: 40px;
+      padding-bottom: 40px;
+    }
+
+    .auth-brand-copy {
+      gap: 10px;
+    }
+
+    .auth-brand-copy h2 {
+      font-size: clamp(32px, 4vw, 48px);
+    }
+
+    .auth-brand-copy p,
+    .auth-brand-stats,
+    .auth-moodle-link {
+      display: none;
     }
   }
 
