@@ -116,7 +116,7 @@ start_portal_qa_server() {
   fi
 
   printf 'Starting portal QA server at %s\n' "$base_url"
-  PORT="$port" NODE_ENV=production node dist/index.js >/tmp/nile-learn-portal-qa.log 2>&1 &
+  PORT="$port" NODE_ENV=production node dist-server/index.js >/tmp/nile-learn-portal-qa.log 2>&1 &
   QA_SERVER_PID="$!"
   wait_for_url "${base_url}/auth/login"
 }
