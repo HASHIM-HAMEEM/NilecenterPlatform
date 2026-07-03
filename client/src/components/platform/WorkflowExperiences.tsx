@@ -4173,12 +4173,16 @@ function AttendanceWorkflow({
     return sessionFilter === "saved" ? sessionSaved : !sessionSaved;
   });
   const sessionOptionKey = filteredSessions.map(session => session.id).join("|");
+  const defaultSession =
+    filteredSessions.find(item => !isAttendanceSessionSaved(state, item)) ??
+    filteredSessions[0];
+  const defaultSessionId = defaultSession?.id ?? "";
   const [selectedSessionId, setSelectedSessionId] = useState(
-    filteredSessions[0]?.id ?? ""
+    defaultSessionId
   );
   const session =
     filteredSessions.find(item => item.id === selectedSessionId) ??
-    filteredSessions[0];
+    defaultSession;
   const [statuses, setStatuses] = useState<Record<string, AttendanceStatus>>(
     {}
   );
@@ -4322,9 +4326,9 @@ function AttendanceWorkflow({
     setSelectedSessionId(current =>
       current && filteredSessions.some(item => item.id === current)
         ? current
-        : (filteredSessions[0]?.id ?? "")
+        : defaultSessionId
     );
-  }, [sessionOptionKey, sessionFilter]);
+  }, [defaultSessionId, sessionOptionKey, sessionFilter]);
 
   useEffect(() => {
     if (!selectedClass || !session) {
