@@ -108,4 +108,95 @@ describe("platform repository boundary", () => {
       attendanceSaved: true,
     });
   });
+
+  it("keeps workflow mutations successful when repository event logging fails", async () => {
+    let savedState: PlatformState | undefined;
+    const repository: PlatformRepository = {
+      readSnapshot: vi.fn(async () => ({
+        state: cloneSeed(),
+        persistence: "local",
+        syncedAt: "2026-07-04T00:00:00.000Z",
+      })),
+      writeSnapshot: vi.fn(async (state) => {
+        savedState = JSON.parse(JSON.stringify(state)) as PlatformState;
+        return "local";
+      }),
+      recordEvent: vi.fn(async () => {
+        throw new Error("event sink unavailable");
+      }),
+    };
+    restoreRepository = setPlatformStateRepository(repository);
+
+    const result = await applyPlatformWorkflowAction(
+      {
+        type: "attendance.save",
+        classGroupId: "class_ar_l3_a",
+        sessionId: "session_ar_live",
+        statuses: { stu_demo: "excused" },
+        notes: { stu_demo: "Event sink failure should not block snapshot save" },
+      },
+      sessionForTeacher(),
+    );
+
+    expect(repository.writeSnapshot).toHaveBeenCalledTimes(1);
+    expect(repository.recordEvent).toHaveBeenCalledTimes(1);
+    expect(result.result).toMatchObject({
+      action: "attendance.saved",
+      entityType: "AttendanceRecord",
+      entityId: "class_ar_l3_a",
+    });
+    expect(result.persistence).toBe("local");
+    expect(savedState?.attendance).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          classGroupId: "class_ar_l3_a",
+          sessionId: "session_ar_live",
+          studentId: "stu_demo",
+          status: "excused",
+        }),
+      ]),
+    );
+  });
+
+  it("records repository events with source persistence and server-owned request evidence", async () => {
+    const repository: PlatformRepository = {
+      readSnapshot: vi.fn(async () => ({
+        state: cloneSeed(),
+        persistence: "supabase",
+        syncedAt: "2026-07-04T00:00:00.000Z",
+      })),
+      writeSnapshot: vi.fn(async () => "local"),
+      recordEvent: vi.fn(async () => undefined),
+    };
+    restoreRepository = setPlatformStateRepository(repository);
+
+    await applyPlatformWorkflowAction(
+      {
+        type: "attendance.save",
+        classGroupId: "class_ar_l3_a",
+        sessionId: "session_ar_live",
+        statuses: { stu_demo: "present" },
+        notes: { stu_demo: "Payload evidence" },
+      },
+      sessionForTeacher(),
+    );
+
+    expect(repository.recordEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "attendance.saved",
+        actorId: "usr_teacher_demo",
+        entityType: "AttendanceRecord",
+        entityId: "class_ar_l3_a",
+        payload: expect.objectContaining({
+          sourcePersistence: "supabase",
+          request: expect.objectContaining({
+            type: "attendance.save",
+            actorId: "usr_teacher_demo",
+            classGroupId: "class_ar_l3_a",
+            sessionId: "session_ar_live",
+          }),
+        }),
+      }),
+    );
+  });
 });
