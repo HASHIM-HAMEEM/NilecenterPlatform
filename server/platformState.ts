@@ -13,6 +13,11 @@ import type {
   IntegrationStatus,
   Lead,
   PlatformState,
+  StaffAvailabilityStatus,
+  StaffPermissionScope,
+  StaffRole,
+  StudentEntrySource,
+  StudentStatus,
 } from "../client/src/lib/domain/types.js";
 import { roleOrder, rolePermissions, type Permission, type Role } from "../client/src/lib/platformData.js";
 import type { ServerSession } from "./auth.js";
@@ -80,6 +85,7 @@ function normalizeState(value: unknown): PlatformState {
     ...seed,
     ...stored,
     users: mergeById(seed.users, stored.users),
+    staffProfiles: mergeById(seed.staffProfiles, stored.staffProfiles),
     courseRuns: mergeById(seed.courseRuns, stored.courseRuns),
     classGroups: mergeById(seed.classGroups, stored.classGroups),
     events: mergeById(seed.events, stored.events),
@@ -232,13 +238,32 @@ function branchForInvoice(state: PlatformState, invoiceId: string) {
 }
 
 function teacherOwnsStudent(state: PlatformState, teacherUserId: string, studentId: string) {
-  const runIds = new Set(state.courseRuns.filter((item) => item.teacherId === teacherUserId).map((item) => item.id));
-  return state.enrollments.some((item) => item.studentId === studentId && runIds.has(item.courseRunId));
+  const classGroupIds = teacherClassGroupIds(state, teacherUserId);
+  return state.classGroups.some((item) => classGroupIds.has(item.id) && item.studentIds.includes(studentId)) ||
+    state.enrollments.some((item) => item.studentId === studentId && item.classGroupId && classGroupIds.has(item.classGroupId));
+}
+
+function teacherOwnsResource(state: PlatformState, teacherUserId: string, resourceId: string) {
+  const resource = state.resources.find((item) => item.id === resourceId);
+  const lesson = state.lessons.find((item) => item.id === resource?.lessonId);
+  const module = state.modules.find((item) => item.id === lesson?.moduleId);
+  return Boolean(module && state.courseRuns.some((item) => item.courseId === module.courseId && item.teacherId === teacherUserId));
 }
 
 function studentIdsForTeacher(state: PlatformState, teacherUserId: string) {
+  const classGroupIds = teacherClassGroupIds(state, teacherUserId);
+  const rosterIds = state.classGroups
+    .filter((item) => classGroupIds.has(item.id))
+    .flatMap((item) => item.studentIds);
+  const enrollmentIds = state.enrollments
+    .filter((item) => item.classGroupId && classGroupIds.has(item.classGroupId))
+    .map((item) => item.studentId);
+  return new Set([...rosterIds, ...enrollmentIds]);
+}
+
+function teacherClassGroupIds(state: PlatformState, teacherUserId: string) {
   const runIds = new Set(state.courseRuns.filter((item) => item.teacherId === teacherUserId).map((item) => item.id));
-  return new Set(state.enrollments.filter((item) => runIds.has(item.courseRunId)).map((item) => item.studentId));
+  return new Set(state.classGroups.filter((item) => runIds.has(item.courseRunId)).map((item) => item.id));
 }
 
 function studentIdsForBranch(state: PlatformState, branchId?: string) {
@@ -262,6 +287,18 @@ function hodOwnsStudent(state: PlatformState, session: ServerSession, studentId:
       .filter((courseId): courseId is string => Boolean(courseId)),
   );
   return Array.from(courseIds).some((courseId) => hodOwnsCourse(state, session, courseId));
+}
+
+function hodOwnsCertificate(state: PlatformState, session: ServerSession, certificateId: string) {
+  const certificate = state.certificates.find((item) => item.id === certificateId);
+  if (!certificate || !hodOwnsCourse(state, session, certificate.courseId) || !hodOwnsStudent(state, session, certificate.studentId)) {
+    return false;
+  }
+  return state.enrollments.some((enrollment) => {
+    if (enrollment.studentId !== certificate.studentId) return false;
+    const run = state.courseRuns.find((item) => item.id === enrollment.courseRunId);
+    return run?.courseId === certificate.courseId;
+  });
 }
 
 function canMessageRecipient(state: PlatformState, session: ServerSession, toUserId: string) {
@@ -359,6 +396,7 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "quiz.review",
       "attendance.save",
       "calendar.create",
+      "material.publish.update",
       "message.send",
       "quran.progress.update",
       "recitation.review",
@@ -367,9 +405,13 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
     ],
     registrar: [
       "lead.create",
+      "application.create",
       "placement.create",
       "placement.result.record",
       "lead.convert",
+      "application.convert",
+      "student.create",
+      "student.status.update",
       "enrollment.activate",
       "payment.record",
       "calendar.create",
@@ -387,6 +429,9 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "quiz.review",
       "certificate.approve",
       "certificate.issue",
+      "certificate.reject",
+      "curriculum.module.create",
+      "course.status.update",
       "message.send",
       "quran.progress.update",
       "recitation.review",
@@ -400,10 +445,23 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "message.send",
       "payment.record",
       "record.save",
+      "room.create",
+      "room.status.update",
       "notification.read",
       "report.preset.save",
     ],
     superadmin: [
+      "staff.user.create",
+      "lead.create",
+      "application.create",
+      "placement.create",
+      "placement.result.record",
+      "lead.convert",
+      "student.create",
+      "student.status.update",
+      "application.convert",
+      "enrollment.activate",
+      "payment.record",
       "user.create",
       "user.update",
       "permission.update",
@@ -411,7 +469,11 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "integration.status.update",
       "integration.local_check",
       "system.health_check",
+      "settings.save",
       "teacher.assign",
+      "course.status.update",
+      "room.create",
+      "room.status.update",
       "message.send",
       "record.save",
       "notification.read",
@@ -460,18 +522,27 @@ function assertScopedAction(state: PlatformState, action: PlatformWorkflowAction
       const submission = state.assignmentSubmissions.find((item) => item.id === action.submissionId);
       const assignment = state.assignments.find((item) => item.id === submission?.assignmentId);
       const run = state.courseRuns.find((item) => item.id === assignment?.courseRunId);
-      if (run?.teacherId !== session.userId) throw new Error("Teacher can only grade assigned course submissions.");
+      if (run?.teacherId !== session.userId || !submission || !teacherOwnsStudent(state, session.userId, submission.studentId)) {
+        throw new Error("Teacher can only grade assigned class submissions.");
+      }
     }
     if (action.type === "quiz.review") {
       const attempt = state.quizAttempts.find((item) => item.id === action.attemptId);
       const quiz = state.quizzes.find((item) => item.id === attempt?.quizId);
       const run = state.courseRuns.find((item) => item.id === quiz?.courseRunId);
-      if (run?.teacherId !== session.userId) throw new Error("Teacher can only review assigned course quiz attempts.");
+      if (run?.teacherId !== session.userId || !attempt || !teacherOwnsStudent(state, session.userId, attempt.studentId)) {
+        throw new Error("Teacher can only review assigned class quiz attempts.");
+      }
     }
     if (action.type === "attendance.save") {
       const group = state.classGroups.find((item) => item.id === action.classGroupId);
       const run = state.courseRuns.find((item) => item.id === group?.courseRunId);
       if (!group || !run || run.teacherId !== session.userId) throw new Error("Teacher can only save attendance for assigned classes.");
+    }
+    if (action.type === "material.publish.update") {
+      if (!teacherOwnsResource(state, session.userId, action.id)) {
+        throw new Error("Teacher can only publish materials for assigned courses.");
+      }
     }
     if (action.type === "calendar.create") {
       const allowedTypes = new Set<CalendarEventType>(["class_session", "live_session", "assignment_due", "quiz_due", "reminder"]);
@@ -523,6 +594,15 @@ function assertScopedAction(state: PlatformState, action: PlatformWorkflowAction
     if (action.type === "payment.record" && branchForInvoice(state, action.invoiceId) !== user?.branchId) {
       throw new Error("Branch admin can only record payments for their branch.");
     }
+    if (action.type === "room.status.update") {
+      const room = state.rooms.find((item) => item.id === action.roomId);
+      if (!user?.branchId || !room || room.branchId !== user.branchId) {
+        throw new Error("Branch admin can only update rooms in their branch.");
+      }
+    }
+    if (action.type === "room.create" && (!user?.branchId || action.branchId !== user.branchId)) {
+      throw new Error("Branch admin can only create rooms in their branch.");
+    }
     if (action.type === "notification.read") {
       const notification = state.notifications.find((item) => item.id === action.notificationId);
       if (notification?.userId !== session.userId) throw new Error("Branch admin can only mark own notifications as read.");
@@ -530,9 +610,18 @@ function assertScopedAction(state: PlatformState, action: PlatformWorkflowAction
   }
 
   if (session.activeRole === "headofdepartment") {
-    if (action.type === "certificate.approve" || action.type === "certificate.issue") {
-      const certificate = state.certificates.find((item) => item.id === action.certificateId);
-      if (!certificate || !hodOwnsCourse(state, session, certificate.courseId)) {
+    if (action.type === "curriculum.module.create") {
+      if (!hodOwnsCourse(state, session, action.courseId)) {
+        throw new Error("HOD can only create curriculum modules in their department.");
+      }
+    }
+    if (action.type === "course.status.update") {
+      if (!hodOwnsCourse(state, session, action.courseId)) {
+        throw new Error("HOD can only update course status in their department.");
+      }
+    }
+    if (action.type === "certificate.approve" || action.type === "certificate.issue" || action.type === "certificate.reject") {
+      if (!hodOwnsCertificate(state, session, action.certificateId)) {
         throw new Error("HOD can only manage certificates in their department.");
       }
     }
@@ -572,6 +661,9 @@ function assertScopedAction(state: PlatformState, action: PlatformWorkflowAction
   if (session.activeRole === "registrar") {
     const user = userForSession(state, session);
     const branchIds = branchIdsForUserScope(state, user);
+    if (action.type === "application.create" && !branchIds.has(action.branchId)) {
+      throw new Error("Registrar can only create applications inside admissions branches.");
+    }
     if (action.type === "placement.create" && action.branchId && !branchIds.has(action.branchId)) {
       throw new Error("Registrar can only book placement tests inside admissions branches.");
     }
@@ -579,6 +671,40 @@ function assertScopedAction(state: PlatformState, action: PlatformWorkflowAction
       const booking = state.placementTests.find((item) => item.id === action.bookingId);
       if (!booking || (booking.branchId && !branchIds.has(booking.branchId))) {
         throw new Error("Registrar can only record placement results inside admissions branches.");
+      }
+    }
+    if (action.type === "lead.convert" && action.branchId && !branchIds.has(action.branchId)) {
+      throw new Error("Registrar can only convert leads inside admissions branches.");
+    }
+    if (action.type === "application.convert") {
+      const application = state.applications.find((item) => item.id === action.applicationId);
+      if (!application || (application.branchId && !branchIds.has(application.branchId))) {
+        throw new Error("Registrar can only convert applications inside admissions branches.");
+      }
+    }
+    if (action.type === "student.create") {
+      const courseRun = state.courseRuns.find((item) => item.id === action.courseRunId);
+      const classGroup = state.classGroups.find((item) => item.id === action.classGroupId);
+      const application = action.applicationId ? state.applications.find((item) => item.id === action.applicationId) : undefined;
+      const placement = action.placementTestId ? state.placementTests.find((item) => item.id === action.placementTestId) : undefined;
+      if (!branchIds.has(action.branchId) || !courseRun || !branchIds.has(courseRun.branchId)) {
+        throw new Error("Registrar can only create students inside admissions branches.");
+      }
+      if (!classGroup || classGroup.courseRunId !== courseRun.id) {
+        throw new Error("Registrar can only assign a matching class group.");
+      }
+      if (application?.branchId && !branchIds.has(application.branchId)) {
+        throw new Error("Registrar can only use applications inside admissions branches.");
+      }
+      if (placement?.branchId && !branchIds.has(placement.branchId)) {
+        throw new Error("Registrar can only use placement tests inside admissions branches.");
+      }
+    }
+    if (action.type === "student.status.update") {
+      const student = state.students.find((item) => item.id === action.studentId);
+      const studentUser = state.users.find((item) => item.id === student?.userId);
+      if (!student || !branchIds.has(studentUser?.branchId ?? "")) {
+        throw new Error("Registrar can only update students inside admissions branches.");
       }
     }
     if (action.type === "payment.record" && !branchIds.has(branchForInvoice(state, action.invoiceId) ?? "")) {
@@ -663,6 +789,23 @@ const leadSources = new Set<Lead["source"]>(["website", "trial_form", "placement
 const communicationChannels = new Set<CommunicationLog["channel"]>(["in_app", "email", "whatsapp", "phone", "manual"]);
 const reportTypes = new Set(["enrollments", "attendance", "finance", "audit"]);
 const accountStatuses = new Set(["active", "pending", "paused"]);
+const studentStatuses = new Set<StudentStatus>([
+  "lead",
+  "trial_booked",
+  "placement_booked",
+  "placement_completed",
+  "ready_to_enroll",
+  "enrolled",
+  "active",
+  "paused",
+  "completed",
+  "cancelled",
+]);
+const studentCreateStatuses = new Set<StudentStatus>(["ready_to_enroll", "enrolled", "active", "paused"]);
+const studentEntrySources = new Set<StudentEntrySource>(["direct", "lead", "application", "placement"]);
+const staffRoles = new Set<StaffRole>(["teacher", "registrar", "headofdepartment", "branchadmin", "superadmin"]);
+const staffPermissionScopes = new Set<StaffPermissionScope>(["department", "branch", "admissions", "operations", "global"]);
+const staffAvailabilityStatuses = new Set<StaffAvailabilityStatus>(["available", "limited", "unavailable", "not_applicable"]);
 const knownPermissions = new Set<Permission>(Object.values(rolePermissions).flatMap((permissions) => permissions));
 const integrationStatuses = new Set<IntegrationStatus>(["not_configured", "mock_mode", "connected", "error"]);
 const integrationIds = new Set<IntegrationConfig["id"]>(["supabase", "moodle", "ems", "email", "whatsapp", "meeting", "payment", "jotform"]);
@@ -761,6 +904,28 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     };
   }
 
+  if (type === "application.create") {
+    const fullName = stringValue(input, "fullName");
+    const email = stringValue(input, "email");
+    const phone = stringValue(input, "phone");
+    const branchId = stringValue(input, "branchId");
+    const courseInterest = stringValue(input, "courseInterest");
+    const schedulePreference = stringValue(input, "schedulePreference");
+    if (!fullName || !email || !phone || !branchId || !courseInterest || !schedulePreference) return null;
+    return {
+      type,
+      fullName,
+      email,
+      phone,
+      branchId,
+      courseInterest,
+      schedulePreference,
+      notes: optionalStringValue(input, "notes"),
+      country: optionalStringValue(input, "country"),
+      source: leadSources.has(input.source as Lead["source"]) ? (input.source as Lead["source"]) : undefined,
+    };
+  }
+
   if (type === "placement.create") {
     const fullName = stringValue(input, "fullName");
     const email = stringValue(input, "email");
@@ -779,6 +944,32 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       currentLevel,
       branchId: optionalStringValue(input, "branchId"),
     };
+  }
+
+  if (type === "curriculum.module.create") {
+    const courseId = stringValue(input, "courseId");
+    const title = stringValue(input, "title");
+    const outcomes = stringArrayValue(input.outcomes);
+    if (!courseId || !title) return null;
+    return { type, courseId, title, outcomes };
+  }
+
+  if (type === "course.status.update") {
+    const courseId = stringValue(input, "courseId");
+    const status = stringValue(input, "status");
+    const courseStatuses = new Set(["draft", "active", "paused", "completed"]);
+    if (!courseId || !courseStatuses.has(status)) return null;
+    return {
+      type,
+      courseId,
+      status: status as Extract<PlatformWorkflowAction, { type: "course.status.update" }>["status"],
+    };
+  }
+
+  if (type === "material.publish.update") {
+    const id = stringValue(input, "id");
+    if (!id || typeof input.published !== "boolean") return null;
+    return { type, id, published: input.published };
   }
 
   if (type === "record.save") {
@@ -816,6 +1007,88 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       subjects: stringArrayValue(input.subjects),
       specialization: stringArrayValue(input.specialization),
       availability: stringArrayValue(input.availability),
+      notes: optionalStringValue(input, "notes"),
+    };
+  }
+
+  if (type === "staff.user.create") {
+    const name = stringValue(input, "name");
+    const email = stringValue(input, "email");
+    const role = stringValue(input, "role");
+    const status = optionalStringValue(input, "status");
+    const permissionScope = optionalStringValue(input, "permissionScope");
+    const availabilityStatus = optionalStringValue(input, "availabilityStatus");
+    if (!name || !email || !staffRoles.has(role as StaffRole)) return null;
+    if (status && !accountStatuses.has(status)) return null;
+    if (permissionScope && !staffPermissionScopes.has(permissionScope as StaffPermissionScope)) return null;
+    if (availabilityStatus && !staffAvailabilityStatuses.has(availabilityStatus as StaffAvailabilityStatus)) return null;
+    return {
+      type,
+      name,
+      email,
+      phone: optionalStringValue(input, "phone"),
+      role: role as StaffRole,
+      branchId: optionalStringValue(input, "branchId"),
+      departmentId: optionalStringValue(input, "departmentId"),
+      status: status as Extract<PlatformWorkflowAction, { type: "staff.user.create" }>["status"],
+      permissionScope: permissionScope as Extract<PlatformWorkflowAction, { type: "staff.user.create" }>["permissionScope"],
+      subjects: stringArrayValue(input.subjects),
+      teachingLevels: stringArrayValue(input.teachingLevels),
+      availabilityStatus: availabilityStatus as Extract<PlatformWorkflowAction, { type: "staff.user.create" }>["availabilityStatus"],
+      operationalScope: stringArrayValue(input.operationalScope),
+      notes: optionalStringValue(input, "notes"),
+    };
+  }
+
+  if (type === "student.create") {
+    const fullName = stringValue(input, "fullName");
+    const email = stringValue(input, "email");
+    const phone = stringValue(input, "phone");
+    const branchId = stringValue(input, "branchId");
+    const preferredLanguage = stringValue(input, "preferredLanguage");
+    const courseInterest = stringValue(input, "courseInterest");
+    const ageGroup = stringValue(input, "ageGroup");
+    const courseRunId = stringValue(input, "courseRunId");
+    const classGroupId = stringValue(input, "classGroupId");
+    const status = optionalStringValue(input, "status");
+    const source = optionalStringValue(input, "source");
+    if (!fullName || !email || !phone || !branchId || !preferredLanguage || !courseInterest || !ageGroup || !courseRunId || !classGroupId) {
+      return null;
+    }
+    if (status && !studentCreateStatuses.has(status as StudentStatus)) return null;
+    if (source && !studentEntrySources.has(source as StudentEntrySource)) return null;
+    return {
+      type,
+      fullName,
+      email,
+      phone,
+      branchId,
+      preferredLanguage,
+      courseInterest,
+      ageGroup,
+      guardianName: optionalStringValue(input, "guardianName"),
+      guardianPhone: optionalStringValue(input, "guardianPhone"),
+      currentLevel: optionalStringValue(input, "currentLevel"),
+      placementResult: optionalStringValue(input, "placementResult"),
+      status: status as Extract<PlatformWorkflowAction, { type: "student.create" }>["status"],
+      notes: optionalStringValue(input, "notes"),
+      courseRunId,
+      classGroupId,
+      source: source as Extract<PlatformWorkflowAction, { type: "student.create" }>["source"],
+      leadId: optionalStringValue(input, "leadId"),
+      applicationId: optionalStringValue(input, "applicationId"),
+      placementTestId: optionalStringValue(input, "placementTestId"),
+    };
+  }
+
+  if (type === "student.status.update") {
+    const studentId = stringValue(input, "studentId");
+    const status = stringValue(input, "status");
+    if (!studentId || !studentStatuses.has(status as StudentStatus)) return null;
+    return {
+      type,
+      studentId,
+      status: status as Extract<PlatformWorkflowAction, { type: "student.status.update" }>["status"],
       notes: optionalStringValue(input, "notes"),
     };
   }
@@ -864,6 +1137,31 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     };
   }
 
+  if (type === "room.status.update") {
+    const roomId = stringValue(input, "roomId");
+    const status = stringValue(input, "status");
+    if (!roomId || !accountStatuses.has(status)) return null;
+    return {
+      type,
+      roomId,
+      status: status as Extract<PlatformWorkflowAction, { type: "room.status.update" }>["status"],
+    };
+  }
+
+  if (type === "room.create") {
+    const branchId = stringValue(input, "branchId");
+    const name = stringValue(input, "name");
+    const capacity = numberValue(input, "capacity");
+    if (!branchId || !name || !Number.isFinite(capacity)) return null;
+    return {
+      type,
+      branchId,
+      name,
+      capacity,
+      equipment: stringArrayValue(input.equipment),
+    };
+  }
+
   if (type === "integration.status.update") {
     const integrationId = stringValue(input, "integrationId");
     const status = stringValue(input, "status");
@@ -890,6 +1188,21 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     return {
       type,
       score,
+    };
+  }
+
+  if (type === "settings.save") {
+    const organization = stringValue(input, "organization").trim();
+    const defaultLanguage = stringValue(input, "defaultLanguage").trim();
+    const academicTerm = stringValue(input, "academicTerm").trim();
+    const retentionDays = numberValue(input, "retentionDays");
+    if (!organization || !defaultLanguage || !academicTerm || !Number.isFinite(retentionDays)) return null;
+    return {
+      type,
+      organization,
+      defaultLanguage,
+      academicTerm,
+      retentionDays,
     };
   }
 
@@ -967,7 +1280,7 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const sessionId = stringValue(input, "sessionId");
     const statuses = attendanceRecordValue(input.statuses);
     if (!classGroupId || !sessionId || !statuses) return null;
-    return { type, classGroupId, sessionId, statuses };
+    return { type, classGroupId, sessionId, statuses, notes: stringRecordValue(input.notes) };
   }
 
   if (type === "calendar.create") {
@@ -1011,6 +1324,12 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     return certificateId ? { type, certificateId } : null;
   }
 
+  if (type === "certificate.reject") {
+    const certificateId = stringValue(input, "certificateId");
+    const reason = stringValue(input, "reason");
+    return certificateId && reason ? { type, certificateId, reason } : null;
+  }
+
   if (type === "payment.record") {
     const invoiceId = stringValue(input, "invoiceId");
     if (!invoiceId) return null;
@@ -1038,7 +1357,12 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
 
   if (type === "lead.convert") {
     const leadId = stringValue(input, "leadId");
-    return leadId ? { type, leadId } : null;
+    return leadId ? { type, leadId, branchId: optionalStringValue(input, "branchId") } : null;
+  }
+
+  if (type === "application.convert") {
+    const applicationId = stringValue(input, "applicationId");
+    return applicationId ? { type, applicationId } : null;
   }
 
   if (type === "enrollment.activate") {

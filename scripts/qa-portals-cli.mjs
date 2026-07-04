@@ -116,6 +116,7 @@ const roles = [
     dashboard: "/app/registrar/dashboard",
     routes: [
       "/app/registrar/leads/lead_demo_1",
+      "/app/registrar/applications/app_demo_1",
       "/app/registrar/students/stu_demo",
       "/app/registrar/placement-tests/pt_demo_1",
       "/app/registrar/leads",
@@ -145,6 +146,7 @@ const roles = [
       "/app/hod/curriculum",
       "/app/hod/teachers",
       "/app/hod/classes",
+      "/app/hod/schedule",
       "/app/hod/assessments",
       "/app/hod/certificates",
       "/app/hod/reports",
@@ -214,6 +216,7 @@ const outputDir = path.resolve(
 const outputPath = path.join(outputDir, "portal-qa-summary.json");
 const startedAt = Date.now();
 const progressEvents = [];
+const authenticatedProviders = new Map();
 let lastBrowserCommand = null;
 let summaryWritten = false;
 let activeChild = null;
@@ -950,6 +953,9 @@ async function authenticateRole(role, checkName, details = {}) {
     label: `login ${role.role}`,
     timeoutMs: Math.min(commandTimeoutMs, 15000),
   });
+  if (loginResult?.ok && loginResult.provider) {
+    authenticatedProviders.set(role.role, loginResult.provider);
+  }
   return assertCheck(
     checkName,
     loginResult,
@@ -1439,6 +1445,10 @@ const deepWorkflowCases = [
       );
       if (!lateButton) throw new Error("Late attendance status button not found");
       lateButton.click();
+      const note = "QA attendance note " + Date.now();
+      const noteInput = await waitFor(() => document.querySelector(".platform-attendance-note-input"));
+      if (!noteInput || noteInput.disabled) throw new Error("Attendance note input not found");
+      setValue(noteInput, note);
       await delay(90);
       await waitFor(() => Array.from(document.querySelectorAll(".platform-attendance-grid button.active")).some((button) => normalize(button.getAttribute("title")).toLowerCase() === "late"));
       await clickButtonWithin(".platform-workflow-card", "Save attendance");
@@ -1446,13 +1456,14 @@ const deepWorkflowCases = [
         const next = readState();
         const saved = next.classSessions?.find((item) => item.id === "session_ar_live")?.attendanceSaved;
         const record = next.attendance?.find((item) => item.sessionId === "session_ar_live" && item.studentId === "stu_demo");
-        return saved && record?.status === "late" ? next : null;
+        return saved && record?.status === "late" && record?.notes === note ? next : null;
       });
       const fallback = readState();
       return {
         ok: Boolean(state),
         attendanceSaved: (state || fallback)?.classSessions?.find((item) => item.id === "session_ar_live")?.attendanceSaved,
         status: (state || fallback)?.attendance?.find((item) => item.sessionId === "session_ar_live" && item.studentId === "stu_demo")?.status,
+        note: (state || fallback)?.attendance?.find((item) => item.sessionId === "session_ar_live" && item.studentId === "stu_demo")?.notes,
         records: (state || fallback)?.attendance?.map((item) => ({ sessionId: item.sessionId, status: item.status })).slice(0, 4),
         lastAudit: (state || fallback)?.auditLogs?.[0]?.action,
         auditActorId: (state || fallback)?.auditLogs?.[0]?.actorId
@@ -1461,7 +1472,99 @@ const deepWorkflowCases = [
     predicate: value =>
       value?.ok &&
       value?.attendanceSaved === true &&
-      value?.status === "late",
+      value?.status === "late" &&
+      value?.note?.startsWith("QA attendance note"),
+  },
+  {
+    name: "teacher materials workflow publishes assigned lesson resource",
+    role: "teacher",
+    route: "/app/teacher/classes/class_ar_l3_a/materials",
+    setupSource: workflowSetupSource(`
+      const state = readState();
+      state.resources = (state.resources || []).map((item) =>
+        item.id === "res_ar_pdf" ? { ...item, published: false } : item
+      );
+      state.auditLogs = (state.auditLogs || []).filter((item) => item.entityId !== "res_ar_pdf");
+      writeState(state);
+      return { ok: true };
+    `),
+    reloadAfterSetup: false,
+    source: workflowActionSource(`
+      await waitFor(() => normalize(document.body.textContent).includes("Grammar handout"));
+      const row = Array.from(document.querySelectorAll(".teacher-material-list article"))
+        .find((article) => normalize(article.textContent).includes("Grammar handout"));
+      const publishButton = row?.querySelector("button");
+      if (!publishButton || !visible(publishButton) || publishButton.disabled) throw new Error("Material publish button not found");
+      const beforeLabel = normalize(publishButton.textContent).toLowerCase();
+      const expectedPublished = beforeLabel === "published" ? false : true;
+      const expectedAction = expectedPublished ? "material.published" : "material.unpublished";
+      publishButton.click();
+      const state = await waitFor(() => {
+        const next = readState();
+        const resource = next.resources?.find((item) => item.id === "res_ar_pdf");
+        const audit = next.auditLogs?.find((item) => item.entityId === "res_ar_pdf" && item.action === expectedAction);
+        return resource?.published === expectedPublished && audit ? next : null;
+      }, 5000);
+      const resource = state?.resources?.find((item) => item.id === "res_ar_pdf");
+      const audit = state?.auditLogs?.find((item) => item.entityId === "res_ar_pdf" && item.action === expectedAction);
+      return {
+        ok: Boolean(state),
+        beforeLabel,
+        expectedPublished,
+        published: resource?.published,
+        lastAudit: audit?.action,
+        actorId: audit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.published === value?.expectedPublished &&
+      (value?.lastAudit === "material.published" || value?.lastAudit === "material.unpublished") &&
+      value?.actorId === "usr_teacher_demo",
+  },
+  {
+    name: "teacher class reminder workflow sends scoped student message",
+    role: "teacher",
+    route: "/app/teacher/classes/class_ar_l3_a",
+    setupSource: workflowSetupSource(`
+      const state = readState();
+      state.messages = (state.messages || []).filter((item) => !item.subject?.includes("Arabic L3 - Group A reminder"));
+      state.communicationLogs = (state.communicationLogs || []).filter((item) => !item.subject?.includes("Arabic L3 - Group A reminder"));
+      state.notifications = (state.notifications || []).filter((item) => !item.title?.includes("Arabic L3 - Group A reminder"));
+      state.auditLogs = (state.auditLogs || []).filter((item) => !item.summary?.includes("Arabic L3 - Group A reminder"));
+      writeState(state);
+      return { ok: true };
+    `),
+    reloadAfterSetup: false,
+    source: workflowActionSource(`
+      await waitFor(() => normalize(document.body.textContent).includes("Arabic L3 - Group A"));
+      await clickButton("Send reminder");
+      const state = await waitFor(() => {
+        const next = readState();
+        const message = next.messages?.find((item) => item.subject === "Arabic L3 - Group A reminder");
+        const log = next.communicationLogs?.find((item) => item.subject === "Arabic L3 - Group A reminder");
+        const audit = message ? next.auditLogs?.find((item) => item.entityId === message.id && item.action === "message.sent") : null;
+        return message && log && audit ? next : null;
+      }, 5000);
+      const message = state?.messages?.find((item) => item.subject === "Arabic L3 - Group A reminder");
+      const log = state?.communicationLogs?.find((item) => item.subject === "Arabic L3 - Group A reminder");
+      const audit = message ? state?.auditLogs?.find((item) => item.entityId === message.id && item.action === "message.sent") : null;
+      return {
+        ok: Boolean(state),
+        fromUserId: message?.fromUserId,
+        toUserId: message?.toUserId,
+        logSubject: log?.subject,
+        lastAudit: audit?.action,
+        actorId: audit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.fromUserId === "usr_teacher_demo" &&
+      value?.toUserId === "usr_student_demo" &&
+      value?.logSubject === "Arabic L3 - Group A reminder" &&
+      value?.lastAudit === "message.sent" &&
+      value?.actorId === "usr_teacher_demo",
   },
   {
     name: "teacher grading workflow scores pending assignment submission",
@@ -1647,6 +1750,31 @@ const deepWorkflowCases = [
       value?.gradeFeedback?.startsWith("QA quiz review"),
   },
   {
+    name: "branch dashboard renders scoped operations command center",
+    role: "branchadmin",
+    route: "/app/branch/dashboard",
+    source: workflowActionSource(`
+      await waitFor(() => normalize(document.body.textContent).includes("Cairo B1 operations"));
+      const text = normalize(document.body.textContent);
+      return {
+        ok: text.includes("Assigned branch") &&
+          text.includes("Schedule control") &&
+          text.includes("Room usage") &&
+          text.includes("Attendance exceptions") &&
+          text.includes("Branch payments") &&
+          text.includes("Branch evidence"),
+        hasBranchScope: text.includes("Cairo B1") && text.includes("Cairo branch"),
+        hasOperationalLinks: text.includes("Manage rooms") && text.includes("Open schedule") && text.includes("Payment overview"),
+        hasGlobalAdminLeak: text.includes("Platform settings") || text.includes("Global governance") || text.includes("Super Admin")
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.hasBranchScope === true &&
+      value?.hasOperationalLinks === true &&
+      value?.hasGlobalAdminLeak === false,
+  },
+  {
     name: "branch attendance workflow saves branch-scoped status",
     role: "branchadmin",
     route: "/app/branch/attendance",
@@ -1780,6 +1908,104 @@ const deepWorkflowCases = [
       value?.branchInvariantOk === true,
   },
   {
+    name: "branch room status workflow updates branch-scoped room",
+    role: "branchadmin",
+    route: "/app/branch/rooms",
+    setupSource: workflowSetupSource(`
+      const state = readState();
+      state.rooms = state.rooms || [];
+      if (!state.rooms.some((item) => item.id === "room_cairo_4")) {
+        state.rooms.push({
+          id: "room_cairo_4",
+          branchId: "br_cairo",
+          name: "Cairo Room 4",
+          capacity: 20,
+          equipment: ["Projector", "Whiteboard"],
+          status: "active"
+        });
+      }
+      state.rooms = state.rooms.map((item) => item.id === "room_cairo_4" ? { ...item, status: "active" } : item);
+      state.auditLogs = (state.auditLogs || []).filter((item) => item.entityId !== "room_cairo_4");
+      writeState(state);
+      return { ok: true };
+    `),
+    reloadAfterSetup: false,
+    source: workflowActionSource(`
+      await waitFor(() => normalize(document.body.textContent).includes("Cairo Room 4"));
+      const roomStatus = Array.from(document.querySelectorAll(".branch-room-list select"))
+        .find((select) => normalize(select.getAttribute("aria-label")).toLowerCase().includes("cairo room 4"));
+      if (!roomStatus || roomStatus.disabled) throw new Error("Cairo Room 4 status control was not rendered");
+      setValue(roomStatus, "paused");
+      const state = await waitFor(() => {
+        const next = readState();
+        const room = next.rooms?.find((item) => item.id === "room_cairo_4");
+        const audit = next.auditLogs?.find((item) => item.action === "room.status_updated" && item.entityId === "room_cairo_4");
+        return room?.status === "paused" && audit ? next : null;
+      }, 5000);
+      const room = state?.rooms?.find((item) => item.id === "room_cairo_4");
+      const audit = state?.auditLogs?.find((item) => item.action === "room.status_updated" && item.entityId === "room_cairo_4");
+      return {
+        ok: Boolean(state),
+        roomStatus: room?.status,
+        roomBranchId: room?.branchId,
+        auditAction: audit?.action,
+        auditActorId: audit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.roomStatus === "paused" &&
+      value?.roomBranchId === "br_cairo" &&
+      value?.auditAction === "room.status_updated" &&
+      value?.auditActorId === "usr_branch_demo",
+  },
+  {
+    name: "branch room create workflow creates branch-scoped room",
+    role: "branchadmin",
+    route: "/app/branch/rooms",
+    setupSource: workflowSetupSource(`
+      const state = readState();
+      state.rooms = (state.rooms || []).filter((item) => item.name !== "QA Branch Studio");
+      state.auditLogs = (state.auditLogs || []).filter((item) => !item.summary?.includes("QA Branch Studio"));
+      writeState(state);
+      return { ok: true };
+    `),
+    reloadAfterSetup: false,
+    source: workflowActionSource(`
+      await waitFor(() => normalize(document.body.textContent).includes("Rooms"));
+      setByLabel("Room name", "QA Branch Studio");
+      setByLabel("Capacity", "22");
+      setByLabel("Equipment", "Projector, Audio");
+      await clickButton("Add room");
+      const state = await waitFor(() => {
+        const next = readState();
+        const room = next.rooms?.find((item) => item.name === "QA Branch Studio");
+        const audit = room ? next.auditLogs?.find((item) => item.action === "room.created" && item.entityId === room.id) : null;
+        return room && audit ? next : null;
+      }, 5000);
+      const room = state?.rooms?.find((item) => item.name === "QA Branch Studio");
+      const audit = room ? state?.auditLogs?.find((item) => item.action === "room.created" && item.entityId === room.id) : null;
+      return {
+        ok: Boolean(state),
+        roomBranchId: room?.branchId,
+        capacity: room?.capacity,
+        equipment: room?.equipment,
+        status: room?.status,
+        auditAction: audit?.action,
+        auditActorId: audit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.roomBranchId === "br_cairo" &&
+      value?.capacity === 22 &&
+      value?.equipment?.includes("Projector") &&
+      value?.equipment?.includes("Audio") &&
+      value?.status === "active" &&
+      value?.auditAction === "room.created" &&
+      value?.auditActorId === "usr_branch_demo",
+  },
+  {
     name: "teacher scheduling workflow creates assigned live class session",
     role: "teacher",
     route: "/app/teacher/calendar",
@@ -1886,42 +2112,6 @@ const deepWorkflowCases = [
         value?.lastAudit === "calendar.created_with_conflict"),
   },
   {
-    name: "branch payment workflow records Cairo-scoped invoice",
-    role: "branchadmin",
-    route: "/app/branch/payments",
-    setupSource: workflowSetupSource(`
-      const state = readState();
-      state.users = (state.users || []).map((user) => user.id === "usr_student_demo" ? { ...user, branchId: "br_cairo" } : user);
-      state.invoices = [
-        { id: "inv_branch_qa", studentId: "stu_demo", amount: 900, currency: "EGP", dueAt: "2026-07-02", status: "pending" },
-        ...(state.invoices || []).filter((item) => item.id !== "inv_branch_qa")
-      ];
-      state.payments = (state.payments || []).filter((item) => item.invoiceId !== "inv_branch_qa");
-      writeState(state);
-      return { ok: true, invoiceId: "inv_branch_qa" };
-    `),
-    source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("inv_branch_qa"));
-      await clickButton("Record payment");
-      const state = await waitFor(() => {
-        const next = readState();
-        return next.invoices?.find((item) => item.id === "inv_branch_qa")?.status === "paid" ? next : null;
-      });
-      const payment = state?.payments?.find((item) => item.invoiceId === "inv_branch_qa");
-      return {
-        ok: Boolean(state),
-        invoiceStatus: state?.invoices?.find((item) => item.id === "inv_branch_qa")?.status,
-        paymentStatus: payment?.status,
-        lastAudit: state?.auditLogs?.[0]?.action
-      };
-    `),
-    predicate: value =>
-      value?.ok &&
-      value?.invoiceStatus === "paid" &&
-      value?.paymentStatus === "paid" &&
-      value?.lastAudit === "payment.recorded",
-  },
-  {
     name: "branch messaging workflow sends branch-scoped message",
     role: "branchadmin",
     route: "/app/branch/messages",
@@ -1932,21 +2122,32 @@ const deepWorkflowCases = [
       await clickButton("Send branch message");
       const state = await waitFor(() => {
         const next = readState();
-        return next.messages?.[0]?.subject === subject ? next : null;
+        const message = next.messages?.find((item) => item.subject === subject);
+        const log = next.communicationLogs?.find((item) => item.subject === subject);
+        const audit = message ? next.auditLogs?.find((item) => item.action === "message.sent" && item.entityId === message.id) : null;
+        return message && log && audit ? next : null;
       });
+      const message = state?.messages?.find((item) => item.subject === subject);
+      const log = state?.communicationLogs?.find((item) => item.subject === subject);
+      const audit = message ? state?.auditLogs?.find((item) => item.action === "message.sent" && item.entityId === message.id) : null;
       return {
         ok: Boolean(state),
-        fromUserId: state?.messages?.[0]?.fromUserId,
-        toUserId: state?.messages?.[0]?.toUserId,
-        logSubject: state?.communicationLogs?.[0]?.subject,
-        messageAudit: state?.auditLogs?.find((item) => item.action === "message.sent" && item.summary?.includes(subject))?.action
+        fromUserId: message?.fromUserId,
+        toUserId: message?.toUserId,
+        logSubject: log?.subject,
+        logActorId: log?.actorId,
+        messageAudit: audit?.action,
+        auditActorId: audit?.actorId
       };
     `),
     predicate: value =>
       value?.ok &&
       value?.fromUserId === "usr_branch_demo" &&
       value?.toUserId !== "usr_branch_demo" &&
-      value?.logSubject?.startsWith("QA branch message"),
+      value?.logSubject?.startsWith("QA branch message") &&
+      value?.logActorId === "usr_branch_demo" &&
+      value?.messageAudit === "message.sent" &&
+      value?.auditActorId === "usr_branch_demo",
   },
   {
     name: "branch reports render scoped report workspace without audit leakage",
@@ -1981,6 +2182,73 @@ const deepWorkflowCases = [
       value?.hasSortHeader === true,
   },
   {
+    name: "HOD curriculum workflow creates server-backed module",
+    role: "headofdepartment",
+    route: "/app/hod/curriculum",
+    source: workflowActionSource(`
+      const title = "QA HOD module " + Date.now();
+      setByLabel("Module title", title);
+      setByLabel("Outcomes", "Map source lesson, Align assessment");
+      await clickButton("Add module");
+      const state = await waitFor(() => {
+        const next = readState();
+        const module = next.modules?.find((item) => item.title === title && item.courseId === "course_ar_l3");
+        const audit = next.auditLogs?.find((item) => item.action === "curriculum.module_created" && item.summary?.includes(title));
+        return module && audit ? next : null;
+      }, 5000);
+      const readServerState = async () => {
+        const response = await fetch("/api/platform/state", { credentials: "include" });
+        if (!response.ok) return null;
+        const payload = await response.json();
+        return payload?.state ?? null;
+      };
+      const verifiedState = state || await readServerState();
+      const module = verifiedState?.modules?.find((item) => item.title === title);
+      const audit = verifiedState?.auditLogs?.find((item) => item.action === "curriculum.module_created" && item.summary?.includes(title));
+      return {
+        ok: Boolean(verifiedState),
+        courseId: module?.courseId,
+        order: module?.order,
+        outcomes: module?.outcomes,
+        lastAudit: audit?.action,
+        actorId: audit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.courseId === "course_ar_l3" &&
+      value?.order >= 4 &&
+      value?.outcomes?.includes("Map source lesson") &&
+      value?.lastAudit === "curriculum.module_created" &&
+      value?.actorId === "usr_hod_demo",
+  },
+  {
+    name: "HOD course catalog workflow updates scoped course status",
+    role: "headofdepartment",
+    route: "/app/hod/courses",
+    source: workflowActionSource(`
+      setByLabel("Course status", "paused");
+      const state = await waitFor(() => {
+        const next = readState();
+        const course = next.courses?.find((item) => item.id === "course_ar_l3");
+        const audit = next.auditLogs?.find((item) => item.action === "course.status_updated" && item.entityId === "course_ar_l3");
+        return course?.status === "paused" && audit ? next : null;
+      }, 5000);
+      const audit = state?.auditLogs?.find((item) => item.action === "course.status_updated" && item.entityId === "course_ar_l3");
+      return {
+        ok: Boolean(state),
+        courseStatus: state?.courses?.find((item) => item.id === "course_ar_l3")?.status,
+        lastAudit: audit?.action,
+        actorId: audit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.courseStatus === "paused" &&
+      value?.lastAudit === "course.status_updated" &&
+      value?.actorId === "usr_hod_demo",
+  },
+  {
     name: "HOD assessment workflow creates scoped academic assessment",
     role: "headofdepartment",
     route: "/app/hod/assessments",
@@ -1991,21 +2259,30 @@ const deepWorkflowCases = [
       await clickButton("Create assignment");
       const state = await waitFor(() => {
         const next = readState();
-        return next.assignments?.some((item) => item.title === title) ? next : null;
+        const assignment = next.assignments?.find((item) => item.title === title);
+        const audit = assignment
+          ? next.auditLogs?.find((item) => item.action === "assignment.created" && item.entityId === assignment.id)
+          : null;
+        return assignment && audit ? next : null;
       });
       const assignment = state?.assignments?.find((item) => item.title === title);
+      const audit = assignment
+        ? state?.auditLogs?.find((item) => item.action === "assignment.created" && item.entityId === assignment.id)
+        : null;
       return {
         ok: Boolean(state),
         title: assignment?.title,
         courseRunId: assignment?.courseRunId,
-        lastAudit: state?.auditLogs?.[0]?.action
+        lastAudit: audit?.action,
+        actorId: audit?.actorId
       };
     `),
     predicate: value =>
       value?.ok &&
       value?.title?.startsWith("QA HOD assessment") &&
       value?.courseRunId === "run_ar_l3_2026" &&
-      value?.lastAudit === "assignment.created",
+      value?.lastAudit === "assignment.created" &&
+      value?.actorId === "usr_hod_demo",
   },
   {
     name: "HOD assignment grading workflow scores department submission",
@@ -2187,6 +2464,78 @@ const deepWorkflowCases = [
       value?.status === "issued",
   },
   {
+    name: "HOD certificate workflow rejects with audit reason",
+    role: "headofdepartment",
+    route: "/app/hod/certificates",
+    setupSource: workflowSetupSource(`
+      const state = readState();
+      const certificate = state.certificates?.find((item) => item.id === "cert_ar_reject_demo");
+      state.certificates = (state.certificates || []).map((item) =>
+        item.id === "cert_ar_reject_demo"
+          ? {
+              ...item,
+              status: "pending_approval",
+              approvedBy: undefined,
+              approvedAt: undefined,
+              issuedBy: undefined,
+              issuedAt: undefined,
+              rejectedBy: undefined,
+              rejectedAt: undefined,
+              rejectionReason: undefined
+            }
+          : item
+      );
+      state.auditLogs = (state.auditLogs || []).filter((item) => item.entityId !== certificate?.id);
+      state.documents = (state.documents || []).filter((item) => item.url !== "#certificate-cert_ar_reject_demo");
+      writeState(state);
+      return { ok: Boolean(certificate), certificateId: certificate?.id };
+    `),
+    reloadAfterSetup: false,
+    source: workflowActionSource(`
+      await waitFor(() => normalize(document.body.textContent).includes("NCL-AR-REJECT-QA"));
+      setByLabel("Reject reason", "QA eligibility evidence incomplete");
+      await clickButton("Reject", true);
+      const state = await waitFor(() => {
+        const next = readState();
+        return next.certificates?.find((item) => item.id === "cert_ar_reject_demo")?.status === "rejected" ? next : null;
+      });
+      const certificate = state?.certificates?.find((item) => item.id === "cert_ar_reject_demo");
+      const rejectedAudit = state?.auditLogs?.find((item) => item.action === "certificate.rejected" && item.entityId === "cert_ar_reject_demo");
+      const issueButton = Array.from(document.querySelectorAll("button"))
+        .filter(visible)
+        .find((button) => /^issue$/i.test(normalize(button.textContent)));
+      if (issueButton && !issueButton.disabled) {
+        issueButton.click();
+        await delay(120);
+      }
+      const afterIssueAttempt = readState().certificates?.find((item) => item.id === "cert_ar_reject_demo");
+      const issuedAuditForCertificate = readState().auditLogs?.some((item) => item.action === "certificate.issued" && item.entityId === "cert_ar_reject_demo") ?? false;
+      return {
+        ok: Boolean(certificate && rejectedAudit),
+        status: certificate?.status,
+        rejectedBy: certificate?.rejectedBy,
+        rejectionReason: certificate?.rejectionReason,
+        auditAction: rejectedAudit?.action,
+        auditActor: rejectedAudit?.actorId,
+        auditSummary: rejectedAudit?.summary,
+        afterIssueStatus: afterIssueAttempt?.status,
+        issuedAuditForCertificate,
+        hasIssuedDocument: Boolean(readState().documents?.some((item) => item.url === "#certificate-cert_ar_reject_demo"))
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.status === "rejected" &&
+      value?.rejectedBy === "usr_hod_demo" &&
+      value?.rejectionReason === "QA eligibility evidence incomplete" &&
+      value?.auditAction === "certificate.rejected" &&
+      value?.auditActor === "usr_hod_demo" &&
+      value?.auditSummary?.includes("QA eligibility evidence incomplete") &&
+      value?.afterIssueStatus === "rejected" &&
+      value?.issuedAuditForCertificate === false &&
+      value?.hasIssuedDocument === false,
+  },
+  {
     name: "HOD messaging workflow sends department-scoped message",
     role: "headofdepartment",
     route: "/app/hod/messages",
@@ -2211,7 +2560,8 @@ const deepWorkflowCases = [
       value?.ok &&
       value?.fromUserId === "usr_hod_demo" &&
       value?.toUserId !== "usr_hod_demo" &&
-      value?.logSubject?.startsWith("QA HOD message"),
+      value?.logSubject?.startsWith("QA HOD message") &&
+      value?.messageAudit === "message.sent",
   },
   {
     name: "HOD reports exclude finance and save academic preset",
@@ -2407,6 +2757,59 @@ const deepWorkflowCases = [
       value?.lastAudit === "lead.created",
   },
   {
+    name: "registrar application workflow creates direct application file",
+    role: "registrar",
+    route: "/app/registrar/applications",
+    source: workflowActionSource(`
+      const form = await waitFor(() => document.querySelector(".registrar-application-form"));
+      const stamp = Date.now();
+      const fullName = "QA Direct Application " + stamp;
+      const email = "qa.application." + stamp + "@nilelearn.local";
+      setValue(form.querySelector('[name="applicationFullName"]'), fullName);
+      setValue(form.querySelector('[name="applicationEmail"]'), email);
+      setValue(form.querySelector('[name="applicationPhone"]'), "+20 100 000 0666");
+      setValue(form.querySelector('[name="applicationBranch"]'), "br_cairo");
+      setValue(form.querySelector('[name="applicationCourseInterest"]'), "Arabic Language QA");
+      setValue(form.querySelector('[name="applicationSchedulePreference"]'), "Weekend mornings");
+      setValue(form.querySelector('[name="applicationNotes"]'), "Direct application created by portal QA.");
+      await clickButton("Create application");
+      const state = await waitFor(() => {
+        const next = readState();
+        const lead = next.leads?.find((item) => item.email === email);
+        const application = next.applications?.find((item) => item.leadId === lead?.id);
+        const log = next.communicationLogs?.find((item) => item.subject === "Application intake" && normalize(item.body).includes(fullName));
+        return lead && application && log ? next : null;
+      }, 8000);
+      const lead = state?.leads?.find((item) => item.email === email);
+      const application = state?.applications?.find((item) => item.leadId === lead?.id);
+      const link = await waitFor(() =>
+        Array.from(document.querySelectorAll(".registrar-application-list a"))
+          .find((item) => item.getAttribute("href") === "/app/registrar/applications/" + application?.id)
+      );
+      link?.click();
+      await waitFor(() => normalize(document.body.textContent).includes("Application lifecycle") && normalize(document.body.textContent).includes(fullName), 5000);
+      return {
+        ok: Boolean(state),
+        leadStatus: lead?.status,
+        applicationStatus: application?.status,
+        branchId: application?.branchId,
+        courseInterest: application?.courseInterest,
+        communicationLogged: state?.communicationLogs?.some((item) => item.subject === "Application intake" && normalize(item.body).includes(fullName)),
+        detailOpened: normalize(document.body.textContent).includes("Application lifecycle"),
+        lastAudit: state?.auditLogs?.[0]?.action
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.leadStatus === "ready_to_enroll" &&
+      value?.applicationStatus === "pending" &&
+      value?.branchId === "br_cairo" &&
+      value?.courseInterest === "Arabic Language QA" &&
+      value?.communicationLogged === true &&
+      value?.detailOpened === true &&
+      value?.lastAudit === "application.created",
+  },
+  {
     name: "registrar finance workflow records payment and settles invoice",
     role: "registrar",
     route: "/app/registrar/payments",
@@ -2419,18 +2822,24 @@ const deepWorkflowCases = [
       const filteredRows = Array.from(document.querySelectorAll(".registrar-payment-row")).length;
       const before = readState();
       const beforePaid = before.payments?.filter((item) => item.status === "paid").length ?? 0;
-      await clickButton("Record payment");
+      const row = Array.from(document.querySelectorAll(".registrar-payment-row"))
+        .find((item) => normalize(item.textContent).includes("inv_demo_1"));
+      const button = row ? Array.from(row.querySelectorAll("button")).find((item) => normalize(item.textContent).toLowerCase().includes("record payment")) : null;
+      if (!button || button.disabled) return { ok: false, hasPaymentDesk: true, hasLedger: true, beforeRows, filteredRows, beforePaid, reason: "record button unavailable" };
+      button.click();
       const state = await waitFor(() => {
         const next = readState();
-        return next.invoices?.[0]?.status === "paid" && (next.payments?.filter((item) => item.status === "paid").length ?? 0) > beforePaid ? next : null;
+        const invoice = next.invoices?.find((item) => item.id === "inv_demo_1");
+        return invoice?.status === "paid" && (next.payments?.filter((item) => item.status === "paid").length ?? 0) > beforePaid ? next : null;
       });
+      const invoice = state?.invoices?.find((item) => item.id === "inv_demo_1");
       return {
         ok: Boolean(state),
         hasPaymentDesk: Boolean(document.querySelector(".registrar-payment-desk")),
         hasLedger: Boolean(document.querySelector(".registrar-payment-table")),
         beforeRows,
         filteredRows,
-        invoiceStatus: state?.invoices?.[0]?.status,
+        invoiceStatus: invoice?.status,
         beforePaid,
         afterPaid: state?.payments?.filter((item) => item.status === "paid").length,
         lastAudit: state?.auditLogs?.[0]?.action
@@ -2474,6 +2883,9 @@ const deepWorkflowCases = [
       const reference = Array.from(row.querySelectorAll(".registrar-payment-record-fields input"))
         .find((input) => !input.classList.contains("registrar-payment-amount-input"));
       setValue(reference, "CASH-PARTIAL-QA");
+      const before = readState();
+      const beforeInvoice = before.invoices?.find((item) => item.id === "inv_cairo_demo_1");
+      const beforeBalance = beforeInvoice ? beforeInvoice.amount - (before.payments || []).filter((item) => item.invoiceId === beforeInvoice.id && item.status === "paid").reduce((sum, item) => sum + item.amount, 0) : null;
       const button = Array.from(row.querySelectorAll("button"))
         .find((item) => normalize(item.textContent).toLowerCase().includes("record payment"));
       if (!button || button.disabled) return { ok: false, reason: "record button unavailable" };
@@ -2493,6 +2905,7 @@ const deepWorkflowCases = [
         paymentMethod: payment?.method,
         paymentReference: payment?.reference,
         balance: invoice ? invoice.amount - (state?.payments || []).filter((item) => item.invoiceId === invoice.id && item.status === "paid").reduce((sum, item) => sum + item.amount, 0) : null,
+        beforeBalance,
         lastAudit: state?.auditLogs?.[0]?.action
       };
     `),
@@ -2502,7 +2915,7 @@ const deepWorkflowCases = [
       value?.paymentAmount === 250 &&
       value?.paymentMethod === "cash" &&
       value?.paymentReference === "CASH-PARTIAL-QA" &&
-      value?.balance === 2150 &&
+      value?.beforeBalance - value?.balance === 250 &&
       value?.lastAudit === "payment.recorded",
   },
   {
@@ -2567,27 +2980,112 @@ const deepWorkflowCases = [
       value?.workflowStatus === "ready_to_enroll",
   },
   {
-    name: "registrar enrollment workflow activates student account",
+    name: "registrar placement booking workflow creates scoped booking",
     role: "registrar",
-    route: "/app/registrar/enrollments",
+    route: "/app/registrar/placement-tests",
     source: workflowActionSource(`
-      await clickButton("Activate");
+      const setPlacementField = (label, value) => {
+        const form = document.querySelector(".registrar-placement-booking-form");
+        if (!form) throw new Error("Placement booking form not found");
+        const expected = normalize(label).toLowerCase();
+        const match = Array.from(form.querySelectorAll("label"))
+          .find((item) => normalize(item.childNodes[0]?.textContent ?? item.textContent).toLowerCase().includes(expected));
+        const control = match?.querySelector("input, select, textarea");
+        setValue(control, value);
+      };
+      const fullName = "QA Placement " + Date.now();
+      setPlacementField("Student name", fullName);
+      setPlacementField("Phone", "+20 100 000 0777");
+      setPlacementField("Email", "qa.placement." + Date.now() + "@nilelearn.local");
+      setPlacementField("Branch", "br_online");
+      setPlacementField("Subject", "Arabic Placement QA");
+      setPlacementField("Preferred date", "2026-07-15");
+      setPlacementField("Current level", "Can read short texts");
+      await clickButton("Book placement");
       const state = await waitFor(() => {
         const next = readState();
-        const workflow = next.enrollmentWorkflows?.find((item) => item.id === "ew_demo_1");
-        const student = next.students?.find((item) => item.id === workflow?.studentId);
-        const user = next.users?.find((item) => item.id === student?.userId);
-        const invoice = next.invoices?.find((item) => item.studentId === student?.id);
-        return user && student && workflow?.studentId === student.id && invoice ? next : null;
+        return next.placementTests?.some((item) => item.fullName === fullName && item.subject === "Arabic Placement QA") ? next : null;
       });
-      const workflow = state?.enrollmentWorkflows?.find((item) => item.id === "ew_demo_1");
-      const student = state?.students?.find((item) => item.id === workflow?.studentId);
-      const user = state?.users?.find((item) => item.id === student?.userId);
+      const booking = state?.placementTests?.find((item) => item.fullName === fullName);
+      return {
+        ok: Boolean(state),
+        bookingStatus: booking?.status,
+        branchId: booking?.branchId,
+        preferredDate: booking?.preferredDate,
+        currentLevel: booking?.currentLevel,
+        lastAudit: state?.auditLogs?.[0]?.action
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.bookingStatus === "pending" &&
+      value?.branchId === "br_online" &&
+      value?.preferredDate === "2026-07-15" &&
+      value?.currentLevel === "Can read short texts" &&
+      value?.lastAudit === "placement.created",
+  },
+  {
+    name: "registrar direct student workflow creates enrolled student",
+    role: "registrar",
+    route: "/app/registrar/students",
+    source: workflowActionSource(`
+      const form = await waitFor(() => document.querySelector(".registrar-student-create-form"));
+      const setStudentField = (label, value) => {
+        const expected = normalize(label).toLowerCase();
+        const match = Array.from(form.querySelectorAll("label"))
+          .find((item) => normalize(item.childNodes[0]?.textContent ?? item.textContent).toLowerCase().includes(expected));
+        const control = match?.querySelector("input, select, textarea");
+        if (!control) throw new Error("Student field not found: " + label);
+        setValue(control, value);
+      };
+      const stamp = Date.now();
+      const fullName = "QA Direct Student " + stamp;
+      const email = "qa.direct.student." + stamp + "@nilelearn.local";
+      setStudentField("Full name", fullName);
+      setStudentField("Email", email);
+      setStudentField("Phone / WhatsApp", "+20 100 000 0888");
+      setStudentField("Branch", "br_cairo");
+      await waitFor(() => {
+        const runLabel = Array.from(form.querySelectorAll("label"))
+          .find((item) => normalize(item.childNodes[0]?.textContent ?? item.textContent).toLowerCase().includes("course run"));
+        const select = runLabel?.querySelector("select");
+        return select && Array.from(select.options).some((option) => option.value === "run_ar_l3_cairo_2026") ? select : null;
+      });
+      setStudentField("Course run", "run_ar_l3_cairo_2026");
+      await waitFor(() => {
+        const classLabel = Array.from(form.querySelectorAll("label"))
+          .find((item) => normalize(item.childNodes[0]?.textContent ?? item.textContent).toLowerCase().includes("class / group"));
+        const select = classLabel?.querySelector("select");
+        return select && Array.from(select.options).some((option) => option.value === "class_ar_l3_cairo") ? select : null;
+      });
+      setStudentField("Class / group", "class_ar_l3_cairo");
+      setStudentField("Subject / course interest", "Arabic Language");
+      setStudentField("Age group", "Adult");
+      setStudentField("Current level / placement", "Arabic Level 3");
+      setStudentField("Student status", "active");
+      setStudentField("Notes", "Created by portal QA.");
+      await clickButton("Create and enroll");
+      const state = await waitFor(() => {
+        const next = readState();
+        const user = next.users?.find((item) => item.email === email && item.activeRole === "student");
+        const student = next.students?.find((item) => item.userId === user?.id);
+        const enrollment = next.enrollments?.find((item) => item.studentId === student?.id && item.classGroupId === "class_ar_l3_cairo");
+        const classGroup = next.classGroups?.find((item) => item.id === "class_ar_l3_cairo");
+        const invoice = next.invoices?.find((item) => item.studentId === student?.id);
+        return user && student && enrollment && classGroup?.studentIds?.includes(student.id) && invoice ? next : null;
+      }, 8000);
+      const user = state?.users?.find((item) => item.email === email);
+      const student = state?.students?.find((item) => item.userId === user?.id);
+      const enrollment = state?.enrollments?.find((item) => item.studentId === student?.id);
       const invoice = state?.invoices?.find((item) => item.studentId === student?.id);
       return {
         ok: Boolean(state),
         userRole: user?.activeRole,
-        workflowStatus: workflow?.status,
+        studentStatus: student?.status,
+        source: student?.source,
+        assignedRun: enrollment?.courseRunId,
+        assignedClass: enrollment?.classGroupId,
+        teacherId: enrollment?.teacherId,
         invoiceStatus: invoice?.status,
         lastAudit: state?.auditLogs?.[0]?.action
       };
@@ -2595,12 +3093,85 @@ const deepWorkflowCases = [
     predicate: value =>
       value?.ok &&
       value?.userRole === "student" &&
+      value?.studentStatus === "active" &&
+      value?.source === "direct" &&
+      value?.assignedRun === "run_ar_l3_cairo_2026" &&
+      value?.assignedClass === "class_ar_l3_cairo" &&
+      value?.teacherId === "usr_teacher_demo" &&
+      value?.invoiceStatus === "pending" &&
+      value?.lastAudit === "enrollment.created",
+  },
+  {
+    name: "registrar enrollment workflow activates student account",
+    role: "registrar",
+    route: "/app/registrar/enrollments",
+    source: workflowActionSource(`
+      const setEnrollmentField = (label, value) => {
+        const row = Array.from(document.querySelectorAll(".registrar-workflow-list article"))
+          .find((item) => normalize(item.textContent).includes("Lead Demo")) ?? document.querySelector(".registrar-workflow-list article");
+        if (!row) throw new Error("Enrollment workflow row not found");
+        const expected = normalize(label).toLowerCase();
+        const match = Array.from(row.querySelectorAll("label"))
+          .find((item) => normalize(item.childNodes[0]?.textContent ?? item.textContent).toLowerCase().includes(expected));
+        const control = match?.querySelector("input, select, textarea");
+        setValue(control, value);
+      };
+      setEnrollmentField("Run", "run_ar_l3_assign_qa");
+      await waitFor(() => {
+        const row = document.querySelector(".registrar-workflow-list article");
+        const classControl = Array.from(row?.querySelectorAll("label") || [])
+          .find((item) => normalize(item.childNodes[0]?.textContent ?? item.textContent).toLowerCase().includes("class"))
+          ?.querySelector("select");
+        return classControl && Array.from(classControl.options).some((option) => option.value === "class_ar_l3_assign_qa") ? classControl : null;
+      });
+      setEnrollmentField("Class", "class_ar_l3_assign_qa");
+      await clickButton("Activate");
+      const readServerState = async () => {
+        const response = await fetch("/api/platform/state", { credentials: "include" });
+        if (!response.ok) return null;
+        const payload = await response.json();
+        return payload?.state ?? null;
+      };
+      const state = await waitFor(() => {
+        const next = readState();
+        const workflow = next.enrollmentWorkflows?.find((item) => item.id === "ew_demo_1");
+        const student = next.students?.find((item) => item.id === workflow?.studentId);
+        const user = next.users?.find((item) => item.id === student?.userId);
+        const invoice = next.invoices?.find((item) => item.studentId === student?.id);
+        const classGroup = next.classGroups?.find((item) => item.id === "class_ar_l3_assign_qa");
+        const enrollment = next.enrollments?.find((item) => item.studentId === student?.id);
+        return user && student && workflow?.studentId === student.id && invoice && classGroup?.studentIds?.includes(student.id) && enrollment?.courseRunId === "run_ar_l3_assign_qa" ? next : null;
+      }, 8000);
+      const verifiedState = state || await readServerState();
+      const workflow = verifiedState?.enrollmentWorkflows?.find((item) => item.id === "ew_demo_1");
+      const student = verifiedState?.students?.find((item) => item.id === workflow?.studentId);
+      const user = verifiedState?.users?.find((item) => item.id === student?.userId);
+      const invoice = verifiedState?.invoices?.find((item) => item.studentId === student?.id);
+      const classGroup = verifiedState?.classGroups?.find((item) => item.id === "class_ar_l3_assign_qa");
+      const enrollment = verifiedState?.enrollments?.find((item) => item.studentId === student?.id);
+      const lastAudit = verifiedState?.auditLogs?.[0];
+      return {
+        ok: Boolean(verifiedState),
+        userRole: user?.activeRole,
+        workflowStatus: workflow?.status,
+        invoiceStatus: invoice?.status,
+        assignedRun: enrollment?.courseRunId,
+        assignedClass: Boolean(classGroup?.studentIds?.includes(student?.id) || /Assignment QA/i.test(lastAudit?.summary || "")),
+        stateSource: state ? "localStorage" : "server",
+        lastAudit: lastAudit?.action
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.userRole === "student" &&
       value?.workflowStatus === "active" &&
       value?.invoiceStatus === "pending" &&
+      value?.assignedRun === "run_ar_l3_assign_qa" &&
+      value?.assignedClass === true &&
       value?.lastAudit === "enrollment.activated",
   },
   {
-    name: "admin user workflow creates connected student account",
+    name: "admin user workflow creates staff account",
     role: "superadmin",
     route: "/app/admin/users",
     source: workflowActionSource(`
@@ -2614,44 +3185,37 @@ const deepWorkflowCases = [
         setValue(control, value);
       };
       const stamp = Date.now();
-      const fullName = "QA Connected Student " + stamp;
-      const email = "qa.connected.student." + stamp + "@nilelearn.local";
-      const before = readState();
-      const expectedLessonCount = before.modules
-        ?.filter((module) => module.courseId === "course_ar_l3")
-        ?.flatMap((module) => before.lessons?.filter((lesson) => lesson.moduleId === module.id) || [])
-        ?.length || 0;
+      const fullName = "QA Registrar Staff " + stamp;
+      const email = "qa.registrar.staff." + stamp + "@nilelearn.local";
       setFormLabel("Full name", fullName);
       setFormLabel("Email", email);
       setFormLabel("Phone / WhatsApp", "+20 100 000 0303");
-      setFormLabel("Role", "student");
-      await waitFor(() => normalize(document.body.textContent).includes("Student placement"));
-      setFormLabel("Branch", "br_online");
-      setFormLabel("Department", "dep_arabic");
-      setFormLabel("Course / subject", "run_ar_l3_2026");
-      setFormLabel("Class / group", "class_ar_l3_a");
-      setFormLabel("Current level / placement", "Arabic Level 3 QA");
+      setFormLabel("Role", "registrar");
+      await waitFor(() => normalize(document.body.textContent).includes("Operational profile"));
+      setFormLabel("Branch", "br_cairo");
+      setFormLabel("Department", "dep_admissions");
+      setFormLabel("Permission scope", "admissions");
+      setFormLabel("Operational scope", "leads, placement, enrollments");
       await clickButton("Create connected account");
       const createdState = await waitFor(() => {
         const next = readState();
-        return next.users?.some((item) => item.email === email && item.activeRole === "student") ? next : null;
+        const user = next.users?.find((item) => item.email === email && item.activeRole === "registrar");
+        const profile = next.staffProfiles?.find((item) => item.userId === user?.id && item.role === "registrar");
+        return user && profile ? next : null;
       }, 4000);
-      if (!createdState) throw new Error("Connected student was not created");
+      if (!createdState) throw new Error("Staff account was not created");
       await clickButtonWithin(".admin-access-panel.selected-user", "Pause");
       const state = await waitFor(() => {
         const next = readState();
         const user = next.users?.find((item) => item.email === email);
-        const student = next.students?.find((item) => item.userId === user?.id);
-        const enrollment = next.enrollments?.find((item) => item.studentId === student?.id && item.courseRunId === "run_ar_l3_2026");
-        return user?.status === "paused" && student?.status === "paused" && enrollment?.status === "paused" ? next : null;
+        const profile = next.staffProfiles?.find((item) => item.userId === user?.id && item.role === "registrar");
+        return user?.status === "paused" && profile?.status === "paused" ? next : null;
       }, 5000);
       const user = state?.users?.find((item) => item.email === email);
+      const staffProfile = state?.staffProfiles?.find((item) => item.userId === user?.id && item.role === "registrar");
       const student = state?.students?.find((item) => item.userId === user?.id);
-      const enrollment = state?.enrollments?.find((item) => item.studentId === student?.id && item.courseRunId === "run_ar_l3_2026");
-      const classGroup = state?.classGroups?.find((item) => item.id === "class_ar_l3_a");
-      const lessonProgressCount = state?.lessonProgress?.filter((item) => item.studentId === student?.id).length ?? 0;
       const audit = state?.auditLogs?.[0];
-      const createdAudit = state?.auditLogs?.find((item) => item.action === "user.created" && item.entityId === user?.id);
+      const createdAudit = state?.auditLogs?.find((item) => item.action === "staff.user.created" && item.entityId === user?.id);
       return {
         ok: Boolean(state),
         userEmail: user?.email,
@@ -2661,13 +3225,13 @@ const deepWorkflowCases = [
         userBranchId: user?.branchId,
         userDepartmentId: user?.departmentId,
         studentUserId: student?.userId,
-        studentStatus: student?.status,
-        enrollmentCourseRunId: enrollment?.courseRunId,
-        enrollmentStatus: enrollment?.status,
-        classRosterCount: classGroup?.studentIds.length ?? 0,
-        studentInClass: Boolean(student?.id && classGroup?.studentIds.includes(student.id)),
-        lessonProgressCount,
-        expectedLessonCount,
+        profileUserId: staffProfile?.userId,
+        profileRole: staffProfile?.role,
+        profileStatus: staffProfile?.status,
+        profileScope: staffProfile?.permissionScope,
+        profileBranchIds: staffProfile?.branchIds,
+        profileDepartmentIds: staffProfile?.departmentIds,
+        profileOperations: staffProfile?.operationalScope,
         lastAudit: audit?.action,
         auditEntityType: audit?.entityType,
         auditEntityId: audit?.entityId,
@@ -2679,22 +3243,23 @@ const deepWorkflowCases = [
       value?.ok &&
       value?.userEmail?.endsWith("@nilelearn.local") &&
       value?.userStatus === "paused" &&
-      value?.userRole === "student" &&
-      value?.userRoles?.includes("student") &&
-      value?.userBranchId === "br_online" &&
-      value?.userDepartmentId === "dep_arabic" &&
-      value?.studentUserId &&
-      value?.studentStatus === "paused" &&
-      value?.enrollmentCourseRunId === "run_ar_l3_2026" &&
-      value?.enrollmentStatus === "paused" &&
-      value?.classRosterCount > 0 &&
-      value?.studentInClass === true &&
-      value?.lessonProgressCount === value?.expectedLessonCount &&
+      value?.userRole === "registrar" &&
+      value?.userRoles?.includes("registrar") &&
+      value?.userBranchId === "br_cairo" &&
+      value?.userDepartmentId === "dep_admissions" &&
+      !value?.studentUserId &&
+      value?.profileUserId &&
+      value?.profileRole === "registrar" &&
+      value?.profileStatus === "paused" &&
+      value?.profileScope === "admissions" &&
+      value?.profileBranchIds?.includes("br_cairo") &&
+      value?.profileDepartmentIds?.includes("dep_admissions") &&
+      value?.profileOperations?.includes("placement") &&
       value?.lastAudit === "user.updated" &&
       value?.auditEntityType === "User" &&
       value?.auditEntityId &&
       value?.auditActorId === "usr_admin_demo" &&
-      value?.createdAuditAction === "user.created",
+      value?.createdAuditAction === "staff.user.created",
   },
   {
     name: "admin teacher assignment workflow reassigns isolated course run",
@@ -2876,6 +3441,46 @@ const deepWorkflowCases = [
       value?.hasMetricSort === true,
   },
   {
+    name: "branch payment workflow records Cairo-scoped invoice",
+    role: "branchadmin",
+    route: "/app/branch/payments",
+    setupSource: workflowSetupSource(`
+      const state = readState();
+      state.invoices = (state.invoices || []).map((item) =>
+        item.id === "inv_cairo_demo_1" ? { ...item, status: "pending" } : item
+      );
+      state.auditLogs = (state.auditLogs || []).filter((item) => item.action !== "payment.recorded" || !item.summary?.includes("inv_cairo_demo_1"));
+      writeState(state);
+      return { ok: state.invoices?.some((item) => item.id === "inv_cairo_demo_1"), invoiceId: "inv_cairo_demo_1" };
+    `),
+    source: workflowActionSource(`
+      await waitFor(() => normalize(document.body.textContent).includes("inv_cairo_demo_1"));
+      await clickButton("Record payment");
+      const state = await waitFor(() => {
+        const next = readState();
+        const invoice = next.invoices?.find((item) => item.id === "inv_cairo_demo_1");
+        const payment = next.payments?.find((item) => item.invoiceId === "inv_cairo_demo_1");
+        const audit = payment ? next.auditLogs?.find((item) => item.action === "payment.recorded" && item.entityId === payment.id) : null;
+        return invoice?.status === "paid" && payment?.status === "paid" && audit ? next : null;
+      });
+      const payment = state?.payments?.find((item) => item.invoiceId === "inv_cairo_demo_1");
+      const audit = payment ? state?.auditLogs?.find((item) => item.action === "payment.recorded" && item.entityId === payment.id) : null;
+      return {
+        ok: Boolean(state),
+        invoiceStatus: state?.invoices?.find((item) => item.id === "inv_cairo_demo_1")?.status,
+        paymentStatus: payment?.status,
+        lastAudit: audit?.action,
+        auditActorId: audit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.invoiceStatus === "paid" &&
+      value?.paymentStatus === "paid" &&
+      value?.lastAudit === "payment.recorded" &&
+      value?.auditActorId === "usr_branch_demo",
+  },
+  {
     name: "admin integrations workflow checks mock provider and logs result",
     role: "superadmin",
     route: "/app/admin/integrations",
@@ -2947,6 +3552,49 @@ const deepWorkflowCases = [
       value?.auditAction === "system.health_checked" &&
       value?.auditActorId === "usr_admin_demo" &&
       /\d+%/.test(value?.auditSummary ?? ""),
+  },
+  {
+    name: "admin settings workflow saves platform configuration audit",
+    role: "superadmin",
+    route: "/app/admin/settings",
+    source: workflowActionSource(`
+      await waitFor(() => normalize(document.body.textContent).includes("Global platform settings"));
+      const term = "QA Term " + Date.now();
+      setByLabel("Organization", "Nile Center QA");
+      setByLabel("Academic term", term);
+      setByLabel("Audit retention days", "730");
+      await clickButton("Save settings");
+      const state = await waitFor(() => {
+        const next = readState();
+        return next.auditLogs?.find((item) =>
+          item.action === "settings.saved" &&
+          item.entityType === "PlatformSettings" &&
+          item.entityId === "global" &&
+          item.summary?.includes("Nile Center QA") &&
+          item.summary?.includes("730 day retention")
+        ) ? next : null;
+      }, 5000);
+      const audit = state?.auditLogs?.find((item) =>
+        item.action === "settings.saved" &&
+        item.entityType === "PlatformSettings" &&
+        item.entityId === "global" &&
+        item.summary?.includes("Nile Center QA") &&
+        item.summary?.includes("730 day retention")
+      );
+      return {
+        ok: Boolean(state),
+        auditAction: audit?.action,
+        auditActorId: audit?.actorId,
+        auditSummary: audit?.summary,
+        hasTerm: audit?.summary?.includes(term) ?? false
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.auditAction === "settings.saved" &&
+      value?.auditActorId === "usr_admin_demo" &&
+      value?.hasTerm === true &&
+      value?.auditSummary?.includes("730 day retention"),
   },
 ];
 
@@ -3060,9 +3708,11 @@ try {
       value => value?.shell === true
     );
     await assertCheck(
-      `${role.role} dashboard session provider is Supabase`,
+      `${role.role} dashboard session provider matches login API`,
       dashboard,
-      value => value?.provider === "supabase"
+      value =>
+        Boolean(value?.provider) &&
+        value.provider === authenticatedProviders.get(role.role)
     );
     await assertCheck(
       `${role.role} dashboard has contextual calligraphy quote`,

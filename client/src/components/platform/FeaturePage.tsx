@@ -3,7 +3,9 @@ import { motion } from "framer-motion";
 import { z } from "zod";
 import { Link } from "wouter";
 import {
+  Activity,
   ArrowRight,
+  AlertCircle,
   AlertTriangle,
   Bell,
   BookOpen,
@@ -61,7 +63,20 @@ import {
 import { platformStore } from "@/lib/domain/store";
 import type { PlatformWorkflowAction } from "@/lib/domain/actions";
 import { getMoodleSourceCourseSnapshot } from "@/lib/moodle/client";
-import type { AttendanceStatus, CalendarEventType, Certificate, EntityStatus, IntegrationConfig, IntegrationStatus, Lead, Payment } from "@/lib/domain/types";
+import type {
+  AttendanceStatus,
+  CalendarEventType,
+  Certificate,
+  EntityStatus,
+  IntegrationConfig,
+  IntegrationStatus,
+  Lead,
+  Payment,
+  StaffAvailabilityStatus,
+  StaffPermissionScope,
+  StaffRole,
+  StudentStatus,
+} from "@/lib/domain/types";
 import type { MoodleActivity, MoodleActivityType, MoodleSection } from "@/lib/moodle/types";
 import PlatformShell from "./PlatformShell";
 import { PlatformPageHeader, PlatformWorkspaceHeader, platformReveal } from "./PlatformPrimitives";
@@ -115,6 +130,14 @@ export default function FeaturePage({ role, pageId, params }: FeaturePageProps) 
     return (
       <PlatformShell role={role} title={config.title}>
         <SuperAdminAcademicExperience pageId={pageId} />
+      </PlatformShell>
+    );
+  }
+
+  if (role === "registrar" && pageId !== "schedule" && registrarAdmissionsPages.has(pageId)) {
+    return (
+      <PlatformShell role={role} title={config.title}>
+        <RegistrarAdmissionsExperience pageId={pageId} params={params} />
       </PlatformShell>
     );
   }
@@ -303,7 +326,7 @@ const adminSystemPages = new Set(["settings", "integrations", "audit-logs", "sys
 const adminAcademicPages = new Set(["departments", "programs", "courses"]);
 const academicGovernancePages = new Set(["departments", "programs", "courses", "levels", "curriculum", "teachers", "classes", "assessments", "certificates", "reports", "messages"]);
 const branchOperationsPages = new Set(["students", "teachers", "classes", "rooms", "schedule", "attendance", "payments", "reports", "messages", "settings"]);
-const registrarAdmissionsPages = new Set(["leads", "lead-detail", "applications", "students", "student-detail", "placement-tests", "placement-detail", "enrollments", "classes", "schedule", "payments", "settings"]);
+const registrarAdmissionsPages = new Set(["leads", "lead-detail", "applications", "application-detail", "students", "student-detail", "placement-tests", "placement-detail", "enrollments", "classes", "schedule", "payments", "settings"]);
 const teacherDeliveryPages = new Set([
   "classes",
   "class-detail",
@@ -341,6 +364,11 @@ function splitListInput(value: string) {
     .split(/[,\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function isMinorAgeGroup(ageGroup: string) {
+  const normalized = ageGroup.trim().toLowerCase();
+  return Boolean(normalized && !/adult|18\+|university|parent not required/.test(normalized));
 }
 
 function StudentAccountExperience({ pageId }: { pageId: string }) {
@@ -608,6 +636,64 @@ function StudentAccountExperience({ pageId }: { pageId: string }) {
   );
 }
 
+const staffRoleOptions = roleOrder.filter((role): role is StaffRole => role !== "student");
+
+const staffRoleDefaults: Record<StaffRole, {
+  branchId: string;
+  departmentId: string;
+  permissionScope: StaffPermissionScope;
+  subjects: string;
+  teachingLevels: string;
+  availabilityStatus: StaffAvailabilityStatus;
+  operationalScope: string;
+}> = {
+  teacher: {
+    branchId: "br_online",
+    departmentId: "dep_arabic",
+    permissionScope: "department",
+    subjects: "Arabic grammar, Tajweed",
+    teachingLevels: "Arabic Level 3",
+    availabilityStatus: "available",
+    operationalScope: "classes, attendance, grading",
+  },
+  registrar: {
+    branchId: "br_cairo",
+    departmentId: "dep_admissions",
+    permissionScope: "admissions",
+    subjects: "",
+    teachingLevels: "",
+    availabilityStatus: "not_applicable",
+    operationalScope: "leads, placement, enrollments, payments",
+  },
+  headofdepartment: {
+    branchId: "br_global",
+    departmentId: "dep_arabic",
+    permissionScope: "department",
+    subjects: "",
+    teachingLevels: "Arabic Language, Quran and Tajweed",
+    availabilityStatus: "not_applicable",
+    operationalScope: "curriculum, teachers, certificates, reports",
+  },
+  branchadmin: {
+    branchId: "br_cairo",
+    departmentId: "dep_operations",
+    permissionScope: "operations",
+    subjects: "",
+    teachingLevels: "",
+    availabilityStatus: "not_applicable",
+    operationalScope: "rooms, schedule, attendance, payments",
+  },
+  superadmin: {
+    branchId: "br_global",
+    departmentId: "dep_platform",
+    permissionScope: "global",
+    subjects: "",
+    teachingLevels: "",
+    availabilityStatus: "not_applicable",
+    operationalScope: "users, roles, permissions, audit",
+  },
+};
+
 function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Record<string, string | undefined> }) {
   const [version, setVersion] = useState(0);
   const [query, setQuery] = useState("");
@@ -632,20 +718,15 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
     name: "",
     email: "",
     phone: "",
-    role: "teacher" as Role,
-    branchId: "br_online",
-    departmentId: "dep_arabic",
+    role: "teacher" as StaffRole,
+    branchId: staffRoleDefaults.teacher.branchId,
+    departmentId: staffRoleDefaults.teacher.departmentId,
     status: "active" as EntityStatus,
-    preferredLanguage: "English",
-    courseRunId: "run_ar_l3_2026",
-    classGroupId: "class_ar_l3_a",
-    currentLevel: "Placement pending",
-    ageGroup: "Adult",
-    guardianName: "",
-    guardianPhone: "",
-    subjects: "Arabic grammar",
-    specialization: "Arabic Level 3",
-    availability: "Mon 09:00, Wed 09:00",
+    permissionScope: staffRoleDefaults.teacher.permissionScope,
+    subjects: staffRoleDefaults.teacher.subjects,
+    teachingLevels: staffRoleDefaults.teacher.teachingLevels,
+    availabilityStatus: staffRoleDefaults.teacher.availabilityStatus,
+    operationalScope: staffRoleDefaults.teacher.operationalScope,
     notes: "",
   });
   const state = useMemo(() => platformStore.getState(), [version]);
@@ -653,6 +734,10 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
   const actorId = getDemoUser("superadmin").id;
   const isRole = (value: unknown): value is Role => typeof value === "string" && value in roleMeta;
   const safeRole = (value: unknown, fallback: Role = "teacher"): Role => isRole(value) ? value : fallback;
+  const safeStaffRole = (value: unknown, fallback: StaffRole = "teacher"): StaffRole => {
+    const role = safeRole(value, fallback);
+    return role === "student" ? fallback : role;
+  };
   const metaForRole = (role?: Role) => roleMeta[safeRole(role)];
   const selectedRoleMeta = metaForRole(selectedRole);
   const draftRoleMeta = metaForRole(newUser.role);
@@ -670,13 +755,26 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
   const activeUsers = state.users.filter((user) => user.status === "active").length;
   const multiRoleUsers = state.users.filter((user) => user.roles.length > 1).length;
   const selectedRoleUsers = state.users.filter((user) => user.roles.includes(selectedRole)).length;
-  const selectedDraftCourseRun = state.courseRuns.find((run) => run.id === newUser.courseRunId);
-  const selectedDraftCourse = state.courses.find((course) => course.id === selectedDraftCourseRun?.courseId);
-  const selectedDraftClass = state.classGroups.find((group) => group.id === newUser.classGroupId);
-  const draftClassOptions = state.classGroups.filter((group) => group.courseRunId === newUser.courseRunId);
   const draftBranch = state.branches.find((branch) => branch.id === newUser.branchId);
   const draftDepartment = state.departments.find((department) => department.id === newUser.departmentId);
-  const draftTeacherClassCount = newUser.role === "teacher" ? state.classGroups.filter((group) => group.courseRunId === newUser.courseRunId).length : 0;
+  const selectedStaffProfile = selectedUser
+    ? state.staffProfiles.find((profile) => profile.userId === selectedUser.id && profile.role === selectedUser.activeRole) ??
+      state.staffProfiles.find((profile) => profile.userId === selectedUser.id)
+    : undefined;
+  const selectedStaffBranches = selectedStaffProfile?.branchIds
+    .map((branchId) => state.branches.find((branch) => branch.id === branchId)?.name)
+    .filter(Boolean)
+    .join(", ");
+  const selectedStaffDepartments = selectedStaffProfile?.departmentIds
+    .map((departmentId) => state.departments.find((department) => department.id === departmentId)?.name)
+    .filter(Boolean)
+    .join(", ");
+  const selectedPermissionSummary = selectedUser ? state.permissions[selectedUser.activeRole] ?? [] : [];
+  const selectedUserAuditRows = selectedUser
+    ? state.auditLogs
+        .filter((audit) => audit.entityId === selectedUser.id || audit.actorId === selectedUser.id || audit.summary.includes(selectedUser.name))
+        .slice(0, 4)
+    : [];
   const selectedTeacherProfile = selectedUser ? state.teachers.find((teacher) => teacher.userId === selectedUser.id) : undefined;
   const selectedTeacherRuns = selectedUser ? state.courseRuns.filter((run) => run.teacherId === selectedUser.id) : [];
   const selectedTeacherRunIds = new Set(selectedTeacherRuns.map((run) => run.id));
@@ -874,8 +972,14 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
     const email = newUser.email.trim().toLowerCase();
     const phone = newUser.phone.trim();
     setCreateAccountError("");
-    if (!name || !email || !phone) {
-      const message = "Name, email, and phone are required";
+    if (!name || !email) {
+      const message = "Full name and email are required";
+      setCreateAccountError(message);
+      toast.error(message);
+      return;
+    }
+    if (!email.includes("@")) {
+      const message = "Enter a valid email address";
       setCreateAccountError(message);
       toast.error(message);
       return;
@@ -886,20 +990,19 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
       toast.error(message);
       return;
     }
-    if (newUser.role === "student") {
-      const classGroup = state.classGroups.find((group) => group.id === newUser.classGroupId);
-      if (!newUser.courseRunId || !classGroup) {
-        const message = "Choose a course run and class group for the student";
-        setCreateAccountError(message);
-        toast.error(message);
-        return;
-      }
-      if (classGroup.studentIds.length >= classGroup.capacity) {
-        const message = "Selected class is already at capacity";
-        setCreateAccountError(message);
-        toast.error(message);
-        return;
-      }
+    const selectedBranch = state.branches.find((branch) => branch.id === newUser.branchId);
+    const selectedDepartment = state.departments.find((department) => department.id === newUser.departmentId);
+    if (!selectedBranch || !selectedDepartment) {
+      const message = "Choose a valid branch and department";
+      setCreateAccountError(message);
+      toast.error(message);
+      return;
+    }
+    if (!selectedDepartment.branchIds.includes(selectedBranch.id) && selectedBranch.id !== "br_global") {
+      const message = "Selected department is not available in the chosen branch";
+      setCreateAccountError(message);
+      toast.error(message);
+      return;
     }
     if (newUser.role === "teacher" && !splitListInput(newUser.subjects).length) {
       const message = "Add at least one subject taught by the teacher";
@@ -907,32 +1010,51 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
       toast.error(message);
       return;
     }
-    if (newUser.role === "teacher" && !state.courseRuns.some((run) => run.id === newUser.courseRunId)) {
-      const message = "Choose a course run for the teacher";
+    if (newUser.role === "teacher" && !splitListInput(newUser.teachingLevels).length) {
+      const message = "Add at least one teaching level for the teacher";
+      setCreateAccountError(message);
+      toast.error(message);
+      return;
+    }
+    if (newUser.role === "branchadmin" && !splitListInput(newUser.operationalScope).length) {
+      const message = "Add at least one branch operation scope";
+      setCreateAccountError(message);
+      toast.error(message);
+      return;
+    }
+    if (newUser.role === "registrar" && newUser.permissionScope !== "admissions") {
+      const message = "Registrar accounts require admissions permission scope";
+      setCreateAccountError(message);
+      toast.error(message);
+      return;
+    }
+    if (newUser.role === "headofdepartment" && newUser.permissionScope !== "department") {
+      const message = "HOD accounts require department permission scope";
+      setCreateAccountError(message);
+      toast.error(message);
+      return;
+    }
+    if (newUser.role === "superadmin" && newUser.permissionScope !== "global") {
+      const message = "Super admin accounts require global permission scope";
       setCreateAccountError(message);
       toast.error(message);
       return;
     }
     setCreatingAccount(true);
     const response = await runPlatformWorkflowActionRequest({
-      type: "user.create",
+      type: "staff.user.create",
       name,
       email,
-      phone,
+      phone: phone || undefined,
       role: newUser.role,
       branchId: newUser.branchId,
       departmentId: newUser.departmentId,
       status: newUser.status,
-      preferredLanguage: newUser.preferredLanguage,
-      courseRunId: newUser.courseRunId,
-      classGroupId: newUser.classGroupId,
-      currentLevel: newUser.currentLevel,
-      ageGroup: newUser.ageGroup,
-      guardianName: newUser.guardianName,
-      guardianPhone: newUser.guardianPhone,
+      permissionScope: newUser.permissionScope,
       subjects: splitListInput(newUser.subjects),
-      specialization: splitListInput(newUser.specialization),
-      availability: splitListInput(newUser.availability),
+      teachingLevels: splitListInput(newUser.teachingLevels),
+      availabilityStatus: newUser.availabilityStatus,
+      operationalScope: splitListInput(newUser.operationalScope),
       notes: newUser.notes.trim() || undefined,
     });
     setCreatingAccount(false);
@@ -948,32 +1070,29 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
           user?: {
             id: string;
             name: string;
-            activeRole: Role;
+            activeRole: StaffRole;
           };
+          staffProfile?: { role: StaffRole };
           relationshipSummary?: string;
         }
       | undefined;
     const id = created?.user?.id ?? response.data.result.entityId;
     setSelectedUserId(id);
     setSelectedRole(created?.user?.activeRole ?? newUser.role);
+    const defaults = staffRoleDefaults.teacher;
     setNewUser({
       name: "",
       email: "",
       phone: "",
       role: "teacher",
-      branchId: "br_online",
-      departmentId: "dep_arabic",
+      branchId: defaults.branchId,
+      departmentId: defaults.departmentId,
       status: "active",
-      preferredLanguage: "English",
-      courseRunId: "run_ar_l3_2026",
-      classGroupId: "class_ar_l3_a",
-      currentLevel: "Placement pending",
-      ageGroup: "Adult",
-      guardianName: "",
-      guardianPhone: "",
-      subjects: "Arabic grammar",
-      specialization: "Arabic Level 3",
-      availability: "Mon 09:00, Wed 09:00",
+      permissionScope: defaults.permissionScope,
+      subjects: defaults.subjects,
+      teachingLevels: defaults.teachingLevels,
+      availabilityStatus: defaults.availabilityStatus,
+      operationalScope: defaults.operationalScope,
       notes: "",
     });
     refresh();
@@ -1156,6 +1275,37 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
                 ))}
               </div>
 
+              <div className="admin-access-review-card">
+                <strong>{selectedStaffProfile?.title ?? "Related profile"}</strong>
+                <small>
+                  {selectedStaffProfile
+                    ? `${selectedStaffProfile.permissionScope} scope · ${selectedStaffBranches || "No branch"} · ${selectedStaffDepartments || "No department"}`
+                    : "No staff profile is linked to this account yet."}
+                </small>
+                <span>
+                  {selectedStaffProfile
+                    ? `${selectedPermissionSummary.length} permission(s) available. ${selectedStaffProfile.operationalScope.join(", ") || "No operational scope recorded."}`
+                    : "Student profiles are managed through registrar admissions; staff profiles are created here."}
+                </span>
+              </div>
+
+              <div className="admin-audit-list">
+                {selectedUserAuditRows.length ? (
+                  selectedUserAuditRows.map((auditRow) => (
+                    <article key={auditRow.id}>
+                      <strong>{auditRow.action}</strong>
+                      <small>{auditRow.summary}</small>
+                      <span>{new Date(auditRow.createdAt).toLocaleString()}</span>
+                    </article>
+                  ))
+                ) : (
+                  <article>
+                    <strong>No recent audit events</strong>
+                    <small>Role, scope, and creation changes will appear here.</small>
+                  </article>
+                )}
+              </div>
+
               {accessUpdateError ? (
                 <div className="platform-empty-state error">
                   <strong>Access update was not saved</strong>
@@ -1309,7 +1459,7 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
                 <input type="email" value={newUser.email} onChange={(event) => setNewUser((value) => ({ ...value, email: event.target.value }))} placeholder="name@nilelearn.local" />
               </label>
               <label>
-                Phone / WhatsApp
+                Phone / WhatsApp optional
                 <input value={newUser.phone} onChange={(event) => setNewUser((value) => ({ ...value, phone: event.target.value }))} placeholder="+20 100 000 0000" />
               </label>
             </div>
@@ -1321,11 +1471,12 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
                 <select
                   value={newUser.role}
                   onChange={(event) => {
-                    const role = safeRole(event.target.value);
-                    setNewUser((value) => ({ ...value, role }));
+                    const role = safeStaffRole(event.target.value);
+                    const defaults = staffRoleDefaults[role];
+                    setNewUser((value) => ({ ...value, role, ...defaults }));
                   }}
                 >
-                  {roleOrder.map((role) => <option key={role} value={role}>{roleMeta[role].label}</option>)}
+                  {staffRoleOptions.map((role) => <option key={role} value={role}>{roleMeta[role].label}</option>)}
                 </select>
               </label>
               <label>
@@ -1348,91 +1499,53 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
                   <option value="paused">Paused</option>
                 </select>
               </label>
+              <label>
+                Permission scope
+                <select value={newUser.permissionScope} onChange={(event) => setNewUser((value) => ({ ...value, permissionScope: event.target.value as StaffPermissionScope }))}>
+                  <option value="department">Department</option>
+                  <option value="branch">Branch</option>
+                  <option value="admissions">Admissions</option>
+                  <option value="operations">Operations</option>
+                  <option value="global">Global</option>
+                </select>
+              </label>
             </div>
-
-            {newUser.role === "student" ? (
-              <div className="admin-access-form-section">
-                <span>Student placement</span>
-                <label>
-                  Preferred language
-                  <select value={newUser.preferredLanguage} onChange={(event) => setNewUser((value) => ({ ...value, preferredLanguage: event.target.value }))}>
-                    <option value="English">English</option>
-                    <option value="Arabic">Arabic</option>
-                    <option value="Turkish">Turkish</option>
-                    <option value="Russian">Russian</option>
-                  </select>
-                </label>
-                <label>
-                  Course / subject
-                  <select
-                    value={newUser.courseRunId}
-                    onChange={(event) => {
-                      const courseRunId = event.target.value;
-                      const classGroupId = state.classGroups.find((group) => group.courseRunId === courseRunId)?.id ?? "";
-                      setNewUser((value) => ({ ...value, courseRunId, classGroupId }));
-                    }}
-                  >
-                    {state.courseRuns.map((run) => {
-                      const course = state.courses.find((item) => item.id === run.courseId);
-                      const branch = state.branches.find((item) => item.id === run.branchId);
-                      return <option key={run.id} value={run.id}>{course?.title ?? run.id} · {branch?.name ?? "Branch"} · {run.term}</option>;
-                    })}
-                  </select>
-                </label>
-                <label>
-                  Class / group
-                  <select value={newUser.classGroupId} onChange={(event) => setNewUser((value) => ({ ...value, classGroupId: event.target.value }))}>
-                    {draftClassOptions.map((group) => <option key={group.id} value={group.id}>{group.name} · {group.schedule} · {group.studentIds.length}/{group.capacity}</option>)}
-                  </select>
-                </label>
-                <label>
-                  Current level / placement
-                  <input value={newUser.currentLevel} onChange={(event) => setNewUser((value) => ({ ...value, currentLevel: event.target.value }))} />
-                </label>
-                <label>
-                  Age group
-                  <select value={newUser.ageGroup} onChange={(event) => setNewUser((value) => ({ ...value, ageGroup: event.target.value }))}>
-                    <option value="Adult">Adult</option>
-                    <option value="Teen">Teen</option>
-                    <option value="Child">Child</option>
-                  </select>
-                </label>
-                <label>
-                  Guardian name
-                  <input value={newUser.guardianName} onChange={(event) => setNewUser((value) => ({ ...value, guardianName: event.target.value }))} placeholder="Required for minors" />
-                </label>
-                <label>
-                  Guardian phone
-                  <input value={newUser.guardianPhone} onChange={(event) => setNewUser((value) => ({ ...value, guardianPhone: event.target.value }))} placeholder="+20 ..." />
-                </label>
-              </div>
-            ) : null}
 
             {newUser.role === "teacher" ? (
               <div className="admin-access-form-section">
-                <span>Teacher assignment</span>
+                <span>Teacher profile</span>
                 <label>
                   Subjects taught
                   <input value={newUser.subjects} onChange={(event) => setNewUser((value) => ({ ...value, subjects: event.target.value }))} placeholder="Arabic, Quran, Tajweed" />
                 </label>
                 <label>
-                  Teaching level / specialization
-                  <input value={newUser.specialization} onChange={(event) => setNewUser((value) => ({ ...value, specialization: event.target.value }))} placeholder="Arabic Level 3" />
+                  Teaching levels
+                  <input value={newUser.teachingLevels} onChange={(event) => setNewUser((value) => ({ ...value, teachingLevels: event.target.value }))} placeholder="Arabic Level 3, Tajweed 1" />
                 </label>
                 <label>
-                  Availability
-                  <input value={newUser.availability} onChange={(event) => setNewUser((value) => ({ ...value, availability: event.target.value }))} placeholder="Mon 09:00, Thu 10:30" />
-                </label>
-                <label>
-                  Assign course run
-                  <select value={newUser.courseRunId} onChange={(event) => setNewUser((value) => ({ ...value, courseRunId: event.target.value }))}>
-                    {state.courseRuns.map((run) => {
-                      const course = state.courses.find((item) => item.id === run.courseId);
-                      const branch = state.branches.find((item) => item.id === run.branchId);
-                      return <option key={run.id} value={run.id}>{course?.title ?? run.id} · {branch?.name ?? "Branch"} · {run.term}</option>;
-                    })}
+                  Availability status
+                  <select value={newUser.availabilityStatus} onChange={(event) => setNewUser((value) => ({ ...value, availabilityStatus: event.target.value as StaffAvailabilityStatus }))}>
+                    <option value="available">Available</option>
+                    <option value="limited">Limited</option>
+                    <option value="unavailable">Unavailable</option>
                   </select>
                 </label>
+              </div>
+            ) : null}
+
+            {newUser.role !== "teacher" ? (
+              <div className="admin-access-form-section">
+                <span>Operational profile</span>
+                <label>
+                  Operational scope
+                  <input value={newUser.operationalScope} onChange={(event) => setNewUser((value) => ({ ...value, operationalScope: event.target.value }))} placeholder="rooms, schedule, reports" />
+                </label>
+                {newUser.role === "headofdepartment" ? (
+                  <label>
+                    Academic coverage
+                    <input value={newUser.teachingLevels} onChange={(event) => setNewUser((value) => ({ ...value, teachingLevels: event.target.value }))} placeholder="Arabic Language, Quran and Tajweed" />
+                  </label>
+                ) : null}
               </div>
             ) : null}
 
@@ -1449,14 +1562,14 @@ function AdminAccessExperience({ pageId, params }: { pageId: string; params?: Re
               <small>
                 {draftRoleMeta.label} · {draftBranch?.name ?? "No branch"} · {draftDepartment?.name ?? "No department"}
               </small>
-              {newUser.role === "student" ? (
-                <span>Links to {selectedDraftCourse?.title ?? "selected course"} and {selectedDraftClass?.name ?? "selected class"}.</span>
-              ) : newUser.role === "teacher" ? (
+              {newUser.role === "teacher" ? (
                 <span>
-                  Links to {selectedDraftCourse?.title ?? "selected course"} with {draftTeacherClassCount} class group(s), {splitListInput(newUser.availability).length} availability slot(s), attendance, materials, assignments, grading, quizzes, and feedback tools.
+                  Creates a teacher profile with {splitListInput(newUser.subjects).length} subject(s), {splitListInput(newUser.teachingLevels).length} teaching level(s), and {newUser.availabilityStatus} availability. Course assignment stays in the selected account panel.
                 </span>
               ) : (
-                <span>Uses existing RBAC permissions for {draftRoleMeta.label}.</span>
+                <span>
+                  Creates a {newUser.permissionScope} staff profile with {splitListInput(newUser.operationalScope).length} operational scope item(s) and existing RBAC permissions for {draftRoleMeta.label}.
+                </span>
               )}
             </div>
 
@@ -1571,15 +1684,20 @@ function AdminSystemExperience({ pageId }: { pageId: string }) {
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<IntegrationConfig["id"]>("moodle");
   const [auditQuery, setAuditQuery] = useState("");
   const [auditFilter, setAuditFilter] = useState("All");
-  const [settingsDraft, setSettingsDraft] = useState({
-    organization: "Nile Center",
-    defaultLanguage: "English",
-    academicTerm: "Summer 2026",
-    retentionDays: "365",
+  const [settingsDraft, setSettingsDraft] = useState(() => {
+    const settings = platformStore.getState().settings;
+    return {
+      organization: settings.organization,
+      defaultLanguage: settings.defaultLanguage,
+      academicTerm: settings.academicTerm,
+      retentionDays: String(settings.retentionDays),
+    };
   });
   const [integrationCheck, setIntegrationCheck] = useState("");
   const [savingSystemAction, setSavingSystemAction] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [systemActionError, setSystemActionError] = useState("");
+  const [settingsSaveError, setSettingsSaveError] = useState("");
   const state = useMemo(() => platformStore.getState(), [version]);
   const refresh = () => setVersion((value) => value + 1);
   const actorId = getDemoUser("superadmin").id;
@@ -1726,17 +1844,28 @@ function AdminSystemExperience({ pageId }: { pageId: string }) {
     toast.success("Audit CSV prepared", { description: `${rows.length} row(s) exported from the local audit log.` });
   };
 
-  const saveSettings = (event: React.FormEvent) => {
+  const saveSettings = async (event: React.FormEvent) => {
     event.preventDefault();
-    platformStore.audit(
-      "settings.saved",
-      "PlatformSettings",
-      "global",
-      `${settingsDraft.organization} · ${settingsDraft.defaultLanguage} · ${settingsDraft.academicTerm} · ${settingsDraft.retentionDays} day retention.`,
-      actorId,
-    );
+    if (savingSettings) return;
+    setSavingSettings(true);
+    setSettingsSaveError("");
+    const response = await runPlatformWorkflowActionRequest({
+      type: "settings.save",
+      organization: settingsDraft.organization,
+      defaultLanguage: settingsDraft.defaultLanguage,
+      academicTerm: settingsDraft.academicTerm,
+      retentionDays: Number(settingsDraft.retentionDays),
+    });
+    setSavingSettings(false);
+    if (!response.ok || !response.data) {
+      const message = response.error ?? "Platform settings could not be saved.";
+      setSettingsSaveError(message);
+      toast.error("Settings save failed", { description: message });
+      return;
+    }
+    platformStore.setState(response.data.state);
     refresh();
-    toast.success("Platform settings saved locally");
+    toast.success("Platform settings saved", { description: response.data.persistence });
   };
   const updateAuditQuery = (event: React.ChangeEvent<HTMLInputElement> | React.FormEvent<HTMLInputElement>) => {
     setAuditQuery(event.currentTarget.value);
@@ -1951,9 +2080,15 @@ function AdminSystemExperience({ pageId }: { pageId: string }) {
                     <span key={policy}><CheckCircle2 size={15} /> {policy}</span>
                   ))}
                 </div>
-                <button type="submit">
+                {settingsSaveError ? (
+                  <div className="platform-empty-state error">
+                    <strong>Settings were not saved</strong>
+                    <span>{settingsSaveError}</span>
+                  </div>
+                ) : null}
+                <button type="submit" disabled={savingSettings}>
                   <ShieldCheck size={15} />
-                  Save settings
+                  {savingSettings ? "Saving settings" : "Save settings"}
                 </button>
               </form>
             </>
@@ -2036,7 +2171,12 @@ function AcademicGovernanceExperience({
     title: "",
     outcomes: "",
   });
+  const [moduleSaving, setModuleSaving] = useState(false);
+  const [assessmentSaving, setAssessmentSaving] = useState(false);
+  const [courseStatusSavingKey, setCourseStatusSavingKey] = useState("");
+  const [messageSaving, setMessageSaving] = useState(false);
   const [certificateSavingKey, setCertificateSavingKey] = useState("");
+  const [certificateRejectReasons, setCertificateRejectReasons] = useState<Record<string, string>>({});
   const state = useMemo(() => platformStore.getState(), [version]);
   const refresh = () => setVersion((value) => value + 1);
   const actorRole = scope === "admin" ? "superadmin" : "headofdepartment";
@@ -2116,15 +2256,27 @@ function AcademicGovernanceExperience({
     return text.includes(query.toLowerCase());
   });
   const runAcademicCertificateAction = async (
-    actionType: "certificate.approve" | "certificate.issue",
+    actionType: "certificate.approve" | "certificate.issue" | "certificate.reject",
     certificate: Certificate,
   ) => {
     const nextKey = `${actionType}:${certificate.id}`;
     setCertificateSavingKey(nextKey);
-    const response = await runPlatformWorkflowActionRequest({
-      type: actionType,
-      certificateId: certificate.id,
-    });
+    const rejectionReason =
+      actionType === "certificate.reject"
+        ? certificateRejectReasons[certificate.id]?.trim() ?? ""
+        : "";
+    const response = await runPlatformWorkflowActionRequest(
+      actionType === "certificate.reject"
+        ? {
+            type: actionType,
+            certificateId: certificate.id,
+            reason: rejectionReason,
+          }
+        : {
+            type: actionType,
+            certificateId: certificate.id,
+          },
+    );
     setCertificateSavingKey("");
     if (!response.ok || !response.data) {
       toast.error("Certificate action failed", {
@@ -2140,13 +2292,22 @@ function AcademicGovernanceExperience({
       toast.info(
         actionType === "certificate.issue"
           ? "Approve the certificate before issuing it"
+          : actionType === "certificate.reject"
+            ? "Certificate state did not change"
           : "Certificate state did not change",
       );
       return;
     }
-    toast.success(actionType === "certificate.approve" ? "Certificate approved" : "Certificate issued", {
-      description: `${changed.verificationCode} · ${response.data.persistence}`,
-    });
+    toast.success(
+      actionType === "certificate.approve"
+        ? "Certificate approved"
+        : actionType === "certificate.issue"
+          ? "Certificate issued"
+          : "Certificate rejected",
+      {
+        description: `${changed.verificationCode} · ${response.data.persistence}`,
+      },
+    );
   };
   useEffect(() => {
     if (!programs.length) return;
@@ -2167,7 +2328,7 @@ function AcademicGovernanceExperience({
     }
   }, [academicRecipients, messageDraft.recipientId]);
   const auditRows = state.auditLogs
-    .filter((audit) => /academic|course|program|module|level|curriculum|class/i.test(`${audit.action} ${audit.entityType} ${audit.summary}`))
+    .filter((audit) => /academic|course|program|module|level|curriculum|class|certificate/i.test(`${audit.action} ${audit.entityType} ${audit.summary}`))
     .slice(0, 5);
   const scopedReportRows = [
     ...programs.map((program) => ({ type: "Program", name: program.title, status: program.status, owner: academicDepartments.find((department) => department.id === program.departmentId)?.name ?? "Department" })),
@@ -2191,46 +2352,117 @@ function AcademicGovernanceExperience({
   const attendanceAuditRows = state.auditLogs
     .filter((audit) => audit.action === "attendance.saved" && scopedClassIds.has(audit.entityId))
     .slice(0, 4);
+  const scopedAssignmentIds = new Set(scopedAssignments.map((assignment) => assignment.id));
+  const scopedQuizIds = new Set(scopedQuizzes.map((quiz) => quiz.id));
+  const scopedSubmissions = state.assignmentSubmissions.filter((submission) => scopedAssignmentIds.has(submission.assignmentId));
+  const scopedAttempts = state.quizAttempts.filter((attempt) => scopedQuizIds.has(attempt.quizId));
+  const expectedAssessmentRows = scopedStudentIds.size * (scopedAssignments.length + scopedQuizzes.length);
+  const completedAssessmentRows =
+    scopedSubmissions.filter((submission) => submission.status === "completed").length +
+    scopedAttempts.filter((attempt) => attempt.status === "completed").length;
+  const assessmentCompletion = expectedAssessmentRows
+    ? Math.round((completedAssessmentRows / expectedAssessmentRows) * 100)
+    : 0;
+  const teacherLoadRows = state.teachers
+    .filter((teacher) => departmentIds.includes(teacher.departmentId))
+    .map((teacher) => {
+      const user = state.users.find((item) => item.id === teacher.userId);
+      const teacherRuns = scopedRuns.filter((run) => run.teacherId === teacher.userId);
+      const teacherClasses = scopedClasses.filter((classGroup) => teacherRuns.some((run) => run.id === classGroup.courseRunId));
+      const teacherStudents = new Set(teacherClasses.flatMap((classGroup) => classGroup.studentIds));
+      return {
+        id: teacher.id,
+        name: user?.name ?? "Teacher",
+        status: teacher.availabilityStatus,
+        classes: teacherClasses.length,
+        students: teacherStudents.size,
+      };
+    });
+  const courseHealthRows = scopedCourses.map((course) => {
+    const modules = state.modules.filter((module) => module.courseId === course.id);
+    const moduleIds = new Set(modules.map((module) => module.id));
+    const lessons = state.lessons.filter((lesson) => moduleIds.has(lesson.moduleId));
+    const runs = scopedRuns.filter((run) => run.courseId === course.id);
+    const runIds = new Set(runs.map((run) => run.id));
+    const classes = scopedClasses.filter((classGroup) => runIds.has(classGroup.courseRunId));
+    const enrollments = state.enrollments.filter((enrollment) => runIds.has(enrollment.courseRunId));
+    const averageProgress = enrollments.length
+      ? Math.round(enrollments.reduce((total, enrollment) => total + enrollment.progress, 0) / enrollments.length)
+      : 0;
+    const coverage = modules.length ? Math.min(100, Math.round((lessons.length / (modules.length * 3)) * 100)) : 0;
+    return {
+      course,
+      modules: modules.length,
+      lessons: lessons.length,
+      classes: classes.length,
+      enrollments: enrollments.length,
+      averageProgress,
+      coverage,
+    };
+  });
+  const atRiskStudents = state.enrollments
+    .filter((enrollment) => scopedRunIds.has(enrollment.courseRunId))
+    .filter((enrollment) => enrollment.attendanceRate < 85 || enrollment.currentGrade < 80 || enrollment.progress < 55)
+    .map((enrollment) => {
+      const student = state.students.find((item) => item.id === enrollment.studentId);
+      const user = state.users.find((item) => item.id === student?.userId);
+      const run = state.courseRuns.find((item) => item.id === enrollment.courseRunId);
+      const course = state.courses.find((item) => item.id === run?.courseId);
+      return { enrollment, studentName: user?.name ?? "Student", courseTitle: course?.title ?? "Course" };
+    })
+    .slice(0, 5);
+  const certificateQueue = scopedCertificates.filter((certificate) =>
+    ["pending_approval", "approved", "rejected"].includes(certificate.status),
+  );
 
-  const audit = (action: string, entityType: string, entityId: string, summary: string) => {
-    platformStore.audit(action, entityType, entityId, summary, actorId);
+  const updateCourseStatus = async (courseId: string, status: Extract<EntityStatus, "draft" | "active" | "paused" | "completed">) => {
+    setCourseStatusSavingKey(courseId);
+    const response = await runPlatformWorkflowActionRequest({
+      type: "course.status.update",
+      courseId,
+      status,
+      actorId,
+    });
+    setCourseStatusSavingKey("");
+    if (!response.ok || !response.data) {
+      toast.error("Course status could not be saved", {
+        description: response.error ?? "The server could not save this course status.",
+      });
+      return;
+    }
+    platformStore.setState(response.data.state);
     refresh();
+    toast.success("Course status updated", { description: response.data.persistence });
   };
 
-  const updateCourseStatus = (courseId: string, status: EntityStatus) => {
-    const next = clonePlatformState();
-    next.courses = next.courses.map((course) => (course.id === courseId ? { ...course, status } : course));
-    platformStore.setState(next);
-    audit("course.status_updated", "Course", courseId, `Set course status to ${status}.`);
-    toast.success("Course status updated");
-  };
-
-  const addModule = (event: React.FormEvent) => {
+  const addModule = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedCourse || !moduleDraft.title.trim()) {
       toast.error("Module title is required");
       return;
     }
-    const next = clonePlatformState();
-    const courseModules = next.modules.filter((module) => module.courseId === selectedCourse.id);
-    const id = `mod_${selectedCourse.id}_${Date.now().toString(36)}`;
-    next.modules = [
-      ...next.modules,
-      {
-        id,
-        courseId: selectedCourse.id,
-        title: moduleDraft.title.trim(),
-        order: courseModules.length + 1,
-        outcomes: moduleDraft.outcomes
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-      },
-    ];
-    platformStore.setState(next);
+    setModuleSaving(true);
+    const response = await runPlatformWorkflowActionRequest({
+      type: "curriculum.module.create",
+      courseId: selectedCourse.id,
+      title: moduleDraft.title.trim(),
+      outcomes: moduleDraft.outcomes
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+      actorId,
+    });
+    setModuleSaving(false);
+    if (!response.ok || !response.data) {
+      toast.error("Module could not be saved", {
+        description: response.error ?? "The server could not save this curriculum module.",
+      });
+      return;
+    }
+    platformStore.setState(response.data.state);
     setModuleDraft({ title: "", outcomes: "" });
-    audit("curriculum.module_created", "Module", id, `Added module to ${selectedCourse.title}.`);
-    toast.success("Module added");
+    refresh();
+    toast.success("Module added", { description: `${selectedCourse.title} · ${response.data.persistence}` });
   };
 
   const selectProgram = (programId: string) => {
@@ -2239,7 +2471,7 @@ function AcademicGovernanceExperience({
     if (course) setSelectedCourseId(course.id);
   };
 
-  const createAssessment = (event: React.FormEvent) => {
+  const createAssessment = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedCourse || !assessmentDraft.title.trim()) {
       toast.error("Assessment title is required");
@@ -2250,50 +2482,67 @@ function AcademicGovernanceExperience({
       toast.error("Create a course run before creating assessments");
       return;
     }
-    if (assessmentDraft.type === "quiz") {
-      platformStore.createQuiz(
-        {
+    setAssessmentSaving(true);
+    const response =
+      assessmentDraft.type === "quiz"
+        ? await runPlatformWorkflowActionRequest({
+          type: "quiz.create",
           courseRunId: run.id,
           title: assessmentDraft.title.trim(),
           dueAt: getDefaultDueAt(2),
           durationMinutes: 30,
           attemptsAllowed: 1,
           questionTypes: ["multiple_choice", "short_answer", "oral_record"],
-        },
-        actorId,
-      );
-    } else {
-      platformStore.createAssignment(
-        {
+          actorId,
+        })
+        : await runPlatformWorkflowActionRequest({
+          type: "assignment.create",
           courseRunId: run.id,
           title: assessmentDraft.title.trim(),
-          dueAt: "2026-07-05T18:00:00.000Z",
+          dueAt: getDefaultDueAt(7),
           submissionType: "text",
           rubric: ["Accuracy", "Fluency", "Teacher feedback"],
-        },
-        actorId,
-      );
+          actorId,
+        });
+    setAssessmentSaving(false);
+    if (!response.ok || !response.data) {
+      toast.error("Assessment could not be created", {
+        description: response.error ?? "The server could not save this academic assessment.",
+      });
+      return;
     }
+    platformStore.setState(response.data.state);
     setAssessmentDraft({ title: "", type: "quiz" });
     refresh();
-    toast.success("Assessment added to academic plan");
+    toast.success("Assessment added to academic plan", { description: response.data.persistence });
   };
 
-  const sendAcademicMessage = (event: React.FormEvent) => {
+  const sendAcademicMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!messageDraft.recipientId || !messageDraft.subject.trim() || !messageDraft.body.trim()) {
       toast.error("Recipient, subject, and body are required");
       return;
     }
-    platformStore.sendMessage({
-      fromUserId: actorId,
+    setMessageSaving(true);
+    const response = await runPlatformWorkflowActionRequest({
+      type: "message.send",
       toUserId: messageDraft.recipientId,
       subject: messageDraft.subject.trim(),
       body: messageDraft.body.trim(),
+      channel: "in_app",
+      actorId,
     });
+    setMessageSaving(false);
+    if (!response.ok || !response.data) {
+      toast.error("Academic message could not be sent", {
+        description: response.error ?? "The server rejected this message.",
+      });
+      return;
+    }
+    platformStore.setState(response.data.state);
     setMessageDraft((value) => ({ ...value, subject: "", body: "" }));
     refresh();
-    toast.success("Academic message sent");
+    toast.success("Academic message sent", { description: response.data.persistence });
   };
 
   const exportAcademicCsv = () => {
@@ -2365,6 +2614,84 @@ function AcademicGovernanceExperience({
         <AdminAccessMetric label="Seat usage" value={`${enrolledSeats}/${classCapacity}`} />
         <AdminAccessMetric label="Lessons" value={String(scopedLessons.length)} />
       </div>
+
+      {scope === "hod" ? (
+        <div className="academic-oversight-grid">
+          <section className="academic-panel">
+            <div className="academic-panel-head">
+              <div>
+                <span>Course health</span>
+                <strong>{courseHealthRows.length} department courses</strong>
+              </div>
+              <Activity size={18} />
+            </div>
+            <div className="academic-health-list">
+              {courseHealthRows.slice(0, 4).map((row) => (
+                <article key={row.course.id}>
+                  <div>
+                    <strong>{row.course.title}</strong>
+                    <small>{row.modules} modules · {row.lessons} lessons · {row.enrollments} enrollments</small>
+                  </div>
+                  <span>{row.coverage}% coverage</span>
+                  <em>{row.averageProgress}% progress</em>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="academic-panel">
+            <div className="academic-panel-head">
+              <div>
+                <span>Teacher load</span>
+                <strong>{teacherLoadRows.length} faculty profiles</strong>
+              </div>
+              <Users size={18} />
+            </div>
+            <div className="academic-health-list">
+              {teacherLoadRows.slice(0, 4).map((teacher) => (
+                <article key={teacher.id}>
+                  <div>
+                    <strong>{teacher.name}</strong>
+                    <small>{teacher.classes} classes · {teacher.students} learners</small>
+                  </div>
+                  <span>{teacher.status.replace("_", " ")}</span>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="academic-panel">
+            <div className="academic-panel-head">
+              <div>
+                <span>Academic risk</span>
+                <strong>{atRiskStudents.length} learners need review</strong>
+              </div>
+              <AlertTriangle size={18} />
+            </div>
+            <div className="academic-health-list">
+              {atRiskStudents.length ? (
+                atRiskStudents.map((row) => (
+                  <article key={row.enrollment.id}>
+                    <div>
+                      <strong>{row.studentName}</strong>
+                      <small>{row.courseTitle} · {row.enrollment.progress}% progress</small>
+                    </div>
+                    <span>{row.enrollment.attendanceRate}% att.</span>
+                    <em>{row.enrollment.currentGrade}% grade</em>
+                  </article>
+                ))
+              ) : (
+                <article>
+                  <div>
+                    <strong>No current risk flags</strong>
+                    <small>Attendance, progress, and grade thresholds are clear in this department.</small>
+                  </div>
+                </article>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {pageId === "reports" ? (
         <section className="academic-panel academic-attendance-panel">
@@ -2490,7 +2817,16 @@ function AcademicGovernanceExperience({
               </div>
               <label>
                 Course status
-                <select value={selectedCourse.status} onChange={(event) => updateCourseStatus(selectedCourse.id, event.target.value as EntityStatus)}>
+                <select
+                  value={selectedCourse.status}
+                  disabled={courseStatusSavingKey === selectedCourse.id}
+                  onChange={(event) =>
+                    void updateCourseStatus(
+                      selectedCourse.id,
+                      event.target.value as Extract<EntityStatus, "draft" | "active" | "paused" | "completed">,
+                    )
+                  }
+                >
                   <option value="draft">Draft</option>
                   <option value="active">Active</option>
                   <option value="paused">Paused</option>
@@ -2611,9 +2947,9 @@ function AcademicGovernanceExperience({
               Outcomes
               <input value={moduleDraft.outcomes} onChange={(event) => setModuleDraft((value) => ({ ...value, outcomes: event.target.value }))} placeholder="Outcome one, outcome two" />
             </label>
-            <button type="submit">
+            <button type="submit" disabled={moduleSaving}>
               <Plus size={15} />
-              Add module
+              {moduleSaving ? "Adding..." : "Add module"}
             </button>
           </form>
         </section>
@@ -2676,9 +3012,23 @@ function AcademicGovernanceExperience({
           <div className="academic-panel-head">
             <div>
               <span>Assessment command</span>
-              <strong>{scopedAssignments.length + scopedQuizzes.length} items</strong>
+              <strong>{assessmentCompletion}% completion</strong>
             </div>
             <ClipboardList size={18} />
+          </div>
+          <div className="academic-course-stats">
+            <article>
+              <span>Assignments</span>
+              <strong>{scopedAssignments.length}</strong>
+            </article>
+            <article>
+              <span>Quizzes</span>
+              <strong>{scopedQuizzes.length}</strong>
+            </article>
+            <article>
+              <span>Completed</span>
+              <strong>{completedAssessmentRows}/{expectedAssessmentRows}</strong>
+            </article>
           </div>
           <div className="academic-module-list">
             {[...scopedAssignments, ...scopedQuizzes].slice(0, 5).map((item) => (
@@ -2703,9 +3053,9 @@ function AcademicGovernanceExperience({
                 <option value="assignment">Assignment</option>
               </select>
             </label>
-            <button type="submit">
+            <button type="submit" disabled={assessmentSaving}>
               <Plus size={15} />
-              Create assessment
+              {assessmentSaving ? "Creating..." : "Create assessment"}
             </button>
           </form>
         </section>
@@ -2714,7 +3064,7 @@ function AcademicGovernanceExperience({
           <div className="academic-panel-head">
             <div>
               <span>Certificate approvals</span>
-              <strong>{scopedCertificates.filter((certificate) => certificate.status !== "issued").length} open</strong>
+              <strong>{certificateQueue.length} in review</strong>
             </div>
             <ShieldCheck size={18} />
           </div>
@@ -2727,9 +3077,12 @@ function AcademicGovernanceExperience({
               const eligible = certificate.grade >= 80 && certificate.attendanceRate >= 80;
               const canApprove = certificate.status === "pending_approval" && eligible;
               const canIssue = certificate.status === "approved";
+              const canReject = certificate.status === "pending_approval" || certificate.status === "approved";
               const issued = certificate.status === "issued";
+              const rejectReason = certificateRejectReasons[certificate.id]?.trim() ?? "";
               const approveKey = `certificate.approve:${certificate.id}`;
               const issueKey = `certificate.issue:${certificate.id}`;
+              const rejectKey = `certificate.reject:${certificate.id}`;
               return (
                 <article key={certificate.id}>
                   <div>
@@ -2738,6 +3091,21 @@ function AcademicGovernanceExperience({
                   </div>
                   <span className={`platform-certificate-status ${certificate.status}`}>{certificate.status}</span>
                   <div className="platform-row-actions">
+                    {canReject ? (
+                      <label className="platform-certificate-reject-reason">
+                        Reject reason
+                        <input
+                          value={certificateRejectReasons[certificate.id] ?? ""}
+                          onChange={(event) =>
+                            setCertificateRejectReasons((current) => ({
+                              ...current,
+                              [certificate.id]: event.target.value,
+                            }))
+                          }
+                          placeholder="Eligibility note"
+                        />
+                      </label>
+                    ) : null}
                     <button
                       disabled={!canApprove || Boolean(certificateSavingKey)}
                       onClick={() => runAcademicCertificateAction("certificate.approve", certificate)}
@@ -2755,6 +3123,12 @@ function AcademicGovernanceExperience({
                       onClick={() => runAcademicCertificateAction("certificate.issue", certificate)}
                     >
                       {certificateSavingKey === issueKey ? "Issuing" : issued ? "Issued" : canIssue ? "Issue" : "Approve first"}
+                    </button>
+                    <button
+                      disabled={!canReject || !rejectReason || Boolean(certificateSavingKey)}
+                      onClick={() => runAcademicCertificateAction("certificate.reject", certificate)}
+                    >
+                      {certificateSavingKey === rejectKey ? "Rejecting" : canReject ? "Reject" : "Closed"}
                     </button>
                   </div>
                 </article>
@@ -2832,9 +3206,9 @@ function AcademicGovernanceExperience({
               Message
               <textarea value={messageDraft.body} onChange={(event) => setMessageDraft((value) => ({ ...value, body: event.target.value }))} placeholder="Write a concise department message" />
             </label>
-            <button type="submit" disabled={!academicRecipients.length}>
+            <button type="submit" disabled={!academicRecipients.length || messageSaving}>
               <Send size={15} />
-              Send academic message
+              {messageSaving ? "Sending..." : "Send academic message"}
             </button>
           </form>
         </section>
@@ -2861,6 +3235,10 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
     classGroupId: "",
   });
   const [eventSaving, setEventSaving] = useState(false);
+  const [roomStatusSaving, setRoomStatusSaving] = useState<string | null>(null);
+  const [roomCreateSaving, setRoomCreateSaving] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [messageSaving, setMessageSaving] = useState(false);
   const [messageDraft, setMessageDraft] = useState({
     recipientId: "usr_registrar_demo",
     subject: "Branch operations update",
@@ -2888,6 +3266,19 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
   const branchAttendance = state.attendance.filter((record) => branchClasses.some((classGroup) => classGroup.id === record.classGroupId));
   const branchStudentIds = new Set(branchStudents.map(({ student }) => student.id));
   const branchInvoices = state.invoices.filter((invoice) => branchStudentIds.has(invoice.studentId));
+  const branchInvoiceRows = branchInvoices.map((invoice) => {
+    const paid = state.payments
+      .filter((payment) => payment.invoiceId === invoice.id && payment.status === "paid")
+      .reduce((total, payment) => total + payment.amount, 0);
+    return { invoice, paid, balance: Math.max(0, invoice.amount - paid) };
+  });
+  const branchOpenInvoices = branchInvoiceRows.filter((row) => row.balance > 0 || row.invoice.status !== "paid");
+  const branchPaymentBalance = branchInvoiceRows.reduce((total, row) => total + row.balance, 0);
+  const branchSessions = state.classSessions.filter((session) => branchClasses.some((classGroup) => classGroup.id === session.classGroupId));
+  const missingAttendanceSessions = branchSessions.filter((session) => !session.attendanceSaved);
+  const branchAttendanceExceptions = branchAttendance.filter((record) => record.status === "late" || record.status === "absent" || record.status === "excused");
+  const pendingBranchEvents = branchEvents.filter((event) => event.status === "pending");
+  const nextBranchEvents = branchEvents.slice(0, 4);
   const branchRecipientIds = new Set([actorId, ...branchUsers.map((user) => user.id), ...branchTeachers.map(({ teacher }) => teacher.userId)]);
   const branchRecipients = state.users.filter((user) => user.id !== actorId && branchRecipientIds.has(user.id));
   const branchMessages = state.messages.filter((message) => branchRecipientIds.has(message.fromUserId) || branchRecipientIds.has(message.toUserId));
@@ -2911,45 +3302,55 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
     .filter((audit) => /branch|room|class|attendance|schedule|payment|settings/i.test(`${audit.action} ${audit.entityType} ${audit.summary}`))
     .slice(0, 5);
 
-  const audit = (action: string, entityType: string, entityId: string, summary: string) => {
-    platformStore.audit(action, entityType, entityId, summary, actorId);
+  const updateRoomStatus = async (roomId: string, status: EntityStatus) => {
+    setRoomStatusSaving(roomId);
+    const result = await runPlatformWorkflowActionRequest({
+      type: "room.status.update",
+      roomId,
+      status: status as Extract<EntityStatus, "active" | "pending" | "paused">,
+      actorId,
+    });
+    setRoomStatusSaving(null);
+    if (!result.ok || !result.data) {
+      toast.error("Room status update failed", {
+        description: result.error ?? "The server could not update this room.",
+      });
+      return;
+    }
+    platformStore.setState(result.data.state);
     refresh();
+    toast.success("Room status updated", { description: result.data.persistence });
   };
 
-  const updateRoomStatus = (roomId: string, status: EntityStatus) => {
-    const next = clonePlatformState();
-    next.rooms = next.rooms.map((room) => (room.id === roomId ? { ...room, status } : room));
-    platformStore.setState(next);
-    audit("room.status_updated", "Room", roomId, `Set room status to ${status}.`);
-    toast.success("Room status updated");
-  };
-
-  const addRoom = (event: React.FormEvent) => {
+  const addRoom = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!branch || !roomDraft.name.trim()) {
       toast.error("Room name is required");
       return;
     }
-    const next = clonePlatformState();
-    const id = `room_${branch.code.toLowerCase()}_${Date.now().toString(36)}`;
-    next.rooms = [
-      {
-        id,
-        branchId: branch.id,
-        name: roomDraft.name.trim(),
-        capacity: Number(roomDraft.capacity) || 18,
-        equipment: roomDraft.equipment
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        status: "active",
-      },
-      ...next.rooms,
-    ];
-    platformStore.setState(next);
+    setRoomCreateSaving(true);
+    const result = await runPlatformWorkflowActionRequest({
+      type: "room.create",
+      branchId: branch.id,
+      name: roomDraft.name.trim(),
+      capacity: Number(roomDraft.capacity) || 18,
+      equipment: roomDraft.equipment
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+      actorId,
+    });
+    setRoomCreateSaving(false);
+    if (!result.ok || !result.data) {
+      toast.error("Room create failed", {
+        description: result.error ?? "The server could not create this room.",
+      });
+      return;
+    }
+    platformStore.setState(result.data.state);
     setRoomDraft({ name: "", capacity: "18", equipment: "" });
-    audit("room.created", "Room", id, `Added room ${roomDraft.name.trim()} to ${branch.name}.`);
-    toast.success("Room added");
+    refresh();
+    toast.success("Room added", { description: result.data.persistence });
   };
 
   useEffect(() => {
@@ -3009,32 +3410,57 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
     });
   };
 
-  const recordBranchPayment = () => {
-    const invoice = branchInvoices.find((item) => item.status !== "paid") ?? branchInvoices[0];
+  const recordBranchPayment = async () => {
+    const invoice = branchOpenInvoices[0]?.invoice ?? branchInvoices[0];
     if (!invoice) {
       toast.info("No branch invoice is ready for payment");
       return;
     }
-    platformStore.recordPayment(invoice.id, actorId);
+    setPaymentSaving(true);
+    const result = await runPlatformWorkflowActionRequest({
+      type: "payment.record",
+      invoiceId: invoice.id,
+      method: "manual",
+      actorId,
+    });
+    setPaymentSaving(false);
+    if (!result.ok || !result.data) {
+      toast.error("Branch payment failed", {
+        description: result.error ?? "The server could not record this payment.",
+      });
+      return;
+    }
+    platformStore.setState(result.data.state);
     refresh();
-    toast.success("Branch payment recorded", { description: invoice.id });
+    toast.success("Branch payment recorded", { description: `${invoice.id} · ${result.data.persistence}` });
   };
 
-  const sendBranchMessage = (event: React.FormEvent) => {
+  const sendBranchMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!messageDraft.recipientId || !messageDraft.subject.trim() || !messageDraft.body.trim()) {
       toast.error("Recipient, subject, and body are required");
       return;
     }
-    platformStore.sendMessage({
-      fromUserId: actorId,
+    setMessageSaving(true);
+    const result = await runPlatformWorkflowActionRequest({
+      type: "message.send",
       toUserId: messageDraft.recipientId,
       subject: messageDraft.subject.trim(),
       body: messageDraft.body.trim(),
+      channel: "in_app",
+      actorId,
     });
+    setMessageSaving(false);
+    if (!result.ok || !result.data) {
+      toast.error("Branch message failed", {
+        description: result.error ?? "The server could not send this branch message.",
+      });
+      return;
+    }
+    platformStore.setState(result.data.state);
     setMessageDraft((value) => ({ ...value, subject: "", body: "" }));
     refresh();
-    toast.success("Branch message sent");
+    toast.success("Branch message sent", { description: result.data.persistence });
   };
 
   const exportBranchCsv = () => {
@@ -3100,7 +3526,7 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
         <AdminAccessMetric label="Students" value={String(branchStudents.length)} />
         <AdminAccessMetric label="Teachers" value={String(branchTeachers.length)} />
         <AdminAccessMetric label="Rooms active" value={`${activeRooms}/${branchRooms.length}`} />
-        <AdminAccessMetric label="Seat usage" value={`${assignedSeats}/${roomCapacity || 0}`} />
+        <AdminAccessMetric label="Exceptions" value={`${branchAttendanceExceptions.length}/${missingAttendanceSessions.length}`} />
       </div>
 
       <div className="branch-ops-layout">
@@ -3220,7 +3646,12 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
                   <strong>{room.name}</strong>
                   <small>{room.capacity} seats · {room.equipment.join(", ") || "No equipment listed"}</small>
                 </div>
-                <select value={room.status} onChange={(event) => updateRoomStatus(room.id, event.target.value as EntityStatus)} aria-label={`${room.name} status`}>
+                <select
+                  value={room.status}
+                  disabled={roomStatusSaving === room.id}
+                  onChange={(event) => void updateRoomStatus(room.id, event.target.value as EntityStatus)}
+                  aria-label={`${room.name} status`}
+                >
                   <option value="active">Active</option>
                   <option value="paused">Paused</option>
                   <option value="pending">Pending</option>
@@ -3231,19 +3662,37 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
           <form className="branch-room-form" onSubmit={addRoom}>
             <label>
               Room name
-              <input value={roomDraft.name} onChange={(event) => setRoomDraft((value) => ({ ...value, name: event.target.value }))} placeholder="Room name" />
+              <input
+                value={roomDraft.name}
+                disabled={roomCreateSaving}
+                onChange={(event) => setRoomDraft((value) => ({ ...value, name: event.target.value }))}
+                placeholder="Room name"
+              />
             </label>
             <label>
               Capacity
-              <input type="number" value={roomDraft.capacity} onChange={(event) => setRoomDraft((value) => ({ ...value, capacity: event.target.value }))} placeholder="18" />
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={roomDraft.capacity}
+                disabled={roomCreateSaving}
+                onChange={(event) => setRoomDraft((value) => ({ ...value, capacity: event.target.value }))}
+                placeholder="18"
+              />
             </label>
             <label>
               Equipment
-              <input value={roomDraft.equipment} onChange={(event) => setRoomDraft((value) => ({ ...value, equipment: event.target.value }))} placeholder="Projector, whiteboard" />
+              <input
+                value={roomDraft.equipment}
+                disabled={roomCreateSaving}
+                onChange={(event) => setRoomDraft((value) => ({ ...value, equipment: event.target.value }))}
+                placeholder="Projector, whiteboard"
+              />
             </label>
-            <button type="submit">
+            <button type="submit" disabled={roomCreateSaving}>
               <Plus size={15} />
-              Add room
+              {roomCreateSaving ? "Adding room" : "Add room"}
             </button>
           </form>
         </section>
@@ -3305,9 +3754,34 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
           <div className="branch-panel-head">
             <div>
               <span>Schedule command</span>
-              <strong>{branchEvents.length} branch events</strong>
+              <strong>{branchEvents.length} branch events · {pendingBranchEvents.length} review</strong>
             </div>
             <CalendarDays size={18} />
+          </div>
+          <div className="branch-class-list compact">
+            {(pendingBranchEvents.length ? pendingBranchEvents : nextBranchEvents).slice(0, 3).map((eventRow) => {
+              const eventRoom = state.rooms.find((room) => room.id === eventRow.roomId);
+              const eventClass = state.classGroups.find((classGroup) => classGroup.id === eventRow.classGroupId);
+              return (
+                <article key={eventRow.id}>
+                  <div>
+                    <strong>{eventRow.title}</strong>
+                    <small>{eventRoom?.name ?? "No room"} · {eventClass?.name ?? eventRow.type}</small>
+                  </div>
+                  <span>{eventRow.status === "pending" ? "review" : eventRow.status}</span>
+                  <em>{new Date(eventRow.startsAt).toLocaleString()}</em>
+                </article>
+              );
+            })}
+            {!branchEvents.length ? (
+              <article>
+                <div>
+                  <strong>No branch events scheduled</strong>
+                  <small>Create a room booking, placement test, or class session for this branch.</small>
+                </div>
+                <span>empty</span>
+              </article>
+            ) : null}
           </div>
           <form className="branch-room-form stacked" onSubmit={createBranchEvent}>
             <label>
@@ -3357,32 +3831,64 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
         <section className="branch-panel branch-attendance-panel">
           <div className="branch-panel-head">
             <div>
-              <span>Attendance watch</span>
-              <strong>{branchAttendance.length} records</strong>
+              <span>Attendance exceptions</span>
+              <strong>{branchAttendanceExceptions.length} exceptions · {missingAttendanceSessions.length} missing</strong>
             </div>
             <ClipboardList size={18} />
           </div>
           <div className="branch-settings-list">
-            {(["present", "late", "absent", "excused"] as AttendanceStatus[]).map((status) => (
-              <article key={status}>
+            {[
+              ["Missing sessions", `${missingAttendanceSessions.length} session(s) need save`],
+              ["Late", `${branchAttendance.filter((record) => record.status === "late").length} learner record(s)`],
+              ["Absent", `${branchAttendance.filter((record) => record.status === "absent").length} learner record(s)`],
+              ["Excused", `${branchAttendance.filter((record) => record.status === "excused").length} learner record(s)`],
+            ].map(([label, value]) => (
+              <article key={label}>
                 <CheckCircle2 size={15} />
                 <div>
-                  <strong>{status}</strong>
-                  <small>{branchAttendance.filter((record) => record.status === status).length} learner record(s)</small>
+                  <strong>{label}</strong>
+                  <small>{value}</small>
                 </div>
               </article>
             ))}
           </div>
           <div className="branch-class-list compact">
-            {branchClasses.slice(0, 3).map((classGroup) => (
-              <article key={classGroup.id}>
+            {(branchAttendanceExceptions.length
+              ? branchAttendanceExceptions.slice(0, 4).map((record) => {
+                  const student = state.students.find((item) => item.id === record.studentId);
+                  const user = state.users.find((item) => item.id === student?.userId);
+                  const classGroup = branchClasses.find((item) => item.id === record.classGroupId);
+                  return (
+                    <article key={record.id}>
+                      <div>
+                        <strong>{user?.name ?? record.studentId}</strong>
+                        <small>{classGroup?.name ?? "Branch class"} · {record.notes ?? "No note"}</small>
+                      </div>
+                      <span>{record.status}</span>
+                    </article>
+                  );
+                })
+              : missingAttendanceSessions.slice(0, 4).map((session) => {
+                  const classGroup = branchClasses.find((item) => item.id === session.classGroupId);
+                  return (
+                    <article key={session.id}>
+                      <div>
+                        <strong>{session.title}</strong>
+                        <small>{classGroup?.name ?? "Branch class"} · {new Date(session.startsAt).toLocaleString()}</small>
+                      </div>
+                      <span>save due</span>
+                    </article>
+                  );
+                }))}
+            {!branchAttendanceExceptions.length && !missingAttendanceSessions.length ? (
+              <article>
                 <div>
-                  <strong>{classGroup.name}</strong>
-                  <small>{classGroup.studentIds.length} enrolled · {state.classSessions.filter((session) => session.classGroupId === classGroup.id && session.attendanceSaved).length} saved sessions</small>
+                  <strong>Attendance is clear</strong>
+                  <small>Saved branch attendance has no late, absent, or excused exceptions.</small>
                 </div>
-                <span>{classGroup.schedule}</span>
+                <span>clear</span>
               </article>
-            ))}
+            ) : null}
           </div>
         </section>
 
@@ -3390,18 +3896,18 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
           <div className="branch-panel-head">
             <div>
               <span>Payment queue</span>
-              <strong>{branchInvoices.filter((invoice) => invoice.status !== "paid").length} open</strong>
+              <strong>{branchOpenInvoices.length} open · EGP {branchPaymentBalance}</strong>
             </div>
             <CreditCard size={18} />
           </div>
           <div className="branch-class-list compact">
-            {branchInvoices.length ? branchInvoices.map((invoice) => (
-              <article key={invoice.id}>
+            {branchInvoiceRows.length ? branchInvoiceRows.map((row) => (
+              <article key={row.invoice.id}>
                 <div>
-                  <strong>{invoice.id}</strong>
-                  <small>{invoice.currency} {invoice.amount} · due {new Date(invoice.dueAt).toLocaleDateString()}</small>
+                  <strong>{row.invoice.id}</strong>
+                  <small>{row.invoice.currency} {row.invoice.amount} · paid {row.paid} · due {new Date(row.invoice.dueAt).toLocaleDateString()}</small>
                 </div>
-                <span>{invoice.status}</span>
+                <span>{row.balance > 0 ? `${row.invoice.currency} ${row.balance}` : row.invoice.status}</span>
               </article>
             )) : (
               <article>
@@ -3413,9 +3919,9 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
               </article>
             )}
           </div>
-          <button className="platform-secondary-button" onClick={recordBranchPayment}>
+          <button className="platform-secondary-button" onClick={() => void recordBranchPayment()} disabled={paymentSaving || !branchOpenInvoices.length}>
             <CreditCard size={15} />
-            Record payment
+            {paymentSaving ? "Recording payment" : "Record payment"}
           </button>
         </section>
 
@@ -3430,9 +3936,9 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
           <div className="platform-report-table compact">
             {[
               ["Classes", `${branchClasses.length} active groups`, `${assignedSeats}/${roomCapacity || 0} seat usage`],
-              ["Rooms", `${activeRooms}/${branchRooms.length} active`, branch?.name ?? "Branch"],
-              ["Payments", `${branchInvoices.filter((invoice) => invoice.status !== "paid").length} open invoices`, `${branchInvoices.length} total`],
-              ["Attendance", `${branchAttendance.length} records`, `${branchAttendance.filter((record) => record.status === "present").length} present`],
+              ["Rooms", `${activeRooms}/${branchRooms.length} active`, `${pendingBranchEvents.length} schedule review`],
+              ["Payments", `${branchOpenInvoices.length} open invoices`, `EGP ${branchPaymentBalance} balance`],
+              ["Attendance", `${branchAttendanceExceptions.length} exceptions`, `${missingAttendanceSessions.length} missing sessions`],
             ].map(([type, value, detail]) => (
               <article key={type}>
                 <span>
@@ -3467,7 +3973,11 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
           <form className="branch-room-form stacked" onSubmit={sendBranchMessage}>
             <label>
               Recipient
-              <select value={messageDraft.recipientId} onChange={(event) => setMessageDraft((value) => ({ ...value, recipientId: event.target.value }))}>
+              <select
+                value={messageDraft.recipientId}
+                disabled={messageSaving}
+                onChange={(event) => setMessageDraft((value) => ({ ...value, recipientId: event.target.value }))}
+              >
                 {branchRecipients.length ? branchRecipients.map((user) => (
                   <option key={user.id} value={user.id}>{user.name} · {roleMeta[user.activeRole].label}</option>
                 )) : <option value="">No branch recipient</option>}
@@ -3475,15 +3985,25 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
             </label>
             <label>
               Subject
-              <input value={messageDraft.subject} onChange={(event) => setMessageDraft((value) => ({ ...value, subject: event.target.value }))} placeholder="Branch update" />
+              <input
+                value={messageDraft.subject}
+                disabled={messageSaving}
+                onChange={(event) => setMessageDraft((value) => ({ ...value, subject: event.target.value }))}
+                placeholder="Branch update"
+              />
             </label>
             <label>
               Message
-              <textarea value={messageDraft.body} onChange={(event) => setMessageDraft((value) => ({ ...value, body: event.target.value }))} placeholder="Write a branch message" />
+              <textarea
+                value={messageDraft.body}
+                disabled={messageSaving}
+                onChange={(event) => setMessageDraft((value) => ({ ...value, body: event.target.value }))}
+                placeholder="Write a branch message"
+              />
             </label>
-            <button type="submit" disabled={!branchRecipients.length}>
+            <button type="submit" disabled={!branchRecipients.length || messageSaving}>
               <Send size={15} />
-              Send branch message
+              {messageSaving ? "Sending message" : "Send branch message"}
             </button>
           </form>
         </section>
@@ -3511,6 +4031,41 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
     source: "manual",
     notes: "",
   });
+  const [applicationDraft, setApplicationDraft] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+    branchId: "br_cairo",
+    courseInterest: "Arabic Language",
+    schedulePreference: "Evening",
+    notes: "",
+  });
+  const [placementDraft, setPlacementDraft] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+    branchId: "br_online",
+    subject: "Arabic Language",
+    preferredDate: getDefaultDueAt(2),
+    currentLevel: "Placement pending",
+  });
+  const [studentDraft, setStudentDraft] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+    branchId: "br_online",
+    preferredLanguage: "English",
+    courseInterest: "Arabic Language",
+    ageGroup: "Adult",
+    guardianName: "",
+    guardianPhone: "",
+    currentLevel: "Arabic Level 3",
+    status: "active" as Extract<StudentStatus, "ready_to_enroll" | "enrolled" | "active" | "paused">,
+    notes: "",
+    courseRunId: "run_ar_l3_2026",
+    classGroupId: "class_ar_l3_a",
+  });
+  const [studentStatusDrafts, setStudentStatusDrafts] = useState<Record<string, StudentStatus>>({});
   const [selectedPlacementId, setSelectedPlacementId] = useState(params?.bookingId ?? "");
   const [recommendedLevel, setRecommendedLevel] = useState("Arabic Level 2");
   const [score, setScore] = useState(78);
@@ -3519,6 +4074,7 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
   const [paymentAmountDrafts, setPaymentAmountDrafts] = useState<Record<string, string>>({});
   const [paymentMethodDrafts, setPaymentMethodDrafts] = useState<Record<string, Payment["method"]>>({});
   const [paymentReferenceDrafts, setPaymentReferenceDrafts] = useState<Record<string, string>>({});
+  const [enrollmentAssignmentDrafts, setEnrollmentAssignmentDrafts] = useState<Record<string, { courseRunId: string; classGroupId: string }>>({});
   const [pendingRegistrarAction, setPendingRegistrarAction] = useState<string | null>(null);
   const state = useMemo(() => platformStore.getState(), [version]);
   const refresh = () => setVersion((value) => value + 1);
@@ -3526,27 +4082,105 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
   const activePage =
     pageId.includes("lead")
       ? "leads"
-      : pageId.includes("placement")
-        ? "placement-tests"
-        : pageId.includes("student")
-          ? "students"
-          : pageId;
+      : pageId.includes("application")
+        ? "applications"
+        : pageId.includes("placement")
+          ? "placement-tests"
+          : pageId.includes("student")
+            ? "students"
+            : pageId;
+  const requestedLeadId = params?.leadId;
+  const requestedApplicationId = params?.applicationId;
+  const requestedStudentId = params?.studentId;
+  const requestedPlacementId = params?.bookingId;
   const selectedPlacement =
-    state.placementTests.find((booking) => booking.id === params?.bookingId) ??
-    state.placementTests.find((booking) => booking.id === selectedPlacementId) ??
-    state.placementTests.find((booking) => booking.status !== "completed") ??
-    state.placementTests[0];
+    requestedPlacementId
+      ? state.placementTests.find((booking) => booking.id === requestedPlacementId)
+      : state.placementTests.find((booking) => booking.id === selectedPlacementId) ??
+        state.placementTests.find((booking) => booking.status !== "completed") ??
+        state.placementTests[0];
   const selectedLead =
-    state.leads.find((lead) => lead.id === params?.leadId) ??
-    state.leads[0];
+    requestedLeadId ? state.leads.find((lead) => lead.id === requestedLeadId) : state.leads[0];
+  const selectedApplication =
+    requestedApplicationId
+      ? state.applications.find((application) => application.id === requestedApplicationId)
+      : state.applications[0];
   const selectedStudent =
-    state.students.find((student) => student.id === params?.studentId) ??
-    state.students[0];
+    requestedStudentId ? state.students.find((student) => student.id === requestedStudentId) : state.students[0];
+  const detailRecordMissing =
+    (pageId === "lead-detail" && requestedLeadId && !selectedLead) ||
+    (pageId === "application-detail" && requestedApplicationId && !selectedApplication) ||
+    (pageId === "student-detail" && requestedStudentId && !selectedStudent) ||
+    (pageId === "placement-detail" && requestedPlacementId && !selectedPlacement);
   const selectedStudentUser = state.users.find((user) => user.id === selectedStudent?.userId);
   const selectedStudentEnrollments = state.enrollments.filter((enrollment) => enrollment.studentId === selectedStudent?.id);
   const selectedLeadApplication = state.applications.find((application) => application.leadId === selectedLead?.id);
+  const selectedApplicationLead = state.leads.find((lead) => lead.id === selectedApplication?.leadId);
+  const selectedApplicationBranch = state.branches.find((branch) => branch.id === selectedApplication?.branchId);
+  const selectedApplicationWorkflow = state.enrollmentWorkflows.find((workflow) => workflow.applicationId === selectedApplication?.id);
+  const selectedApplicationAuditRows = state.auditLogs
+    .filter((audit) => audit.entityId === selectedApplication?.id || audit.entityId === selectedApplicationWorkflow?.id || audit.summary.includes(selectedApplicationLead?.fullName ?? "__no_app__"))
+    .slice(0, 5);
   const readyWorkflows = state.enrollmentWorkflows.filter((workflow) => workflow.status === "ready_to_enroll");
   const pendingPlacements = state.placementTests.filter((booking) => booking.status !== "completed");
+  const studentCreateCourseRuns = state.courseRuns.filter((run) => run.branchId === studentDraft.branchId);
+  const selectedStudentCreateRun =
+    studentCreateCourseRuns.find((run) => run.id === studentDraft.courseRunId) ??
+    studentCreateCourseRuns[0] ??
+    state.courseRuns[0];
+  const studentCreateClassGroups = state.classGroups.filter((group) => group.courseRunId === selectedStudentCreateRun?.id);
+  const studentCreateAvailableClassGroups = studentCreateClassGroups.filter((group) => group.studentIds.length < group.capacity);
+  const selectedStudentCreateClass =
+    studentCreateAvailableClassGroups.find((group) => group.id === studentDraft.classGroupId) ??
+    studentCreateAvailableClassGroups[0];
+  const selectedStudentDetailRows = selectedStudentEnrollments.map((enrollment) => {
+    const run = state.courseRuns.find((item) => item.id === enrollment.courseRunId);
+    const course = state.courses.find((item) => item.id === run?.courseId);
+    const classGroup =
+      state.classGroups.find((item) => item.id === enrollment.classGroupId) ??
+      state.classGroups.find((item) => item.courseRunId === run?.id && item.studentIds.includes(enrollment.studentId)) ??
+      state.classGroups.find((item) => item.courseRunId === run?.id);
+    const teacher = state.users.find((item) => item.id === (enrollment.teacherId ?? run?.teacherId));
+    return { enrollment, run, course, classGroup, teacher };
+  });
+  const selectedStudentAuditRows = state.auditLogs
+    .filter((audit) =>
+      audit.entityId === selectedStudent?.id ||
+      audit.entityId === selectedStudentUser?.id ||
+      selectedStudentEnrollments.some((enrollment) => enrollment.id === audit.entityId) ||
+      /student|enrollment/i.test(`${audit.action} ${audit.summary}`) && audit.summary.includes(selectedStudentUser?.name ?? "__no_student__"),
+    )
+    .slice(0, 5);
+  const selectedStudentPlacement = state.placementTests.find((booking) =>
+    selectedStudentUser ? booking.email.toLowerCase() === selectedStudentUser.email.toLowerCase() : false,
+  );
+  const selectedStudentPlacementResult = state.placementResults.find((result) => result.bookingId === selectedStudentPlacement?.id);
+  const selectedStudentWorkflow = state.enrollmentWorkflows.find((workflow) =>
+    workflow.studentId === selectedStudent?.id ||
+    (workflow.placementTestId ? workflow.placementTestId === selectedStudentPlacement?.id : false) ||
+    selectedStudentEnrollments.some((enrollment) =>
+      workflow.classGroupId === enrollment.classGroupId || workflow.courseRunId === enrollment.courseRunId,
+    ),
+  );
+  const selectedStudentPrimaryConnection = selectedStudentDetailRows[0];
+  const selectedStudentLevelLabel =
+    selectedStudentPlacementResult?.recommendedLevel ??
+    selectedStudent?.currentLevel ??
+    selectedStudentWorkflow?.recommendedLevel ??
+    "Level pending";
+  const selectedStudentNextAction = !selectedStudentUser
+    ? "Create profile"
+    : selectedStudentPlacement && !selectedStudentPlacementResult
+      ? "Record placement result"
+      : !selectedStudentEnrollments.length
+        ? "Create enrollment"
+        : !selectedStudentPrimaryConnection?.classGroup
+          ? "Assign class"
+          : !selectedStudentPrimaryConnection?.teacher
+            ? "Assign teacher through class"
+            : selectedStudent?.status !== "active"
+              ? "Activate portal"
+              : "Monitor progress";
   const paymentBalance = state.invoices.reduce((total, invoice) => {
     const paid = state.payments
       .filter((payment) => payment.invoiceId === invoice.id && payment.status === "paid")
@@ -3560,16 +4194,20 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
     const student = state.students.find((item) => item.id === invoice.studentId);
     const user = state.users.find((item) => item.id === student?.userId);
     const branch = state.branches.find((item) => item.id === user?.branchId);
+    const enrollment = state.enrollments.find((item) => item.studentId === invoice.studentId);
+    const run = state.courseRuns.find((item) => item.id === enrollment?.courseRunId);
+    const course = state.courses.find((item) => item.id === run?.courseId);
+    const classGroup = state.classGroups.find((item) => item.id === enrollment?.classGroupId);
     const payments = state.payments.filter((payment) => payment.invoiceId === invoice.id && payment.status === "paid");
     const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
     const balance = Math.max(0, invoice.amount - paid);
     const lastPayment = [...payments].sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
     const status = balance <= 0 ? "paid" : invoice.status;
-    return { invoice, student, user, branch, payments, paid, balance, lastPayment, status };
+    return { invoice, student, user, branch, enrollment, run, course, classGroup, payments, paid, balance, lastPayment, status };
   });
   const filteredPaymentRows = paymentRows.filter((row) => {
     const query = paymentSearch.trim().toLowerCase();
-    const matchesQuery = !query || [row.invoice.id, row.user?.name, row.user?.email, row.branch?.name, row.status]
+    const matchesQuery = !query || [row.invoice.id, row.enrollment?.id, row.user?.name, row.user?.email, row.branch?.name, row.course?.title, row.classGroup?.name, row.status]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(query));
     const matchesStatus =
@@ -3597,6 +4235,17 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
           : activePage === "students"
             ? "Student records"
             : "Admissions pipeline";
+  const showLeadDesk = activePage === "dashboard" || activePage === "leads";
+  const showPlacementDesk = activePage === "dashboard" || activePage === "placement-tests" || activePage === "applications";
+  const showFinanceDesk = activePage === "dashboard";
+  const showApplicationsDesk = activePage === "dashboard" || activePage === "applications" || activePage === "leads";
+  const showEnrollmentDesk = activePage === "dashboard" || activePage === "applications" || activePage === "placement-tests" || activePage === "enrollments" || activePage === "classes";
+  const showStudentDesk = activePage === "dashboard" || activePage === "students" || activePage === "enrollments" || activePage === "classes";
+  const showStudentCreateDesk = activePage === "students" || activePage === "enrollments" || activePage === "classes";
+  const showAuditDesk = activePage === "dashboard" || activePage === "reports" || activePage === "settings";
+  const showOperationsDesk = ["schedule", "messages", "settings", "reports", "classes"].includes(activePage);
+  const registrarMessages = state.communicationLogs.filter((log) => log.actorId === actorId || /placement|admission|payment|trial/i.test(`${log.subject} ${log.body}`)).slice(0, 5);
+  const registrarScheduleEvents = state.events.filter((event) => ["placement_test", "trial_lesson", "room_booking"].includes(event.type)).slice(0, 5);
 
   const runRegistrarAction = async (
     actionKey: string,
@@ -3644,8 +4293,190 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
     }
   };
 
+  const createApplication = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!applicationDraft.fullName.trim() || !applicationDraft.email.trim() || !applicationDraft.phone.trim()) {
+      toast.error("Applicant name, email, and phone are required");
+      return;
+    }
+    const result = await runRegistrarAction(
+      "application.create",
+      {
+        type: "application.create",
+        fullName: applicationDraft.fullName.trim(),
+        email: applicationDraft.email.trim(),
+        phone: applicationDraft.phone.trim(),
+        branchId: applicationDraft.branchId,
+        courseInterest: applicationDraft.courseInterest.trim() || "Arabic Language",
+        schedulePreference: applicationDraft.schedulePreference.trim() || "To confirm",
+        notes: applicationDraft.notes.trim() || undefined,
+        country: "Egypt",
+        source: "manual",
+        actorId,
+      },
+      "Application created",
+      "Lead, application file, communication log, and audit evidence were saved.",
+    );
+    if (result) {
+      setApplicationDraft((value) => ({
+        ...value,
+        fullName: "",
+        email: "",
+        phone: "",
+        notes: "",
+      }));
+    }
+  };
+
+  const createPlacementBooking = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!placementDraft.fullName.trim() || !placementDraft.phone.trim() || !placementDraft.preferredDate.trim()) {
+      toast.error("Name, phone, and date are required");
+      return;
+    }
+    const email = placementDraft.email.trim() || `${Date.now().toString(36)}@nilelearn.local`;
+    const result = await runRegistrarAction(
+      "placement.create",
+      {
+        type: "placement.create",
+        fullName: placementDraft.fullName.trim(),
+        email,
+        phone: placementDraft.phone.trim(),
+        branchId: placementDraft.branchId,
+        subject: placementDraft.subject.trim() || "Arabic Language",
+        preferredDate: placementDraft.preferredDate,
+        currentLevel: placementDraft.currentLevel.trim() || "Placement pending",
+        actorId,
+      },
+      "Placement booking added",
+    );
+    if (result) {
+      const booking = result.result as { id?: string } | undefined;
+      if (booking?.id) setSelectedPlacementId(booking.id);
+      setPlacementDraft({
+        fullName: "",
+        email: "",
+        phone: "",
+        branchId: placementDraft.branchId,
+        subject: "Arabic Language",
+        preferredDate: getDefaultDueAt(2),
+        currentLevel: "Placement pending",
+      });
+    }
+  };
+
   const convertLead = async (leadId: string) => {
     await runRegistrarAction(`lead.convert:${leadId}`, { type: "lead.convert", leadId, actorId }, "Lead converted to application");
+  };
+
+  const convertApplication = async (applicationId: string) => {
+    await runRegistrarAction(
+      `application.convert:${applicationId}`,
+      { type: "application.convert", applicationId, actorId },
+      "Application prepared for enrollment",
+    );
+  };
+
+  const createStudent = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const courseRunId = selectedStudentCreateRun?.id ?? studentDraft.courseRunId;
+    const classGroupId = selectedStudentCreateClass?.id ?? studentDraft.classGroupId;
+    const fullName = studentDraft.fullName.trim();
+    const email = studentDraft.email.trim().toLowerCase();
+    const phone = studentDraft.phone.trim();
+    const courseInterest = studentDraft.courseInterest.trim();
+    const currentLevel = studentDraft.currentLevel.trim();
+    if (!fullName || !email || !phone) {
+      toast.error("Student name, email, and phone are required");
+      return;
+    }
+    if (!email.includes("@")) {
+      toast.error("Enter a valid student email address");
+      return;
+    }
+    if (state.users.some((user) => user.email.toLowerCase() === email)) {
+      toast.error("This student email is already in the identity directory");
+      return;
+    }
+    if (!courseInterest) {
+      toast.error("Subject or course interest is required");
+      return;
+    }
+    if (!currentLevel) {
+      toast.error("Current level or placement result is required");
+      return;
+    }
+    if (isMinorAgeGroup(studentDraft.ageGroup) && (!studentDraft.guardianName.trim() || !studentDraft.guardianPhone.trim())) {
+      toast.error("Guardian name and phone are required for minor students");
+      return;
+    }
+    if (!courseRunId || !classGroupId) {
+      toast.error("Choose a course run and class group before creating the student");
+      return;
+    }
+    if (selectedStudentCreateRun?.branchId !== studentDraft.branchId) {
+      toast.error("Student branch must match the selected course run");
+      return;
+    }
+    if (!selectedStudentCreateClass || selectedStudentCreateClass.courseRunId !== courseRunId) {
+      toast.error("Selected class group must belong to the selected course run");
+      return;
+    }
+    if (selectedStudentCreateClass.studentIds.length >= selectedStudentCreateClass.capacity) {
+      toast.error("Selected class is already at capacity");
+      return;
+    }
+    const result = await runRegistrarAction(
+      "student.create",
+      {
+        type: "student.create",
+        fullName,
+        email,
+        phone,
+        branchId: studentDraft.branchId,
+        preferredLanguage: studentDraft.preferredLanguage,
+        courseInterest,
+        ageGroup: studentDraft.ageGroup,
+        guardianName: studentDraft.guardianName.trim() || undefined,
+        guardianPhone: studentDraft.guardianPhone.trim() || undefined,
+        currentLevel,
+        status: studentDraft.status,
+        notes: studentDraft.notes.trim() || undefined,
+        courseRunId,
+        classGroupId,
+        source: "direct",
+        actorId,
+      },
+      "Student created and enrolled",
+      "Identity, enrollment, class roster, teacher link, lesson path, and invoice were created.",
+    );
+    if (result) {
+      setStudentDraft((value) => ({
+        ...value,
+        fullName: "",
+        email: "",
+        phone: "",
+        guardianName: "",
+        guardianPhone: "",
+        notes: "",
+      }));
+    }
+  };
+
+  const updateStudentStatus = async (studentId: string) => {
+    const nextStatus = studentStatusDrafts[studentId] ?? state.students.find((student) => student.id === studentId)?.status;
+    if (!nextStatus) return;
+    await runRegistrarAction(
+      `student.status.update:${studentId}`,
+      {
+        type: "student.status.update",
+        studentId,
+        status: nextStatus,
+        notes: "Updated from registrar student detail.",
+        actorId,
+      },
+      "Student status updated",
+    );
   };
 
   const recordPlacement = async () => {
@@ -3695,10 +4526,16 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
     }
   };
 
-  const activateEnrollment = async (workflowId: string) => {
+  const activateEnrollment = async (workflowId: string, assignment?: { courseRunId?: string; classGroupId?: string }) => {
     const result = await runRegistrarAction(
       `enrollment.activate:${workflowId}`,
-      { type: "enrollment.activate", workflowId, actorId },
+      {
+        type: "enrollment.activate",
+        workflowId,
+        courseRunId: assignment?.courseRunId,
+        classGroupId: assignment?.classGroupId,
+        actorId,
+      },
       "Student portal activated",
       "Account, class, enrollment, lesson path, and invoice are connected.",
     );
@@ -3824,12 +4661,12 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
                 <article key={row.invoice.id} className="registrar-payment-row" role="row">
                   <div role="cell">
                     <strong>{row.user?.name ?? row.invoice.studentId}</strong>
-                    <small>{row.user?.email ?? "No email"} · {row.branch?.name ?? "No branch"}</small>
+                    <small>{row.user?.email ?? "No email"} · {row.branch?.name ?? "No branch"} · {row.course?.title ?? "No course"}</small>
                   </div>
                   <div role="cell">
                     <strong>{row.invoice.id}</strong>
                     <small>
-                      Due {row.invoice.dueAt} ·{" "}
+                      {row.enrollment?.id ?? "No enrollment"} · {row.classGroup?.name ?? "Class pending"} · due {row.invoice.dueAt} ·{" "}
                       {row.lastPayment
                         ? `${row.lastPayment.method}${row.lastPayment.reference ? ` · ${row.lastPayment.reference}` : ""} · ${row.lastPayment.paidAt.slice(0, 10)}`
                         : "No receipt yet"}
@@ -3935,14 +4772,18 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
         </div>
       ) : (
         <>
-      {["lead-detail", "student-detail", "placement-detail"].includes(pageId) ? (
+      {["lead-detail", "application-detail", "student-detail", "placement-detail"].includes(pageId) ? (
         <section className="registrar-panel registrar-detail-focus">
           <div className="registrar-panel-head">
             <div>
               <span>Selected record</span>
               <strong>
-                {pageId === "student-detail"
+                {detailRecordMissing
+                  ? "Record not found"
+                  : pageId === "student-detail"
                   ? selectedStudentUser?.name ?? "Student record"
+                  : pageId === "application-detail"
+                    ? selectedApplicationLead?.fullName ?? "Application file"
                   : pageId === "placement-detail"
                     ? selectedPlacement?.fullName ?? "Placement booking"
                     : selectedLead?.fullName ?? "Lead record"}
@@ -3950,6 +4791,20 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
             </div>
             <UserCircle size={18} />
           </div>
+          {detailRecordMissing ? (
+            <div className="registrar-detail-empty">
+              <AlertCircle size={18} />
+              <div>
+                <strong>This registrar record does not exist.</strong>
+                <small>Use the list pages to choose a valid lead, application, student, or placement booking.</small>
+              </div>
+              <Link className="platform-secondary-button compact" href={`/app/registrar/${activePage}`}>
+                <ArrowRight size={15} />
+                Back to {activePage.replace("-", " ")}
+              </Link>
+            </div>
+          ) : (
+          <>
           <div className="registrar-detail-grid">
             {pageId === "lead-detail" ? (
               <>
@@ -3975,6 +4830,42 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
                   <UserPlus size={15} />
                   {isActionPending(`lead.convert:${selectedLead?.id}`) ? "Converting..." : selectedLeadApplication ? "Application exists" : "Convert lead"}
                 </button>
+              </>
+            ) : pageId === "application-detail" ? (
+              <>
+                <article>
+                  <span>Application status</span>
+                  <strong>{selectedApplication?.status ?? "No application"}</strong>
+                  <small>{selectedApplication?.courseInterest ?? "Course"} · {selectedApplication?.schedulePreference ?? "Schedule pending"}</small>
+                </article>
+                <article>
+                  <span>Applicant</span>
+                  <strong>{selectedApplicationLead?.fullName ?? "No linked lead"}</strong>
+                  <small>{selectedApplicationLead?.phone ?? "No phone"} · {selectedApplicationLead?.email ?? "No email"}</small>
+                </article>
+                <article>
+                  <span>Branch scope</span>
+                  <strong>{selectedApplicationBranch?.name ?? selectedApplication?.branchId ?? "No branch"}</strong>
+                  <small>{selectedApplicationLead?.notes ?? "Internal admissions follow-up only"}</small>
+                </article>
+                <article>
+                  <span>Enrollment handoff</span>
+                  <strong>{selectedApplicationWorkflow ? "Prepared" : "Not prepared"}</strong>
+                  <small>{selectedApplicationWorkflow?.nextStep ?? "Prepare after branch, level, and course fit are confirmed."}</small>
+                </article>
+                <button
+                  disabled={!selectedApplication || Boolean(selectedApplicationWorkflow) || isAnyRegistrarActionPending}
+                  onClick={() => selectedApplication && convertApplication(selectedApplication.id)}
+                >
+                  <UserPlus size={15} />
+                  {isActionPending(`application.convert:${selectedApplication?.id}`)
+                    ? "Preparing..."
+                    : selectedApplicationWorkflow ? "Enrollment prepared" : "Prepare enrollment"}
+                </button>
+                <Link className="registrar-row-link" href="/app/registrar/enrollments">
+                  <ArrowRight size={15} />
+                  Open handoff
+                </Link>
               </>
             ) : pageId === "placement-detail" ? (
               <>
@@ -4005,29 +4896,256 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
                 <article>
                   <span>Student</span>
                   <strong>{selectedStudentUser?.email ?? "No account"}</strong>
-                  <small>{selectedStudent?.preferredLanguage ?? "Language"} · {selectedStudent?.timezone ?? "Timezone"}</small>
+                  <small>{selectedStudent?.preferredLanguage ?? "Language"} · {selectedStudent?.ageGroup ?? "Age group"} · {selectedStudent?.timezone ?? "Timezone"}</small>
                 </article>
                 <article>
-                  <span>Enrollments</span>
-                  <strong>{selectedStudentEnrollments.length}</strong>
-                  <small>{selectedStudentEnrollments.map((item) => item.status).join(", ") || "No enrollment"}</small>
+                  <span>Status</span>
+                  <strong>{selectedStudent?.status ?? "No status"}</strong>
+                  <small>{selectedStudent?.currentLevel ?? "Level pending"} · {selectedStudent?.source ?? "existing"} intake</small>
                 </article>
                 <article>
-                  <span>Performance</span>
-                  <strong>{selectedStudentEnrollments[0]?.currentGrade ?? 0}%</strong>
-                  <small>Attendance {selectedStudentEnrollments[0]?.attendanceRate ?? 0}%</small>
+                  <span>Class and teacher</span>
+                  <strong>{selectedStudentDetailRows[0]?.classGroup?.name ?? "Class pending"}</strong>
+                  <small>{selectedStudentDetailRows[0]?.teacher?.name ?? "Teacher through class"} · {selectedStudentDetailRows[0]?.classGroup?.schedule ?? "Schedule pending"}</small>
                 </article>
-                <Link className="platform-secondary-button compact" href="/app/registrar/enrollments">
-                  <ArrowRight size={15} />
-                  Open enrollment
-                </Link>
+                <article>
+                  <span>Guardian</span>
+                  <strong>{selectedStudent?.guardianName ?? "Not required"}</strong>
+                  <small>{selectedStudent?.guardianPhone ?? selectedStudentUser?.phone ?? "No guardian phone"}</small>
+                </article>
               </>
             )}
           </div>
+          {pageId === "application-detail" && selectedApplication ? (
+            <div className="registrar-student-detail-workspace">
+              <section>
+                <div className="registrar-panel-head compact">
+                  <div>
+                    <span>Application lifecycle</span>
+                    <strong>{selectedApplicationLead?.fullName ?? selectedApplication.id}</strong>
+                  </div>
+                  <FileText size={16} />
+                </div>
+                <div className="registrar-lifecycle-rail">
+                  {[
+                    ["Lead", selectedApplicationLead ? "done" : "pending"],
+                    ["Application", selectedApplication ? "done" : "pending"],
+                    ["Branch", selectedApplicationBranch ? "done" : "pending"],
+                    ["Level", selectedApplicationWorkflow?.targetLevelId ? "done" : "pending"],
+                    ["Enrollment", selectedApplicationWorkflow ? "done" : "pending"],
+                    ["Portal", selectedApplicationWorkflow?.studentId ? "done" : "pending"],
+                  ].map(([label, status]) => (
+                    <article key={label}>
+                      <span className={status}>{status}</span>
+                      <strong>{label}</strong>
+                    </article>
+                  ))}
+                </div>
+              </section>
+              <section>
+                <div className="registrar-panel-head compact">
+                  <div>
+                    <span>Communication log</span>
+                    <strong>Internal placeholder</strong>
+                  </div>
+                  <MessageSquare size={16} />
+                </div>
+                <div className="registrar-operations-list">
+                  {state.communicationLogs.filter((log) => /application|admission|follow-up|intake/i.test(`${log.subject} ${log.body}`)).slice(0, 3).map((log) => (
+                    <article key={log.id}>
+                      <strong>{log.subject}</strong>
+                      <small>{log.body}</small>
+                      <span>{log.status}</span>
+                    </article>
+                  ))}
+                </div>
+              </section>
+              <section className="wide">
+                <div className="registrar-panel-head compact">
+                  <div>
+                    <span>Audit</span>
+                    <strong>Application transitions</strong>
+                  </div>
+                  <ShieldCheck size={16} />
+                </div>
+                <div className="admin-audit-list">
+                  {selectedApplicationAuditRows.length ? selectedApplicationAuditRows.map((auditRow) => (
+                    <article key={auditRow.id}>
+                      <strong>{auditRow.action}</strong>
+                      <small>{auditRow.summary}</small>
+                      <span>{new Date(auditRow.createdAt).toLocaleString()}</span>
+                    </article>
+                  )) : (
+                    <article>
+                      <strong>application.ready</strong>
+                      <small>Application changes will appear after prepare or enrollment actions.</small>
+                      <span>Now</span>
+                    </article>
+                  )}
+                </div>
+              </section>
+            </div>
+          ) : null}
+          {pageId === "student-detail" && selectedStudent ? (
+            <div className="registrar-student-detail-workspace">
+              <section>
+                <div className="registrar-panel-head compact">
+                  <div>
+                    <span>Lifecycle</span>
+                    <strong>Admissions to active portal</strong>
+                  </div>
+                  <CheckCircle2 size={16} />
+                </div>
+                <div className="registrar-lifecycle-rail">
+                  {[
+                    ["Profile", selectedStudentUser ? "done" : "pending"],
+                    ["Level", selectedStudent.currentLevel ? "done" : "pending"],
+                    ["Enrollment", selectedStudentEnrollments.length ? "done" : "pending"],
+                    ["Class", selectedStudentDetailRows.some((row) => row.classGroup) ? "done" : "pending"],
+                    ["Teacher", selectedStudentDetailRows.some((row) => row.teacher) ? "done" : "pending"],
+                    ["Portal", selectedStudent.status === "active" ? "done" : "pending"],
+                  ].map(([label, status]) => (
+                    <article key={label}>
+                      <span className={status}>{status}</span>
+                      <strong>{label}</strong>
+                    </article>
+                  ))}
+                </div>
+              </section>
+              <section>
+                <div className="registrar-panel-head compact">
+                  <div>
+                    <span>Manage status</span>
+                    <strong>{selectedStudentUser?.name ?? selectedStudent.id}</strong>
+                  </div>
+                  <SlidersHorizontal size={16} />
+                </div>
+                <div className="registrar-student-status-control">
+                  <select
+                    value={studentStatusDrafts[selectedStudent.id] ?? selectedStudent.status}
+                    disabled={isAnyRegistrarActionPending}
+                    onChange={(event) =>
+                      setStudentStatusDrafts((current) => ({
+                        ...current,
+                        [selectedStudent.id]: event.target.value as StudentStatus,
+                      }))
+                    }
+                  >
+                    {["ready_to_enroll", "enrolled", "active", "paused", "completed", "cancelled"].map((status) => (
+                      <option key={status} value={status}>{status.replaceAll("_", " ")}</option>
+                    ))}
+                  </select>
+                  <button type="button" disabled={isAnyRegistrarActionPending} onClick={() => updateStudentStatus(selectedStudent.id)}>
+                    {isActionPending(`student.status.update:${selectedStudent.id}`) ? "Saving..." : "Save status"}
+                  </button>
+                </div>
+                <div className="registrar-student-next-action">
+                  <span>Next action</span>
+                  <strong>{selectedStudentNextAction}</strong>
+                </div>
+              </section>
+              <section>
+                <div className="registrar-panel-head compact">
+                  <div>
+                    <span>Placement and level</span>
+                    <strong>{selectedStudentLevelLabel}</strong>
+                  </div>
+                  <ClipboardCheck size={16} />
+                </div>
+                <div className="registrar-student-fact-list">
+                  <article>
+                    <span>Placement</span>
+                    <strong>{selectedStudentPlacement?.status ?? "Not booked"}</strong>
+                    <small>{selectedStudentPlacement?.preferredDate ?? "No placement booking linked"}</small>
+                  </article>
+                  <article>
+                    <span>Result</span>
+                    <strong>{selectedStudentPlacementResult ? `${selectedStudentPlacementResult.score}%` : "Pending"}</strong>
+                    <small>{selectedStudentPlacementResult?.notes ?? selectedStudentWorkflow?.nextStep ?? "Level can be set directly or from placement."}</small>
+                  </article>
+                </div>
+              </section>
+              <section>
+                <div className="registrar-panel-head compact">
+                  <div>
+                    <span>Course, class, teacher</span>
+                    <strong>{selectedStudentPrimaryConnection?.course?.title ?? "Assignment pending"}</strong>
+                  </div>
+                  <BookOpen size={16} />
+                </div>
+                <div className="registrar-student-fact-list">
+                  <article>
+                    <span>Class/group</span>
+                    <strong>{selectedStudentPrimaryConnection?.classGroup?.name ?? "Pending"}</strong>
+                    <small>{selectedStudentPrimaryConnection?.classGroup?.schedule ?? "Assign a class group to unlock schedule, attendance, and portal data."}</small>
+                  </article>
+                  <article>
+                    <span>Teacher</span>
+                    <strong>{selectedStudentPrimaryConnection?.teacher?.name ?? "Pending"}</strong>
+                    <small>{selectedStudentPrimaryConnection?.run ? "Assigned through the class course run." : "Teacher assignment happens through the class/group."}</small>
+                  </article>
+                </div>
+              </section>
+              <section className="wide">
+                <div className="registrar-panel-head compact">
+                  <div>
+                    <span>Enrollment panel</span>
+                    <strong>{selectedStudentDetailRows.length} active connection(s)</strong>
+                  </div>
+                  <UserPlus size={16} />
+                </div>
+                <div className="registrar-student-enrollment-list">
+                  {selectedStudentDetailRows.length ? selectedStudentDetailRows.map(({ enrollment, course, classGroup, teacher }) => (
+                    <article key={enrollment.id}>
+                      <div>
+                        <strong>{course?.title ?? enrollment.courseRunId}</strong>
+                        <small>{classGroup?.name ?? enrollment.classGroupId ?? "Class pending"} · {teacher?.name ?? enrollment.teacherId ?? "Teacher pending"} · {classGroup?.schedule ?? "Schedule pending"}</small>
+                      </div>
+                      <span>{enrollment.status}</span>
+                    </article>
+                  )) : (
+                    <article className="registrar-empty-row">
+                      <div>
+                        <strong>No enrollment</strong>
+                        <small>Create or activate an enrollment before the student portal is useful.</small>
+                      </div>
+                    </article>
+                  )}
+                </div>
+              </section>
+              <section className="wide">
+                <div className="registrar-panel-head compact">
+                  <div>
+                    <span>Audit</span>
+                    <strong>Recent student transitions</strong>
+                  </div>
+                  <ShieldCheck size={16} />
+                </div>
+                <div className="admin-audit-list">
+                  {selectedStudentAuditRows.length ? selectedStudentAuditRows.map((auditRow) => (
+                    <article key={auditRow.id}>
+                      <strong>{auditRow.action}</strong>
+                      <small>{auditRow.summary}</small>
+                      <span>{new Date(auditRow.createdAt).toLocaleString()}</span>
+                    </article>
+                  )) : (
+                    <article>
+                      <strong>student.ready</strong>
+                      <small>Student lifecycle changes will appear here after status or enrollment updates.</small>
+                      <span>Now</span>
+                    </article>
+                  )}
+                </div>
+              </section>
+            </div>
+          ) : null}
+          </>
+          )}
         </section>
       ) : null}
 
       <div className="registrar-layout">
+        {showLeadDesk ? (
         <section className="registrar-panel registrar-intake-panel">
           <div className="registrar-panel-head">
             <div>
@@ -4098,15 +5216,84 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
             </button>
           </form>
         </section>
+        ) : null}
 
+        {showPlacementDesk ? (
         <section className="registrar-panel registrar-placement-panel">
           <div className="registrar-panel-head">
             <div>
               <span>Placement</span>
-              <strong>{pendingPlacements.length} pending</strong>
+              <strong>{pendingPlacements.length} pending · book and result</strong>
             </div>
             <ClipboardList size={18} />
           </div>
+          <form className="registrar-placement-booking-form" onSubmit={createPlacementBooking}>
+            <label>
+              Student name
+              <input
+                value={placementDraft.fullName}
+                onChange={(event) => setPlacementDraft((value) => ({ ...value, fullName: event.target.value }))}
+                placeholder="Student or guardian name"
+              />
+            </label>
+            <label>
+              Phone
+              <input
+                value={placementDraft.phone}
+                onChange={(event) => setPlacementDraft((value) => ({ ...value, phone: event.target.value }))}
+                placeholder="+20..."
+              />
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                value={placementDraft.email}
+                onChange={(event) => setPlacementDraft((value) => ({ ...value, email: event.target.value }))}
+                placeholder="optional"
+              />
+            </label>
+            <label>
+              Branch
+              <select
+                value={placementDraft.branchId}
+                onChange={(event) => setPlacementDraft((value) => ({ ...value, branchId: event.target.value }))}
+              >
+                {state.branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Subject
+              <input
+                value={placementDraft.subject}
+                onChange={(event) => setPlacementDraft((value) => ({ ...value, subject: event.target.value }))}
+              />
+            </label>
+            <label>
+              Preferred date
+              <input
+                type="date"
+                value={placementDraft.preferredDate}
+                onChange={(event) => setPlacementDraft((value) => ({ ...value, preferredDate: event.target.value }))}
+              />
+            </label>
+            <label className="wide">
+              Current level
+              <input
+                value={placementDraft.currentLevel}
+                onChange={(event) => setPlacementDraft((value) => ({ ...value, currentLevel: event.target.value }))}
+                placeholder="What the learner can already do"
+              />
+            </label>
+            <button type="submit" disabled={isAnyRegistrarActionPending}>
+              <Plus size={15} />
+              {isActionPending("placement.create") ? "Booking..." : "Book placement"}
+            </button>
+          </form>
           <div className="registrar-placement-card">
             <label>
               Booking
@@ -4136,7 +5323,137 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
             </button>
           </div>
         </section>
+        ) : null}
 
+        {showStudentCreateDesk ? (
+        <section className="registrar-panel registrar-student-create-panel">
+          <div className="registrar-panel-head">
+            <div>
+              <span>Direct student creation</span>
+              <strong>Profile, enrollment, class, teacher, and portal</strong>
+            </div>
+            <UserPlus size={18} />
+          </div>
+          <form className="registrar-student-create-form" onSubmit={createStudent}>
+            <label>
+              Full name
+              <input value={studentDraft.fullName} onChange={(event) => setStudentDraft((value) => ({ ...value, fullName: event.target.value }))} placeholder="Student full name" />
+            </label>
+            <label>
+              Email
+              <input type="email" value={studentDraft.email} onChange={(event) => setStudentDraft((value) => ({ ...value, email: event.target.value }))} placeholder="student@nilelearn.local" />
+            </label>
+            <label>
+              Phone / WhatsApp
+              <input value={studentDraft.phone} onChange={(event) => setStudentDraft((value) => ({ ...value, phone: event.target.value }))} placeholder="+20..." />
+            </label>
+            <label>
+              Branch
+              <select
+                value={studentDraft.branchId}
+                onChange={(event) => {
+	                  const branchId = event.target.value;
+	                  const run = state.courseRuns.find((item) => item.branchId === branchId) ?? state.courseRuns[0];
+	                  const group = state.classGroups.find((item) => item.courseRunId === run?.id && item.studentIds.length < item.capacity) ??
+	                    undefined;
+                  setStudentDraft((value) => ({
+                    ...value,
+                    branchId,
+                    courseRunId: run?.id ?? "",
+                    classGroupId: group?.id ?? "",
+                  }));
+                }}
+              >
+                {state.branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Preferred language
+              <select value={studentDraft.preferredLanguage} onChange={(event) => setStudentDraft((value) => ({ ...value, preferredLanguage: event.target.value }))}>
+                <option value="English">English</option>
+                <option value="Arabic">Arabic</option>
+                <option value="Turkish">Turkish</option>
+                <option value="Russian">Russian</option>
+              </select>
+            </label>
+            <label>
+              Subject / course interest
+              <input value={studentDraft.courseInterest} onChange={(event) => setStudentDraft((value) => ({ ...value, courseInterest: event.target.value }))} />
+            </label>
+            <label>
+              Age group
+              <select value={studentDraft.ageGroup} onChange={(event) => setStudentDraft((value) => ({ ...value, ageGroup: event.target.value }))}>
+                <option value="Adult">Adult</option>
+                <option value="Teen minor">Teen minor</option>
+                <option value="Child minor">Child minor</option>
+              </select>
+            </label>
+            <label>
+              Current level / placement
+              <input value={studentDraft.currentLevel} onChange={(event) => setStudentDraft((value) => ({ ...value, currentLevel: event.target.value }))} placeholder="Arabic Level 3" />
+            </label>
+            <label>
+              Course run
+              <select
+                value={selectedStudentCreateRun?.id ?? ""}
+                onChange={(event) => {
+	                  const runId = event.target.value;
+	                  const group = state.classGroups.find((item) => item.courseRunId === runId && item.studentIds.length < item.capacity) ??
+	                    undefined;
+                  setStudentDraft((value) => ({ ...value, courseRunId: runId, classGroupId: group?.id ?? "" }));
+                }}
+              >
+                {studentCreateCourseRuns.length ? studentCreateCourseRuns.map((run) => {
+                  const course = state.courses.find((item) => item.id === run.courseId);
+                  return <option key={run.id} value={run.id}>{course?.title ?? run.courseId} · {run.term}</option>;
+                }) : <option value="">No course runs in branch</option>}
+              </select>
+            </label>
+            <label>
+              Class / group
+              <select
+                value={selectedStudentCreateClass?.id ?? ""}
+                onChange={(event) => setStudentDraft((value) => ({ ...value, classGroupId: event.target.value }))}
+              >
+                {studentCreateClassGroups.length ? studentCreateClassGroups.map((group) => (
+	                  <option key={group.id} value={group.id}>{group.name} · {group.studentIds.length}/{group.capacity}</option>
+	                )) : <option value="">No class groups</option>}
+              </select>
+            </label>
+            <label>
+              Student status
+              <select value={studentDraft.status} onChange={(event) => setStudentDraft((value) => ({ ...value, status: event.target.value as typeof studentDraft.status }))}>
+                <option value="active">Active portal</option>
+                <option value="enrolled">Enrolled</option>
+                <option value="ready_to_enroll">Ready to enroll</option>
+                <option value="paused">Paused</option>
+              </select>
+            </label>
+            <label>
+              Guardian name
+              <input value={studentDraft.guardianName} onChange={(event) => setStudentDraft((value) => ({ ...value, guardianName: event.target.value }))} placeholder="Required for minors" />
+            </label>
+            <label>
+              Guardian phone
+              <input value={studentDraft.guardianPhone} onChange={(event) => setStudentDraft((value) => ({ ...value, guardianPhone: event.target.value }))} placeholder="Required for minors" />
+            </label>
+            <label className="wide">
+              Notes
+              <input value={studentDraft.notes} onChange={(event) => setStudentDraft((value) => ({ ...value, notes: event.target.value }))} placeholder="Placement, schedule, guardian, or class notes" />
+            </label>
+            <div className="registrar-student-create-summary">
+              <span>{selectedStudentCreateClass ? `${Math.max(0, selectedStudentCreateClass.capacity - selectedStudentCreateClass.studentIds.length)} seats left` : "No available class selected"}</span>
+              <small>{selectedStudentCreateClass?.schedule ?? "Choose a class group with an open seat"} · teacher {state.users.find((user) => user.id === selectedStudentCreateRun?.teacherId)?.name ?? "pending"}</small>
+            </div>
+            <button type="submit" disabled={isAnyRegistrarActionPending || !selectedStudentCreateRun || !selectedStudentCreateClass}>
+              <Plus size={15} />
+              {isActionPending("student.create") ? "Creating..." : "Create and enroll"}
+            </button>
+          </form>
+        </section>
+        ) : null}
+
+        {showFinanceDesk ? (
         <section className="registrar-panel registrar-finance-panel">
           <div className="registrar-panel-head">
             <div>
@@ -4176,9 +5493,97 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
             ) : null}
           </div>
         </section>
+        ) : null}
       </div>
 
+      {showOperationsDesk ? (
+        <section className="registrar-panel registrar-operations-panel">
+          <div className="registrar-panel-head">
+            <div>
+              <span>{activePage}</span>
+              <strong>
+                {activePage === "schedule"
+                  ? "Admissions calendar and room readiness"
+                  : activePage === "messages"
+                    ? "Follow-up messages and templates"
+                    : activePage === "settings"
+                      ? "Admissions configuration"
+                      : activePage === "classes"
+                        ? "Class capacity and assignment view"
+                        : "Registrar reports and audit trail"}
+              </strong>
+            </div>
+            <SlidersHorizontal size={18} />
+          </div>
+          <div className="registrar-operations-grid">
+            {(activePage === "schedule" || activePage === "classes") ? (
+              <div className="registrar-operations-list">
+                {registrarScheduleEvents.length ? registrarScheduleEvents.map((event) => {
+                  const branch = state.branches.find((item) => item.id === event.branchId);
+                  const room = state.rooms.find((item) => item.id === event.roomId);
+                  return (
+                    <article key={event.id}>
+                      <strong>{event.title}</strong>
+                      <small>{event.startsAt} · {branch?.name ?? "No branch"} · {room?.name ?? "No room"}</small>
+                      <span>{event.status}</span>
+                    </article>
+                  );
+                }) : (
+                  <article className="registrar-empty-row">
+                    <div>
+                      <strong>No admissions events</strong>
+                      <small>Placement tests and room bookings will appear here.</small>
+                    </div>
+                  </article>
+                )}
+              </div>
+            ) : null}
+            {activePage === "messages" ? (
+              <div className="registrar-operations-list">
+                {registrarMessages.length ? registrarMessages.map((message) => {
+                  const relatedUser = state.users.find((item) => item.id === message.relatedUserId);
+                  return (
+                    <article key={message.id}>
+                      <strong>{message.subject}</strong>
+                      <small>{message.channel} · {relatedUser?.name ?? "Admissions contact"} · {message.createdAt}</small>
+                      <span>{message.status}</span>
+                    </article>
+                  );
+                }) : (
+                  <article className="registrar-empty-row">
+                    <div>
+                      <strong>No registrar follow-ups</strong>
+                      <small>Lead, placement, and payment messages will be tracked here.</small>
+                    </div>
+                  </article>
+                )}
+              </div>
+            ) : null}
+            {(activePage === "settings" || activePage === "reports") ? (
+              <div className="registrar-operations-list">
+                <article>
+                  <strong>Admission branches</strong>
+                  <small>{state.branches.map((branch) => branch.name).join(", ")}</small>
+                  <span>{state.branches.length}</span>
+                </article>
+                <article>
+                  <strong>Payment methods</strong>
+                  <small>{paymentMethods.map((method) => method.replace("_", " ")).join(", ")}</small>
+                  <span>active</span>
+                </article>
+                <article>
+                  <strong>Templates</strong>
+                  <small>{state.messageTemplates.filter((template) => template.category === "admissions").map((template) => template.title).join(", ") || "No admissions templates"}</small>
+                  <span>{state.messageTemplates.filter((template) => template.category === "admissions").length}</span>
+                </article>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
       <div className="registrar-lower-grid">
+        {showApplicationsDesk ? (
         <section className="registrar-panel">
           <div className="registrar-panel-head">
             <div>
@@ -4187,10 +5592,87 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
             </div>
             <FileText size={18} />
           </div>
+          {activePage === "applications" ? (
+            <form className="registrar-application-form" onSubmit={createApplication} aria-label="Create registrar application">
+              <label>
+                Applicant name
+                <input
+                  name="applicationFullName"
+                  value={applicationDraft.fullName}
+                  onChange={(event) => setApplicationDraft((value) => ({ ...value, fullName: event.target.value }))}
+                  placeholder="Student or guardian name"
+                />
+              </label>
+              <label>
+                Email
+                <input
+                  name="applicationEmail"
+                  type="email"
+                  value={applicationDraft.email}
+                  onChange={(event) => setApplicationDraft((value) => ({ ...value, email: event.target.value }))}
+                  placeholder="applicant@nilelearn.local"
+                />
+              </label>
+              <label>
+                Phone
+                <input
+                  name="applicationPhone"
+                  value={applicationDraft.phone}
+                  onChange={(event) => setApplicationDraft((value) => ({ ...value, phone: event.target.value }))}
+                  placeholder="+20..."
+                />
+              </label>
+              <label>
+                Branch
+                <select
+                  name="applicationBranch"
+                  value={applicationDraft.branchId}
+                  onChange={(event) => setApplicationDraft((value) => ({ ...value, branchId: event.target.value }))}
+                >
+                  {state.branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Course interest
+                <input
+                  name="applicationCourseInterest"
+                  value={applicationDraft.courseInterest}
+                  onChange={(event) => setApplicationDraft((value) => ({ ...value, courseInterest: event.target.value }))}
+                />
+              </label>
+              <label>
+                Schedule preference
+                <input
+                  name="applicationSchedulePreference"
+                  value={applicationDraft.schedulePreference}
+                  onChange={(event) => setApplicationDraft((value) => ({ ...value, schedulePreference: event.target.value }))}
+                  placeholder="Morning, evening, weekend"
+                />
+              </label>
+              <label className="wide">
+                Notes
+                <input
+                  name="applicationNotes"
+                  value={applicationDraft.notes}
+                  onChange={(event) => setApplicationDraft((value) => ({ ...value, notes: event.target.value }))}
+                  placeholder="Placement, guardian, schedule, or payment context"
+                />
+              </label>
+              <button type="submit" disabled={isAnyRegistrarActionPending}>
+                <Plus size={15} />
+                {isActionPending("application.create") ? "Creating..." : "Create application"}
+              </button>
+            </form>
+          ) : null}
           <div className="registrar-application-list">
             {state.applications.map((application) => {
               const lead = state.leads.find((item) => item.id === application.leadId);
               const branch = state.branches.find((item) => item.id === application.branchId);
+              const workflow = state.enrollmentWorkflows.find((item) => item.applicationId === application.id);
               return (
                 <article key={application.id}>
                   <div>
@@ -4198,12 +5680,28 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
                     <small>{application.courseInterest} · {branch?.name ?? "No branch"} · {application.schedulePreference}</small>
                   </div>
                   <span>{application.status}</span>
+                  <Link className="registrar-row-link" href={`/app/registrar/applications/${application.id}`}>
+                    Open
+                  </Link>
+                  <button type="button" disabled={Boolean(workflow) || isAnyRegistrarActionPending} onClick={() => convertApplication(application.id)}>
+                    {isActionPending(`application.convert:${application.id}`) ? "Preparing..." : workflow ? "Prepared" : "Prepare"}
+                  </button>
                 </article>
               );
             })}
+            {state.applications.length === 0 ? (
+              <article className="registrar-empty-row">
+                <div>
+                  <strong>No applications</strong>
+                  <small>Convert a lead to create the first application file.</small>
+                </div>
+              </article>
+            ) : null}
           </div>
         </section>
+        ) : null}
 
+        {showEnrollmentDesk ? (
         <section className="registrar-panel">
           <div className="registrar-panel-head">
             <div>
@@ -4218,18 +5716,92 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
               const student = state.students.find((item) => item.id === workflow.studentId);
               const user = state.users.find((item) => item.id === student?.userId);
               const course = state.courses.find((item) => item.id === workflow.targetCourseId);
-              const courseRun = state.courseRuns.find((item) => item.courseId === workflow.targetCourseId && item.status === "active");
-              const classGroup = state.classGroups.find((item) => item.courseRunId === courseRun?.id);
+              const courseRuns = state.courseRuns.filter((item) => item.courseId === workflow.targetCourseId);
+              const defaultCourseRun =
+                courseRuns.find((item) => item.status === "active") ??
+                courseRuns[0];
+              const draft = enrollmentAssignmentDrafts[workflow.id];
+              const selectedCourseRun =
+                courseRuns.find((item) => item.id === draft?.courseRunId) ??
+                defaultCourseRun;
+              const classGroups = state.classGroups.filter((item) => item.courseRunId === selectedCourseRun?.id);
+              const defaultClassGroup =
+                classGroups.find((item) => item.studentIds.length < item.capacity) ??
+                classGroups[0];
+              const selectedClassGroup =
+                classGroups.find((item) => item.id === draft?.classGroupId) ??
+                defaultClassGroup;
               const invoice = state.invoices.find((item) => item.studentId === student?.id);
               const isActivated = Boolean(workflow.studentId && student);
+              const canActivate = !isActivated && workflow.status === "ready_to_enroll" && Boolean(selectedCourseRun && selectedClassGroup);
               return (
                 <article key={workflow.id}>
                   <div>
                     <strong>{lead?.fullName ?? user?.name ?? workflow.id}</strong>
-                    <small>{course?.title ?? "Course"} · {classGroup?.name ?? "Class pending"} · {workflow.nextStep}</small>
+                    <small>{course?.title ?? "Course"} · {selectedClassGroup?.name ?? "Class pending"} · {workflow.nextStep}</small>
                   </div>
                   <span>{isActivated ? "active" : workflow.status}</span>
-                  <button disabled={isActivated || workflow.status !== "ready_to_enroll" || isAnyRegistrarActionPending} onClick={() => activateEnrollment(workflow.id)}>
+                  {!isActivated ? (
+                    <div className="registrar-workflow-assignment">
+                      <label>
+                        Run
+                        <select
+                          value={selectedCourseRun?.id ?? ""}
+                          disabled={isAnyRegistrarActionPending || !courseRuns.length}
+                          onChange={(event) => {
+                            const nextRunId = event.target.value;
+                            const nextClassGroup = state.classGroups.find((item) => item.courseRunId === nextRunId && item.studentIds.length < item.capacity) ??
+                              state.classGroups.find((item) => item.courseRunId === nextRunId);
+                            setEnrollmentAssignmentDrafts((current) => ({
+                              ...current,
+                              [workflow.id]: { courseRunId: nextRunId, classGroupId: nextClassGroup?.id ?? "" },
+                            }));
+                          }}
+                        >
+                          {courseRuns.length ? courseRuns.map((run) => {
+                            const branch = state.branches.find((item) => item.id === run.branchId);
+                            return (
+                              <option key={run.id} value={run.id}>
+                                {run.term} · {branch?.name ?? run.branchId}
+                              </option>
+                            );
+                          }) : <option value="">No course run</option>}
+                        </select>
+                      </label>
+                      <label>
+                        Class
+                        <select
+                          value={selectedClassGroup?.id ?? ""}
+                          disabled={isAnyRegistrarActionPending || !classGroups.length}
+                          onChange={(event) =>
+                            setEnrollmentAssignmentDrafts((current) => ({
+                              ...current,
+                              [workflow.id]: {
+                                courseRunId: selectedCourseRun?.id ?? "",
+                                classGroupId: event.target.value,
+                              },
+                            }))
+                          }
+                        >
+                          {classGroups.length ? classGroups.map((group) => (
+                            <option key={group.id} value={group.id}>
+                              {group.name} · {group.studentIds.length}/{group.capacity}
+                            </option>
+                          )) : <option value="">No class</option>}
+                        </select>
+                      </label>
+                      <small>{selectedClassGroup ? `${selectedClassGroup.schedule} · ${Math.max(0, selectedClassGroup.capacity - selectedClassGroup.studentIds.length)} seats left` : "Create a class before activation."}</small>
+                    </div>
+                  ) : null}
+                  <button
+                    disabled={!canActivate || isAnyRegistrarActionPending}
+                    onClick={() =>
+                      activateEnrollment(workflow.id, {
+                        courseRunId: selectedCourseRun?.id,
+                        classGroupId: selectedClassGroup?.id,
+                      })
+                    }
+                  >
                     {isActionPending(`enrollment.activate:${workflow.id}`) ? "Activating..." : isActivated ? `Invoice ${invoice?.status ?? "pending"}` : "Activate"}
                   </button>
                 </article>
@@ -4245,7 +5817,9 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
             ) : null}
           </div>
         </section>
+        ) : null}
 
+        {showStudentDesk ? (
         <section className="registrar-panel">
           <div className="registrar-panel-head">
             <div>
@@ -4260,7 +5834,10 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
               const user = state.users.find((item) => item.id === student?.userId);
               const run = state.courseRuns.find((item) => item.id === enrollment.courseRunId);
               const course = state.courses.find((item) => item.id === run?.courseId);
-              const classGroup = state.classGroups.find((item) => item.courseRunId === run?.id);
+              const classGroup =
+                state.classGroups.find((item) => item.id === enrollment.classGroupId) ??
+                state.classGroups.find((item) => item.courseRunId === run?.id && item.studentIds.includes(enrollment.studentId)) ??
+                state.classGroups.find((item) => item.courseRunId === run?.id);
               return (
                 <article key={enrollment.id}>
                   <div>
@@ -4268,12 +5845,25 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
                     <small>{course?.title ?? "Course"} · {classGroup?.name ?? "Class pending"}</small>
                   </div>
                   <span>{enrollment.status}</span>
+                  <Link className="registrar-row-link" href={`/app/registrar/students/${enrollment.studentId}`}>
+                    Open
+                  </Link>
                 </article>
               );
             })}
+            {state.enrollments.length === 0 ? (
+              <article className="registrar-empty-row">
+                <div>
+                  <strong>No active enrollments</strong>
+                  <small>Activate an enrollment workflow to assign a student to a class.</small>
+                </div>
+              </article>
+            ) : null}
           </div>
         </section>
+        ) : null}
 
+        {showAuditDesk ? (
         <section className="registrar-panel">
           <div className="registrar-panel-head">
             <div>
@@ -4298,6 +5888,7 @@ function RegistrarAdmissionsExperience({ pageId, params }: { pageId: string; par
             )}
           </div>
         </section>
+        ) : null}
       </div>
         </>
       )}
@@ -4331,6 +5922,8 @@ function TeacherDeliveryExperience({ pageId, params }: { pageId: string; params?
   });
   const [sessionSaving, setSessionSaving] = useState(false);
   const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [reminderSaving, setReminderSaving] = useState(false);
+  const [materialSavingKey, setMaterialSavingKey] = useState("");
   const state = useMemo(() => platformStore.getState(), [version]);
   const refresh = () => setVersion((value) => value + 1);
   const actorId = getDemoUser("teacher").id;
@@ -4379,7 +5972,9 @@ function TeacherDeliveryExperience({ pageId, params }: { pageId: string; params?
     quizzes.find((quiz) => quiz.id === params?.quizId) ??
     quizzes[0];
   const pendingSubmissions = state.assignmentSubmissions.filter((submission) =>
-    assignments.some((assignment) => assignment.id === submission.assignmentId) && submission.status === "pending",
+    assignments.some((assignment) => assignment.id === submission.assignmentId) &&
+    classStudents.some((row) => row.student.id === submission.studentId) &&
+    submission.status === "pending",
   );
   const selectedSubmission =
     pendingSubmissions.find((submission) => submission.assignmentId === selectedAssignment?.id) ??
@@ -4477,37 +6072,55 @@ function TeacherDeliveryExperience({ pageId, params }: { pageId: string; params?
     });
   };
 
-  const sendClassReminder = () => {
+  const sendClassReminder = async () => {
     const firstStudent = classStudents[0];
     if (!firstStudent || !selectedClass) {
       toast.error("No student is assigned to this class");
       return;
     }
-    platformStore.sendMessage({
-      fromUserId: actorId,
+    setReminderSaving(true);
+    const result = await runPlatformWorkflowActionRequest({
+      type: "message.send",
       toUserId: firstStudent.user.id,
       subject: `${selectedClass.name} reminder`,
       body: `${selectedClass.name} is scheduled for ${selectedClass.schedule}.`,
+      channel: "in_app",
+      actorId,
     });
+    setReminderSaving(false);
+    if (!result.ok || !result.data) {
+      toast.error("Class reminder failed", {
+        description: result.error ?? "The server could not send this class reminder.",
+      });
+      return;
+    }
+    platformStore.setState(result.data.state);
     refresh();
-    toast.success("Class reminder sent");
+    toast.success("Class reminder sent", { description: result.data.persistence });
   };
 
-  const toggleResourcePublish = (resourceId: string) => {
-    const next = clonePlatformState();
-    const resource = next.resources.find((item) => item.id === resourceId);
+  const toggleResourcePublish = async (resourceId: string) => {
+    const resource = state.resources.find((item) => item.id === resourceId);
     if (!resource) return;
-    resource.published = !resource.published;
-    platformStore.setState(next);
-    platformStore.audit(
-      resource.published ? "material.published" : "material.unpublished",
-      "LessonResource",
-      resource.id,
-      `${resource.title} marked ${resource.published ? "published" : "unpublished"}.`,
+    setMaterialSavingKey(resource.id);
+    const result = await runPlatformWorkflowActionRequest({
+      type: "material.publish.update",
+      id: resource.id,
+      published: !resource.published,
       actorId,
-    );
+    });
+    setMaterialSavingKey("");
+    if (!result.ok || !result.data) {
+      toast.error("Material publish update failed", {
+        description: result.error ?? "The server could not save this material state.",
+      });
+      return;
+    }
+    platformStore.setState(result.data.state);
     refresh();
-    toast.success(resource.published ? "Material published" : "Material unpublished");
+    toast.success(!resource.published ? "Material published" : "Material unpublished", {
+      description: result.data.persistence,
+    });
   };
 
   const createAssignment = (event: React.FormEvent) => {
@@ -4775,9 +6388,9 @@ function TeacherDeliveryExperience({ pageId, params }: { pageId: string; params?
                 <CheckCircle2 size={15} />
                 {attendanceSaving ? "Saving" : "Save all present"}
               </button>
-              <button onClick={sendClassReminder} disabled={!classStudents.length}>
+              <button onClick={() => void sendClassReminder()} disabled={!classStudents.length || reminderSaving}>
                 <MessageSquare size={15} />
-                Send reminder
+                {reminderSaving ? "Sending" : "Send reminder"}
               </button>
             </div>
           </div>
@@ -4881,7 +6494,16 @@ function TeacherDeliveryExperience({ pageId, params }: { pageId: string; params?
                   <strong>{resource.title}</strong>
                   <small>{lesson.title} · {resource.type}</small>
                 </div>
-                <button onClick={() => toggleResourcePublish(resource.id)}>{resource.published ? "Published" : "Publish"}</button>
+                <button
+                  onClick={() => void toggleResourcePublish(resource.id)}
+                  disabled={materialSavingKey === resource.id}
+                >
+                  {materialSavingKey === resource.id
+                    ? "Saving"
+                    : resource.published
+                      ? "Published"
+                      : "Publish"}
+                </button>
               </article>
             ))}
           </div>

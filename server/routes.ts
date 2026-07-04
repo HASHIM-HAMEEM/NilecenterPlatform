@@ -267,11 +267,39 @@ function scopedAuditRows(
   eventIds: Set<string>,
   certificateIds = new Set<string>(),
   actorId?: string,
+  courseIds = new Set<string>(),
+  roomIds = new Set<string>(),
+  invoiceIds = new Set<string>(),
+  paymentIds = new Set<string>(),
 ) {
   const courseRunIds = new Set(
     state.classGroups
       .filter((group) => classGroupIds.has(group.id))
       .map((group) => group.courseRunId),
+  );
+  const moduleIds = new Set(
+    state.modules
+      .filter((module) => courseIds.has(module.courseId))
+      .map((module) => module.id),
+  );
+  const scopedCourseIds = new Set([
+    ...Array.from(courseIds),
+    ...state.courseRuns
+      .filter((run) => courseRunIds.has(run.id))
+      .map((run) => run.courseId),
+  ]);
+  const lessonIds = new Set(
+    state.lessons
+      .filter((lesson) => {
+        const module = state.modules.find((item) => item.id === lesson.moduleId);
+        return Boolean(module && scopedCourseIds.has(module.courseId));
+      })
+      .map((lesson) => lesson.id),
+  );
+  const resourceIds = new Set(
+    state.resources
+      .filter((resource) => lessonIds.has(resource.lessonId))
+      .map((resource) => resource.id),
   );
   const assignmentIds = new Set(
     state.assignments
@@ -298,6 +326,13 @@ function scopedAuditRows(
       .filter((attempt) => quizIds.has(attempt.quizId))
       .map((attempt) => attempt.id),
   );
+  const messageIds = new Set(
+    actorId
+      ? state.messages
+          .filter((message) => message.fromUserId === actorId || message.toUserId === actorId)
+          .map((message) => message.id)
+      : [],
+  );
   return state.auditLogs.filter((item) => {
     if (item.action === "attendance.saved" && item.entityType === "AttendanceRecord") {
       return classGroupIds.has(item.entityId);
@@ -317,6 +352,27 @@ function scopedAuditRows(
     if (item.entityType === "QuestionBankItem") {
       return questionIds.has(item.entityId);
     }
+    if (item.entityType === "Module") {
+      return moduleIds.has(item.entityId);
+    }
+    if (item.entityType === "LessonResource") {
+      return resourceIds.has(item.entityId);
+    }
+    if (item.entityType === "Course") {
+      return courseIds.has(item.entityId);
+    }
+    if (item.entityType === "Message") {
+      return messageIds.has(item.entityId);
+    }
+    if (item.entityType === "Room") {
+      return roomIds.has(item.entityId);
+    }
+    if (item.entityType === "Invoice") {
+      return invoiceIds.has(item.entityId);
+    }
+    if (item.entityType === "Payment") {
+      return paymentIds.has(item.entityId) || invoiceIds.has(item.entityId);
+    }
     if (
       (item.action === "calendar.created" || item.action === "calendar.created_with_conflict") &&
       item.entityType === "CalendarEvent"
@@ -324,7 +380,7 @@ function scopedAuditRows(
       return eventIds.has(item.entityId);
     }
     if (
-      (item.action === "certificate.approved" || item.action === "certificate.issued") &&
+      (item.action === "certificate.approved" || item.action === "certificate.issued" || item.action === "certificate.rejected") &&
       item.entityType === "Certificate"
     ) {
       return certificateIds.has(item.entityId);
@@ -338,6 +394,21 @@ function scopedAuditRows(
 
 function registrarAuditRows(state: PlatformStatePayload, branchIds: Set<string>, eventIds: Set<string>, actorId?: string) {
   const leadIds = new Set(state.leads.map((item) => item.id));
+  const studentIds = new Set(
+    state.students
+      .filter((item) => branchIds.has(state.users.find((userItem) => userItem.id === item.userId)?.branchId ?? ""))
+      .map((item) => item.id),
+  );
+  const userIds = new Set(
+    state.students
+      .filter((item) => studentIds.has(item.id))
+      .map((item) => item.userId),
+  );
+  const enrollmentIds = new Set(
+    state.enrollments
+      .filter((item) => studentIds.has(item.studentId))
+      .map((item) => item.id),
+  );
   const applicationIds = new Set(
     state.applications
       .filter((item) => leadIds.has(item.leadId) && (item.branchId ? branchIds.has(item.branchId) : true))
@@ -383,6 +454,9 @@ function registrarAuditRows(state: PlatformStatePayload, branchIds: Set<string>,
     if (item.entityType === "PlacementTestBooking") return placementIds.has(item.entityId);
     if (item.entityType === "PlacementTestResult") return placementResultIds.has(item.entityId) || placementIds.has(item.entityId);
     if (item.entityType === "EnrollmentWorkflow") return workflowIds.has(item.entityId);
+    if (item.entityType === "StudentProfile") return studentIds.has(item.entityId);
+    if (item.entityType === "Enrollment") return enrollmentIds.has(item.entityId);
+    if (item.entityType === "User") return userIds.has(item.entityId);
     if (item.entityType === "Invoice") return invoiceIds.has(item.entityId);
     if (item.entityType === "Payment") return paymentIds.has(item.entityId) || invoiceIds.has(item.entityId);
     if (item.entityType === "ReportPreset" && actorId) return item.actorId === actorId;
@@ -412,6 +486,7 @@ function safeUnmappedRoleState(state: PlatformStatePayload, session: NonNullable
     users: state.users.filter((item) => item.id === session.userId),
     students: [],
     teachers: [],
+    staffProfiles: [],
     courseRuns: [],
     classGroups: [],
     classSessions: [],
@@ -459,20 +534,44 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
   const teacher = state.teachers.find((item) => item.userId === session.userId);
 
   if (session.activeRole === "student" && student) {
-    const courseRunIds = new Set(state.enrollments.filter((item) => item.studentId === student.id).map((item) => item.courseRunId));
-    const courseIds = new Set(state.courseRuns.filter((item) => courseRunIds.has(item.id)).map((item) => item.courseId));
-    const classGroupIds = new Set(state.classGroups.filter((item) => courseRunIds.has(item.courseRunId)).map((item) => item.id));
+    const studentEnrollments = state.enrollments.filter((item) => item.studentId === student.id);
+    const courseRunIds = new Set(studentEnrollments.map((item) => item.courseRunId));
+    const assignedRuns = state.courseRuns.filter((item) => courseRunIds.has(item.id));
+    const courseIds = new Set(assignedRuns.map((item) => item.courseId));
+    const assignedTeacherUserIds = new Set(assignedRuns.map((item) => item.teacherId));
+    const assignedClassGroupIds = new Set(studentEnrollments.flatMap((item) => item.classGroupId ? [item.classGroupId] : []));
+    const classGroupIds = new Set(
+      state.classGroups
+        .filter((item) => assignedClassGroupIds.has(item.id) || (courseRunIds.has(item.courseRunId) && item.studentIds.includes(student.id)))
+        .map((item) => item.id),
+    );
+    const moduleIds = new Set(state.modules.filter((module) => courseIds.has(module.courseId)).map((item) => item.id));
     const lessonIds = new Set(
-      state.lessons.filter((lesson) => state.modules.some((module) => module.id === lesson.moduleId && courseIds.has(module.courseId))).map((item) => item.id),
+      state.lessons.filter((lesson) => moduleIds.has(lesson.moduleId)).map((item) => item.id),
+    );
+    const resourceIds = new Set(
+      state.lessons
+        .filter((lesson) => lessonIds.has(lesson.id))
+        .flatMap((lesson) => lesson.resourceIds),
+    );
+    const meetingLinkIds = new Set(
+      state.classGroups
+        .filter((item) => classGroupIds.has(item.id) && item.meetingLinkId)
+        .map((item) => item.meetingLinkId!),
     );
     return {
       ...state,
-      users: state.users.filter((item) => item.id === session.userId || item.roles.includes("teacher")),
+      users: state.users.filter((item) => item.id === session.userId || assignedTeacherUserIds.has(item.id)),
       students: [student],
       teachers: state.teachers.filter((item) => state.courseRuns.some((run) => run.teacherId === item.userId && courseRunIds.has(run.id))),
+      staffProfiles: [],
+      modules: state.modules.filter((item) => moduleIds.has(item.id)),
+      resources: state.resources.filter((item) => resourceIds.has(item.id) && item.published),
+      assignments: state.assignments.filter((item) => courseRunIds.has(item.courseRunId)),
       enrollments: state.enrollments.filter((item) => item.studentId === student.id),
       lessonProgress: state.lessonProgress.filter((item) => item.studentId === student.id),
       assignmentSubmissions: state.assignmentSubmissions.filter((item) => item.studentId === student.id),
+      quizzes: state.quizzes.filter((item) => courseRunIds.has(item.courseRunId)),
       quizAttempts: state.quizAttempts.filter((item) => item.studentId === student.id),
       questionBankItems: [],
       quizQuestionPreviews: quizQuestionPreviewsForRuns(state, courseRunIds),
@@ -497,6 +596,7 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
       classGroups: state.classGroups.filter((item) => classGroupIds.has(item.id)),
       classSessions: state.classSessions.filter((item) => classGroupIds.has(item.classGroupId)),
       events: state.events.filter((item) => (item.classGroupId ? classGroupIds.has(item.classGroupId) : item.ownerId === session.userId)),
+      meetingLinks: state.meetingLinks.filter((item) => meetingLinkIds.has(item.id)),
       rooms: [],
       branches: state.branches.filter((item) => state.courseRuns.some((run) => courseRunIds.has(run.id) && run.branchId === item.id)),
       teacherAvailability: [],
@@ -509,7 +609,14 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
   if (session.activeRole === "teacher" && teacher) {
     const courseRunIds = new Set(state.courseRuns.filter((item) => item.teacherId === session.userId).map((item) => item.id));
     const classGroupIds = new Set(state.classGroups.filter((item) => courseRunIds.has(item.courseRunId)).map((item) => item.id));
-    const studentIds = new Set(state.enrollments.filter((item) => courseRunIds.has(item.courseRunId)).map((item) => item.studentId));
+    const studentIds = new Set([
+      ...state.classGroups
+        .filter((item) => classGroupIds.has(item.id))
+        .flatMap((item) => item.studentIds),
+      ...state.enrollments
+        .filter((item) => item.classGroupId && classGroupIds.has(item.classGroupId))
+        .map((item) => item.studentId),
+    ]);
     const userIds = new Set([session.userId, ...state.students.filter((item) => studentIds.has(item.id)).map((item) => item.userId)]);
     const eventIds = new Set(state.events.filter((item) => item.ownerId === session.userId || (item.classGroupId ? classGroupIds.has(item.classGroupId) : false)).map((item) => item.id));
     return {
@@ -517,6 +624,7 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
       users: state.users.filter((item) => userIds.has(item.id)),
       students: state.students.filter((item) => studentIds.has(item.id)),
       teachers: [teacher],
+      staffProfiles: state.staffProfiles.filter((item) => item.userId === session.userId),
       courseRuns: state.courseRuns.filter((item) => courseRunIds.has(item.id)),
       classGroups: state.classGroups.filter((item) => classGroupIds.has(item.id)),
       classSessions: state.classSessions.filter((item) => classGroupIds.has(item.classGroupId)),
@@ -525,12 +633,12 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
       teacherAvailability: state.teacherAvailability.filter((item) => item.teacherId === session.userId && state.courseRuns.some((run) => courseRunIds.has(run.id) && run.branchId === item.branchId)),
       enrollments: state.enrollments.filter((item) => courseRunIds.has(item.courseRunId)),
       assignments: state.assignments.filter((item) => courseRunIds.has(item.courseRunId)),
-      assignmentSubmissions: state.assignmentSubmissions.filter((item) => state.assignments.some((assignment) => assignment.id === item.assignmentId && courseRunIds.has(assignment.courseRunId))),
+      assignmentSubmissions: state.assignmentSubmissions.filter((item) => studentIds.has(item.studentId) && state.assignments.some((assignment) => assignment.id === item.assignmentId && courseRunIds.has(assignment.courseRunId))),
       quizzes: state.quizzes.filter((item) => courseRunIds.has(item.courseRunId)),
       questionBankItems: state.questionBankItems.filter((item) => courseRunIds.has(item.courseRunId)),
       quizQuestionPreviews: [],
-      quizAttempts: state.quizAttempts.filter((item) => state.quizzes.some((quiz) => quiz.id === item.quizId && courseRunIds.has(quiz.courseRunId))),
-      grades: state.grades.filter((item) => studentIds.has(item.studentId)),
+      quizAttempts: state.quizAttempts.filter((item) => studentIds.has(item.studentId) && state.quizzes.some((quiz) => quiz.id === item.quizId && courseRunIds.has(quiz.courseRunId))),
+      grades: state.grades.filter((item) => studentIds.has(item.studentId) && courseRunIds.has(item.courseRunId)),
       attendance: state.attendance.filter((item) => classGroupIds.has(item.classGroupId) && studentIds.has(item.studentId)),
       events: state.events.filter((item) => item.ownerId === session.userId || (item.classGroupId ? classGroupIds.has(item.classGroupId) : false)),
       messages: state.messages.filter((item) => item.fromUserId === session.userId || item.toUserId === session.userId),
@@ -558,12 +666,15 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
     const classGroupIds = new Set(state.classGroups.filter((item) => courseRunIds.has(item.courseRunId)).map((item) => item.id));
     const studentIds = new Set(state.enrollments.filter((item) => courseRunIds.has(item.courseRunId)).map((item) => item.studentId));
     const invoiceIds = new Set(state.invoices.filter((item) => studentIds.has(item.studentId)).map((item) => item.id));
+    const paymentIds = new Set(state.payments.filter((item) => invoiceIds.has(item.invoiceId)).map((item) => item.id));
     const eventIds = new Set(state.events.filter((item) => item.branchId === branchId || (item.classGroupId ? classGroupIds.has(item.classGroupId) : false)).map((item) => item.id));
+    const roomIds = new Set(state.rooms.filter((item) => item.branchId === branchId).map((item) => item.id));
     return {
       ...state,
       users: state.users.filter((item) => item.branchId === branchId || item.id === session.userId),
       students: state.students.filter((item) => studentIds.has(item.id)),
       teachers: state.teachers.filter((item) => state.users.some((userItem) => userItem.id === item.userId && userItem.branchId === branchId)),
+      staffProfiles: state.staffProfiles.filter((item) => item.userId === session.userId || item.branchIds.includes(branchId)),
       branches: state.branches.filter((item) => item.id === branchId),
       rooms: state.rooms.filter((item) => item.branchId === branchId),
       teacherAvailability: state.teacherAvailability.filter((item) => item.branchId === branchId),
@@ -597,7 +708,7 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
       supportTickets: state.supportTickets.filter((item) => item.requesterId === session.userId),
       documents: state.documents.filter((item) => item.ownerId === session.userId),
       reportPresets: reportPresetsForSession(state, session),
-      auditLogs: scopedAuditRows(state, classGroupIds, eventIds, new Set(), session.userId),
+      auditLogs: scopedAuditRows(state, classGroupIds, eventIds, new Set(), session.userId, new Set(), roomIds, invoiceIds, paymentIds),
     };
   }
 
@@ -605,6 +716,7 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
     const branchIds = branchIdsForUserScope(state, user);
     if (!branchIds.size) return safeUnmappedRoleState(state, session);
     const courseRunIds = new Set(state.courseRuns.filter((item) => branchIds.has(item.branchId)).map((item) => item.id));
+    const classGroupIds = new Set(state.classGroups.filter((item) => courseRunIds.has(item.courseRunId)).map((item) => item.id));
     const studentIds = new Set(state.students.filter((item) => branchIds.has(state.users.find((userItem) => userItem.id === item.userId)?.branchId ?? "")).map((item) => item.id));
     const invoiceIds = new Set(state.invoices.filter((item) => studentIds.has(item.studentId)).map((item) => item.id));
     const registrarEventTypes = new Set(["placement_test", "trial_lesson", "room_booking", "reminder"]);
@@ -624,12 +736,13 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
       users: state.users.filter((item) => item.id === session.userId || (item.branchId ? branchIds.has(item.branchId) : false)),
       students: state.students.filter((item) => studentIds.has(item.id)),
       teachers: state.teachers.filter((item) => branchIds.has(state.users.find((userItem) => userItem.id === item.userId)?.branchId ?? "")),
+      staffProfiles: state.staffProfiles.filter((item) => item.userId === session.userId || item.branchIds.some((id) => branchIds.has(id))),
       branches: state.branches.filter((item) => branchIds.has(item.id)),
       rooms: state.rooms.filter((item) => branchIds.has(item.branchId)),
       teacherAvailability: [],
       courseRuns: state.courseRuns.filter((item) => courseRunIds.has(item.id)),
-      classGroups: [],
-      classSessions: [],
+      classGroups: state.classGroups.filter((item) => classGroupIds.has(item.id)),
+      classSessions: state.classSessions.filter((item) => classGroupIds.has(item.classGroupId)),
       enrollments: state.enrollments.filter((item) => courseRunIds.has(item.courseRunId) && studentIds.has(item.studentId)),
       attendance: [],
       events: state.events.filter((item) => eventIds.has(item.id)),
@@ -654,7 +767,14 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
       applications: state.applications.filter((item) => leadIds.has(item.leadId) && (item.branchId ? branchIds.has(item.branchId) : true)),
       placementTests: state.placementTests.filter((item) => placementIds.has(item.id)),
       placementResults: state.placementResults.filter((item) => placementIds.has(item.bookingId)),
-      enrollmentWorkflows: state.enrollmentWorkflows.filter((item) => item.studentId ? studentIds.has(item.studentId) : true),
+      enrollmentWorkflows: state.enrollmentWorkflows.filter((item) => {
+        if (item.studentId) return studentIds.has(item.studentId);
+        const placement = item.placementTestId ? state.placementTests.find((placementItem) => placementItem.id === item.placementTestId) : undefined;
+        if (placement?.branchId) return branchIds.has(placement.branchId);
+        const application = item.applicationId ? state.applications.find((applicationItem) => applicationItem.id === item.applicationId) : undefined;
+        if (application?.branchId) return branchIds.has(application.branchId);
+        return state.courseRuns.some((run) => run.courseId === item.targetCourseId && branchIds.has(run.branchId));
+      }),
       supportTickets: [],
       documents: state.documents.filter((item) => item.ownerId === session.userId),
       reportPresets: reportPresetsForSession(state, session),
@@ -669,12 +789,17 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
     const classGroupIds = new Set(state.classGroups.filter((item) => courseRunIds.has(item.courseRunId)).map((item) => item.id));
     const studentIds = new Set(state.enrollments.filter((item) => courseRunIds.has(item.courseRunId)).map((item) => item.studentId));
     const eventIds = new Set(state.events.filter((item) => item.classGroupId ? classGroupIds.has(item.classGroupId) : item.ownerId === session.userId).map((item) => item.id));
-    const certificateIds = new Set(state.certificates.filter((item) => courseIds.has(item.courseId)).map((item) => item.id));
+    const certificateIds = new Set(
+      state.certificates
+        .filter((item) => courseIds.has(item.courseId) && studentIds.has(item.studentId))
+        .map((item) => item.id),
+    );
     return {
       ...state,
       users: state.users.filter(
         (item) => item.id === session.userId || (item.departmentId ? departmentIds.has(item.departmentId) : false) || studentIds.has(state.students.find((studentItem) => studentItem.userId === item.id)?.id ?? ""),
       ),
+      staffProfiles: state.staffProfiles.filter((item) => item.userId === session.userId || item.departmentIds.some((id) => departmentIds.has(id))),
       departments: state.departments.filter((item) => departmentIds.has(item.id)),
       programs: state.programs.filter((item) => programIds.has(item.id)),
       levels: state.levels.filter((item) => programIds.has(item.programId)),
@@ -700,13 +825,13 @@ function scopePlatformStateForSession(state: PlatformStatePayload, session: NonN
       grades: state.grades.filter((item) => studentIds.has(item.studentId)),
       attendance: state.attendance.filter((item) => classGroupIds.has(item.classGroupId) && studentIds.has(item.studentId)),
       events: state.events.filter((item) => item.classGroupId ? classGroupIds.has(item.classGroupId) : item.ownerId === session.userId),
-      certificates: state.certificates.filter((item) => courseIds.has(item.courseId)),
+      certificates: state.certificates.filter((item) => courseIds.has(item.courseId) && studentIds.has(item.studentId)),
       quranPlans: state.quranPlans.filter((item) => studentIds.has(item.studentId)),
       quranProgress: state.quranProgress.filter((item) => studentIds.has(item.studentId)),
       recitationSubmissions: state.recitationSubmissions.filter((item) => studentIds.has(item.studentId)),
       invoices: [],
       payments: [],
-      auditLogs: scopedAuditRows(state, classGroupIds, eventIds, certificateIds, session.userId),
+      auditLogs: scopedAuditRows(state, classGroupIds, eventIds, certificateIds, session.userId, courseIds),
       messages: state.messages.filter((item) => item.fromUserId === session.userId || item.toUserId === session.userId),
       communicationLogs: state.communicationLogs.filter((item) => item.actorId === session.userId || item.relatedUserId === session.userId),
       notifications: state.notifications.filter((item) => item.userId === session.userId),

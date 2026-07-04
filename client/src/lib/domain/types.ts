@@ -24,9 +24,11 @@ export type StudentStatus =
   | "completed"
   | "cancelled";
 
+export type StudentEntrySource = "direct" | "lead" | "application" | "placement";
+
 export type AttendanceStatus = "present" | "late" | "absent" | "excused";
 export type PaymentStatus = "draft" | "issued" | "pending" | "paid" | "overdue" | "cancelled" | "refunded";
-export type CertificateStatus = "draft" | "pending_approval" | "approved" | "issued" | "revoked";
+export type CertificateStatus = "draft" | "pending_approval" | "approved" | "issued" | "rejected" | "revoked";
 export type LessonProgressStatus = "not_started" | "in_progress" | "completed";
 export type CalendarEventType =
   | "class_session"
@@ -182,11 +184,13 @@ export type StudentProfile = {
   id: string;
   userId: string;
   status: StudentStatus;
+  source?: StudentEntrySource;
   guardianId?: string;
   guardianName?: string;
   guardianPhone?: string;
   currentLevel?: string;
   ageGroup?: string;
+  courseInterest?: string;
   notes?: string;
   country: string;
   preferredLanguage: string;
@@ -197,18 +201,52 @@ export type TeacherProfile = {
   id: string;
   userId: string;
   departmentId: string;
+  branchId: string;
+  subjects: string[];
+  teachingLevels: string[];
   specialties: string[];
   availability: string[];
+  availabilityStatus: StaffAvailabilityStatus;
+  assignedClassIds: string[];
+  status: EntityStatus;
+};
+
+export type StaffRole = Exclude<Role, "student">;
+
+export type StaffPermissionScope = "department" | "branch" | "admissions" | "operations" | "global";
+
+export type StaffAvailabilityStatus = "available" | "limited" | "unavailable" | "not_applicable";
+
+export type StaffProfile = {
+  id: string;
+  userId: string;
+  role: StaffRole;
+  branchIds: string[];
+  departmentIds: string[];
+  permissionScope: StaffPermissionScope;
+  title: string;
+  subjects: string[];
+  teachingLevels: string[];
+  availabilityStatus: StaffAvailabilityStatus;
+  operationalScope: string[];
+  status: EntityStatus;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type Enrollment = {
   id: string;
   studentId: string;
   courseRunId: string;
+  levelId?: string;
+  classGroupId?: string;
+  teacherId?: string;
+  source?: StudentEntrySource;
   status: StudentStatus;
   progress: number;
   attendanceRate: number;
   currentGrade: number;
+  createdAt?: string;
 };
 
 export type Assignment = {
@@ -411,9 +449,15 @@ export type PlacementTestResult = {
 export type EnrollmentWorkflow = {
   id: string;
   leadId?: string;
+  applicationId?: string;
   studentId?: string;
   placementTestId?: string;
   targetCourseId: string;
+  courseRunId?: string;
+  targetLevelId?: string;
+  recommendedLevel?: string;
+  classGroupId?: string;
+  source?: StudentEntrySource;
   status: StudentStatus;
   nextStep: string;
   updatedAt: string;
@@ -468,6 +512,9 @@ export type Certificate = {
   approvedAt?: string;
   issuedBy?: string;
   issuedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
 };
 
 export type CertificateVerificationResult = {
@@ -602,7 +649,17 @@ export type IntegrationConfig = {
   notes: string;
 };
 
+export type PlatformSettings = {
+  organization: string;
+  defaultLanguage: string;
+  academicTerm: string;
+  retentionDays: number;
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
 export type PlatformState = {
+  settings: PlatformSettings;
   users: User[];
   branches: Branch[];
   departments: Department[];
@@ -616,6 +673,7 @@ export type PlatformState = {
   classGroups: ClassGroup[];
   students: StudentProfile[];
   teachers: TeacherProfile[];
+  staffProfiles: StaffProfile[];
   enrollments: Enrollment[];
   lessonProgress: LessonProgress[];
   assignments: Assignment[];

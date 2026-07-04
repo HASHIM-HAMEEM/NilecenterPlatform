@@ -10,8 +10,11 @@ import type {
   Grade,
   IntegrationConfig,
   IntegrationStatus,
+  Application,
   Lead,
   Lesson,
+  LessonResource,
+  Module,
   Message,
   Notification,
   Payment,
@@ -20,11 +23,17 @@ import type {
   PlatformState,
   ReportPreset,
   ReportType,
+  StaffAvailabilityStatus,
+  StaffPermissionScope,
+  StaffProfile,
+  StaffRole,
+  StudentEntrySource,
   StudentStatus,
   QuestionBankItem,
   QuizAttempt,
   QuranProgressRecord,
   RecitationSubmission,
+  Room,
   TeacherAvailability,
 } from "./types.js";
 import { roleOrder, rolePermissions, type Permission, type Role } from "../platformData.js";
@@ -40,12 +49,30 @@ export type CreateLeadActionInput = Pick<Lead, "fullName" | "email" | "phone" | 
   source?: Lead["source"];
 };
 
+export type CreateApplicationActionInput = Pick<Application, "branchId" | "courseInterest" | "schedulePreference"> & {
+  fullName: string;
+  email: string;
+  phone: string;
+  country?: string;
+  notes?: string;
+  source?: Lead["source"];
+};
+
 export type CreatePlacementActionInput = Pick<
   PlacementTestBooking,
   "fullName" | "email" | "phone" | "subject" | "preferredDate" | "currentLevel"
 > & {
   branchId?: string;
 };
+
+export type CreateCurriculumModuleActionInput = Pick<Module, "courseId" | "title" | "outcomes">;
+
+export type UpdateCourseStatusActionInput = {
+  courseId: string;
+  status: Extract<EntityStatus, "draft" | "active" | "paused" | "completed">;
+};
+
+export type UpdateMaterialPublishActionInput = Pick<LessonResource, "id" | "published">;
 
 export type CreateCalendarEventActionInput = {
   title: string;
@@ -103,6 +130,7 @@ export type AssignTeacherActionInput = {
   status?: EntityStatus;
   departmentId?: string;
   specialties?: string[];
+  teachingLevels?: string[];
   availability?: string[];
   actorId?: string;
 };
@@ -130,6 +158,20 @@ export type UpdateBranchActionInput = {
   actorId?: string;
 };
 
+export type UpdateRoomStatusActionInput = {
+  roomId: Room["id"];
+  status: Extract<EntityStatus, "active" | "pending" | "paused">;
+  actorId?: string;
+};
+
+export type CreateRoomActionInput = {
+  branchId: string;
+  name: string;
+  capacity: number;
+  equipment?: string[];
+  actorId?: string;
+};
+
 export type UpdateIntegrationStatusActionInput = {
   integrationId: IntegrationConfig["id"];
   status: IntegrationStatus;
@@ -143,6 +185,14 @@ export type CheckIntegrationActionInput = {
 
 export type CheckSystemHealthActionInput = {
   score: number;
+  actorId?: string;
+};
+
+export type SavePlatformSettingsActionInput = {
+  organization: string;
+  defaultLanguage: string;
+  academicTerm: string;
+  retentionDays: number;
   actorId?: string;
 };
 
@@ -178,17 +228,74 @@ export type CreateUserActionInput = {
   actorId?: string;
 };
 
+export type CreateStaffUserActionInput = {
+  name: string;
+  email: string;
+  phone?: string;
+  role: StaffRole;
+  branchId?: string;
+  departmentId?: string;
+  status?: EntityStatus;
+  permissionScope?: StaffPermissionScope;
+  subjects?: string[];
+  teachingLevels?: string[];
+  availabilityStatus?: StaffAvailabilityStatus;
+  operationalScope?: string[];
+  notes?: string;
+  actorId?: string;
+};
+
+export type CreateStudentActionInput = {
+  fullName: string;
+  email: string;
+  phone: string;
+  branchId: string;
+  preferredLanguage: string;
+  courseInterest: string;
+  ageGroup: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  currentLevel?: string;
+  placementResult?: string;
+  status?: Extract<StudentStatus, "ready_to_enroll" | "enrolled" | "active" | "paused">;
+  notes?: string;
+  courseRunId: string;
+  classGroupId: string;
+  source?: StudentEntrySource;
+  leadId?: string;
+  applicationId?: string;
+  placementTestId?: string;
+  actorId?: string;
+};
+
+export type UpdateStudentStatusActionInput = {
+  studentId: string;
+  status: StudentStatus;
+  notes?: string;
+  actorId?: string;
+};
+
 export type PlatformWorkflowAction =
   | PlatformLearningAction
   | ({ type: "lead.create"; actorId?: string } & CreateLeadActionInput)
+  | ({ type: "application.create"; actorId?: string } & CreateApplicationActionInput)
   | ({ type: "user.create" } & CreateUserActionInput)
+  | ({ type: "staff.user.create" } & CreateStaffUserActionInput)
+  | ({ type: "student.create" } & CreateStudentActionInput)
+  | ({ type: "student.status.update" } & UpdateStudentStatusActionInput)
   | ({ type: "user.update" } & UpdateUserActionInput)
   | ({ type: "permission.update" } & UpdatePermissionActionInput)
   | ({ type: "branch.update" } & UpdateBranchActionInput)
+  | ({ type: "room.status.update" } & UpdateRoomStatusActionInput)
+  | ({ type: "room.create" } & CreateRoomActionInput)
   | ({ type: "integration.status.update" } & UpdateIntegrationStatusActionInput)
   | ({ type: "integration.local_check" } & CheckIntegrationActionInput)
   | ({ type: "system.health_check" } & CheckSystemHealthActionInput)
+  | ({ type: "settings.save" } & SavePlatformSettingsActionInput)
   | ({ type: "placement.create"; actorId?: string } & CreatePlacementActionInput)
+  | ({ type: "curriculum.module.create"; actorId?: string } & CreateCurriculumModuleActionInput)
+  | ({ type: "course.status.update"; actorId?: string } & UpdateCourseStatusActionInput)
+  | ({ type: "material.publish.update"; actorId?: string } & UpdateMaterialPublishActionInput)
   | { type: "record.save"; module: string; payload: Record<string, string>; actorId?: string }
   | ({ type: "assignment.create"; actorId?: string } & CreateAssignmentActionInput)
   | ({ type: "quiz.create"; actorId?: string } & CreateQuizActionInput)
@@ -196,11 +303,19 @@ export type PlatformWorkflowAction =
   | { type: "quiz.questions.set"; quizId: string; questionIds: string[]; actorId?: string }
   | { type: "assignment.grade"; submissionId: string; score: number; feedback: string; actorId?: string }
   | { type: "quiz.review"; attemptId: string; score: number; feedback: string; actorId?: string }
-  | { type: "attendance.save"; classGroupId: string; sessionId: string; statuses: Record<string, AttendanceStatus>; actorId?: string }
+  | {
+      type: "attendance.save";
+      classGroupId: string;
+      sessionId: string;
+      statuses: Record<string, AttendanceStatus>;
+      notes?: Record<string, string>;
+      actorId?: string;
+    }
   | ({ type: "calendar.create"; actorId?: string } & CreateCalendarEventActionInput)
   | ({ type: "message.send"; actorId?: string } & SendMessageActionInput)
   | { type: "certificate.approve"; certificateId: string; actorId?: string }
   | { type: "certificate.issue"; certificateId: string; actorId?: string }
+  | { type: "certificate.reject"; certificateId: string; reason: string; actorId?: string }
   | {
       type: "payment.record";
       invoiceId: string;
@@ -220,7 +335,8 @@ export type PlatformWorkflowAction =
       actorId?: string;
     }
   | { type: "placement.result.record"; bookingId: string; recommendedLevel: string; score: number; notes: string; actorId?: string }
-  | { type: "lead.convert"; leadId: string; actorId?: string }
+  | { type: "lead.convert"; leadId: string; branchId?: string; actorId?: string }
+  | { type: "application.convert"; applicationId: string; actorId?: string }
   | { type: "enrollment.activate"; workflowId: string; courseRunId?: string; classGroupId?: string; actorId?: string }
   | ({ type: "teacher.assign" } & AssignTeacherActionInput)
   | { type: "quran.progress.update"; recordId: string; memorizedPercent: number; tajweedScore: number; notes: string; actorId?: string }
@@ -546,6 +662,33 @@ function messageRouteForUser(user?: PlatformState["users"][number]) {
   }
 }
 
+function defaultAdmissionsBranchId(state: PlatformState, actorId?: string) {
+  const actor = state.users.find((user) => user.id === actorId);
+  if (actor?.branchId && state.branches.some((branch) => branch.id === actor.branchId)) return actor.branchId;
+  const staffProfile = state.staffProfiles.find((profile) => profile.userId === actorId && profile.role === "registrar");
+  const scopedBranch = staffProfile?.branchIds.find((branchId) => state.branches.some((branch) => branch.id === branchId));
+  return scopedBranch ?? state.branches.find((branch) => branch.id === "br_online")?.id ?? state.branches[0]?.id ?? "br_online";
+}
+
+function appendInternalCommunicationLog(
+  state: PlatformState,
+  ctx: MutationContext,
+  input: { actorId: string; subject: string; body: string; relatedUserId?: string },
+) {
+  const log: CommunicationLog = {
+    id: ctx.createId("comm"),
+    actorId: input.actorId,
+    channel: "manual",
+    subject: input.subject,
+    body: input.body,
+    relatedUserId: input.relatedUserId,
+    status: "completed",
+    createdAt: ctx.now(),
+  };
+  state.communicationLogs = [log, ...state.communicationLogs].slice(0, 120);
+  return log;
+}
+
 function applyCreateLead(
   state: PlatformState,
   input: CreateLeadActionInput & { actorId?: string },
@@ -574,6 +717,73 @@ function applyCreateLead(
     input.actorId ?? "usr_registrar_demo",
   );
   return lead;
+}
+
+function applyCreateApplication(
+  state: PlatformState,
+  input: CreateApplicationActionInput & { actorId?: string },
+  ctx: MutationContext,
+) {
+  const fullName = input.fullName.trim();
+  const email = input.email.trim().toLowerCase();
+  const phone = input.phone.trim();
+  const branchId = input.branchId.trim();
+  const courseInterest = input.courseInterest.trim();
+  const schedulePreference = input.schedulePreference.trim();
+  if (!fullName || !email || !phone || !branchId || !courseInterest || !schedulePreference) {
+    throw new Error("Application name, email, phone, branch, course, and schedule are required.");
+  }
+  if (!email.includes("@")) throw new Error("Enter a valid application email address.");
+  const branch = state.branches.find((item) => item.id === branchId);
+  if (!branch) throw new Error("Choose a valid branch for this application.");
+  const existingLead = state.leads.find((lead) => lead.email.toLowerCase() === email);
+  const existingApplication = existingLead ? state.applications.find((application) => application.leadId === existingLead.id) : undefined;
+  if (existingApplication) {
+    throw new Error("An application already exists for this email.");
+  }
+  if (state.users.some((user) => user.email.toLowerCase() === email)) {
+    throw new Error("This email is already in the identity directory.");
+  }
+
+  const actorId = input.actorId ?? "usr_registrar_demo";
+  const lead: Lead = {
+    id: ctx.createId("lead"),
+    fullName,
+    email,
+    phone,
+    country: input.country?.trim() || "Egypt",
+    subject: courseInterest,
+    source: input.source ?? "manual",
+    status: "ready_to_enroll",
+    notes: input.notes?.trim() || undefined,
+    createdAt: ctx.now(),
+  };
+  const application: Application = {
+    id: ctx.createId("app"),
+    leadId: lead.id,
+    branchId: branch.id,
+    courseInterest,
+    schedulePreference,
+    status: "pending",
+  };
+  const communicationLog = appendInternalCommunicationLog(state, ctx, {
+    actorId,
+    subject: "Application intake",
+    body: `Internal follow-up logged for ${fullName}; no external message was sent.`,
+  });
+
+  state.leads = [lead, ...state.leads];
+  state.applications = [application, ...state.applications];
+  appendAudit(
+    state,
+    ctx,
+    "application.created",
+    "Application",
+    application.id,
+    `Created application for ${fullName} in ${branch.name}.`,
+    actorId,
+  );
+  return { lead, application, communicationLog };
 }
 
 function applyCreatePlacementBooking(
@@ -605,6 +815,79 @@ function applyCreatePlacementBooking(
   return booking;
 }
 
+function applyCreateCurriculumModule(
+  state: PlatformState,
+  input: CreateCurriculumModuleActionInput & { actorId?: string },
+  ctx: MutationContext,
+) {
+  const course = state.courses.find((item) => item.id === input.courseId);
+  if (!course) throw new Error(`Course ${input.courseId} was not found.`);
+  if (!input.title.trim()) throw new Error("Module title is required.");
+  const courseModules = state.modules.filter((module) => module.courseId === course.id);
+  const module: Module = {
+    id: ctx.createId("mod"),
+    courseId: course.id,
+    title: input.title.trim(),
+    order: courseModules.length + 1,
+    outcomes: input.outcomes.map((item) => item.trim()).filter(Boolean),
+  };
+  state.modules = [...state.modules, module];
+  appendAudit(
+    state,
+    ctx,
+    "curriculum.module_created",
+    "Module",
+    module.id,
+    `Added module ${module.title} to ${course.title}.`,
+    input.actorId ?? "usr_hod_demo",
+  );
+  return module;
+}
+
+function applyUpdateCourseStatus(
+  state: PlatformState,
+  input: UpdateCourseStatusActionInput & { actorId?: string },
+  ctx: MutationContext,
+) {
+  const course = state.courses.find((item) => item.id === input.courseId);
+  if (!course) throw new Error(`Course ${input.courseId} was not found.`);
+  const allowedStatuses = new Set<UpdateCourseStatusActionInput["status"]>(["draft", "active", "paused", "completed"]);
+  if (!allowedStatuses.has(input.status)) throw new Error("Choose a valid course status.");
+  const updated = { ...course, status: input.status };
+  state.courses = state.courses.map((item) => (item.id === course.id ? updated : item));
+  appendAudit(
+    state,
+    ctx,
+    "course.status_updated",
+    "Course",
+    course.id,
+    `Set ${course.title} to ${input.status}.`,
+    input.actorId ?? "usr_hod_demo",
+  );
+  return updated;
+}
+
+function applyUpdateMaterialPublish(
+  state: PlatformState,
+  input: UpdateMaterialPublishActionInput & { actorId?: string },
+  ctx: MutationContext,
+) {
+  const resource = state.resources.find((item) => item.id === input.id);
+  if (!resource) throw new Error(`Resource ${input.id} was not found.`);
+  const updated = { ...resource, published: input.published };
+  state.resources = state.resources.map((item) => (item.id === resource.id ? updated : item));
+  appendAudit(
+    state,
+    ctx,
+    input.published ? "material.published" : "material.unpublished",
+    "LessonResource",
+    resource.id,
+    `${resource.title} marked ${input.published ? "published" : "unpublished"}.`,
+    input.actorId ?? "usr_teacher_demo",
+  );
+  return updated;
+}
+
 function applySaveOperationalRecord(
   state: PlatformState,
   input: { module: string; payload: Record<string, string>; actorId?: string },
@@ -623,6 +906,53 @@ function applySaveOperationalRecord(
   return { entityId, audit };
 }
 
+function teacherActor(state: PlatformState, actorId?: string) {
+  const actor = actorId ? state.users.find((item) => item.id === actorId) : undefined;
+  return actor?.activeRole === "teacher" ? actor : undefined;
+}
+
+function teacherOwnsCourseRun(state: PlatformState, teacherUserId: string, courseRunId: string) {
+  return state.courseRuns.some((item) => item.id === courseRunId && item.teacherId === teacherUserId);
+}
+
+function teacherOwnsStudentInCourseRun(
+  state: PlatformState,
+  teacherUserId: string,
+  courseRunId: string,
+  studentId: string,
+) {
+  if (!teacherOwnsCourseRun(state, teacherUserId, courseRunId)) return false;
+  const courseClassGroups = state.classGroups.filter((group) => group.courseRunId === courseRunId);
+  const courseClassGroupIds = new Set(courseClassGroups.map((group) => group.id));
+  return (
+    courseClassGroups.some((group) => group.studentIds.includes(studentId)) ||
+    state.enrollments.some(
+      (enrollment) =>
+        enrollment.studentId === studentId &&
+        enrollment.courseRunId === courseRunId &&
+        (!enrollment.classGroupId || courseClassGroupIds.has(enrollment.classGroupId)),
+    )
+  );
+}
+
+function assertTeacherCanUseCourseRun(state: PlatformState, actorId: string | undefined, courseRunId: string, message: string) {
+  const actor = teacherActor(state, actorId);
+  if (!actor) return;
+  if (!teacherOwnsCourseRun(state, actor.id, courseRunId)) throw new Error(message);
+}
+
+function assertTeacherCanManageStudentInRun(
+  state: PlatformState,
+  actorId: string | undefined,
+  courseRunId: string,
+  studentId: string,
+  message: string,
+) {
+  const actor = teacherActor(state, actorId);
+  if (!actor) return;
+  if (!teacherOwnsStudentInCourseRun(state, actor.id, courseRunId, studentId)) throw new Error(message);
+}
+
 function applyCreateAssignment(
   state: PlatformState,
   input: CreateAssignmentActionInput & { actorId?: string },
@@ -630,6 +960,7 @@ function applyCreateAssignment(
 ) {
   const run = state.courseRuns.find((item) => item.id === input.courseRunId);
   if (!run) throw new Error(`Course run ${input.courseRunId} was not found.`);
+  assertTeacherCanUseCourseRun(state, input.actorId, input.courseRunId, "Teacher can only create assessments for assigned course runs.");
   if (!input.title.trim()) throw new Error("Assignment title is required.");
   if (!Number.isFinite(new Date(input.dueAt).getTime())) {
     throw new Error("Assignment requires a valid due date.");
@@ -664,6 +995,7 @@ function applyCreateQuiz(
 ) {
   const run = state.courseRuns.find((item) => item.id === input.courseRunId);
   if (!run) throw new Error(`Course run ${input.courseRunId} was not found.`);
+  assertTeacherCanUseCourseRun(state, input.actorId, input.courseRunId, "Teacher can only create assessments for assigned course runs.");
   if (!input.title.trim()) throw new Error("Quiz title is required.");
   if (!Number.isFinite(new Date(input.dueAt).getTime())) {
     throw new Error("Quiz requires a valid due date.");
@@ -713,6 +1045,7 @@ function applySetQuizQuestions(
   ctx: MutationContext,
 ) {
   const quiz = requireQuiz(state, input.quizId);
+  assertTeacherCanUseCourseRun(state, input.actorId, quiz.courseRunId, "Teacher can only attach questions to assigned course quizzes.");
   const questionIds = normalizeQuizQuestionIds(state, quiz.courseRunId, input.questionIds);
   let updatedQuiz = quiz;
   state.quizzes = state.quizzes.map((item) => {
@@ -776,6 +1109,7 @@ function applyCreateQuestionBankItem(
 ) {
   const run = state.courseRuns.find((item) => item.id === input.courseRunId);
   if (!run) throw new Error(`Course run ${input.courseRunId} was not found.`);
+  assertTeacherCanUseCourseRun(state, input.actorId, input.courseRunId, "Teacher can only create assessments for assigned course runs.");
   if (!input.prompt.trim()) throw new Error("Question prompt is required.");
   const tags = input.tags.map((item) => item.trim()).filter(Boolean);
   const choices = (input.choices ?? []).map((item) => item.trim()).filter(Boolean);
@@ -812,34 +1146,42 @@ function applyGradeAssignmentSubmission(
   input: { submissionId: string; score: number; feedback: string; actorId?: string },
   ctx: MutationContext,
 ) {
-  let updatedSubmission: AssignmentSubmission | undefined;
+  const submission = state.assignmentSubmissions.find((item) => item.id === input.submissionId);
+  if (!submission) return undefined;
+  const assignment = state.assignments.find((item) => item.id === submission.assignmentId);
+  if (!assignment) throw new Error(`Assignment ${submission.assignmentId} was not found.`);
+  assertTeacherCanManageStudentInRun(
+    state,
+    input.actorId,
+    assignment.courseRunId,
+    submission.studentId,
+    "Teacher can only grade assigned class submissions.",
+  );
   const score = Math.min(100, Math.max(0, Math.round(input.score)));
   const feedback = input.feedback.trim() || "Reviewed by teacher.";
+  const updatedSubmission = {
+    ...submission,
+    status: "completed" as const,
+    score,
+    feedback,
+  };
   state.assignmentSubmissions = state.assignmentSubmissions.map((submission) => {
     if (submission.id !== input.submissionId) return submission;
-    updatedSubmission = {
-      ...submission,
-      status: "completed",
-      score,
-      feedback,
-    };
     return updatedSubmission;
   });
-  if (!updatedSubmission) return undefined;
 
-  const assignment = state.assignments.find((item) => item.id === updatedSubmission?.assignmentId);
   const existingGrade = state.grades.find(
     (grade) =>
-      grade.studentId === updatedSubmission?.studentId &&
-      grade.courseRunId === assignment?.courseRunId &&
-      (grade.itemId ? grade.itemId === assignment?.id : grade.itemTitle === assignment?.title),
+      grade.studentId === updatedSubmission.studentId &&
+      grade.courseRunId === assignment.courseRunId &&
+      (grade.itemId ? grade.itemId === assignment.id : grade.itemTitle === assignment.title),
   );
   const maxScore = 100;
   if (existingGrade) {
     existingGrade.score = score;
     existingGrade.maxScore = maxScore;
     existingGrade.feedback = feedback;
-  } else if (assignment) {
+  } else {
     state.grades = [
       {
         id: ctx.createId("gr"),
@@ -854,11 +1196,11 @@ function applyGradeAssignmentSubmission(
       ...state.grades,
     ];
   }
-  const student = state.students.find((item) => item.id === updatedSubmission?.studentId);
+  const student = state.students.find((item) => item.id === updatedSubmission.studentId);
   notify(state, ctx, {
     userId: student?.userId ?? "usr_student_demo",
     title: "Assignment graded",
-    body: `${assignment?.title ?? "Assignment"} received ${score}/${maxScore}.`,
+    body: `${assignment.title} received ${score}/${maxScore}.`,
     href: "/app/student/grades",
   });
   appendAudit(
@@ -867,7 +1209,7 @@ function applyGradeAssignmentSubmission(
     "assignment.graded",
     "AssignmentSubmission",
     updatedSubmission.id,
-    `${assignment?.title ?? "Assignment"} graded ${score}/${maxScore}.`,
+    `${assignment.title} graded ${score}/${maxScore}.`,
     input.actorId ?? "usr_teacher_demo",
   );
   return updatedSubmission;
@@ -878,35 +1220,43 @@ function applyReviewQuizAttempt(
   input: { attemptId: string; score: number; feedback: string; actorId?: string },
   ctx: MutationContext,
 ) {
-  let updatedAttempt: QuizAttempt | undefined;
+  const attempt = state.quizAttempts.find((item) => item.id === input.attemptId);
+  if (!attempt) return undefined;
+  const quiz = state.quizzes.find((item) => item.id === attempt.quizId);
+  if (!quiz) throw new Error(`Quiz ${attempt.quizId} was not found.`);
+  assertTeacherCanManageStudentInRun(
+    state,
+    input.actorId,
+    quiz.courseRunId,
+    attempt.studentId,
+    "Teacher can only review assigned class quiz attempts.",
+  );
   const score = Math.min(100, Math.max(0, Math.round(input.score)));
   const feedback = input.feedback.trim() || "Reviewed by teacher.";
+  const updatedAttempt = {
+    ...attempt,
+    status: "completed" as const,
+    score,
+  };
   state.quizAttempts = state.quizAttempts.map((attempt) => {
     if (attempt.id !== input.attemptId) return attempt;
-    updatedAttempt = {
-      ...attempt,
-      status: "completed",
-      score,
-    };
     return updatedAttempt;
   });
-  if (!updatedAttempt) return undefined;
 
-  const quiz = state.quizzes.find((item) => item.id === updatedAttempt?.quizId);
   const existingGrade = state.grades.find(
     (grade) =>
-      grade.studentId === updatedAttempt?.studentId &&
-      grade.courseRunId === quiz?.courseRunId &&
-      (grade.itemId ? grade.itemId === quiz?.id : grade.itemTitle === quiz?.title),
+      grade.studentId === updatedAttempt.studentId &&
+      grade.courseRunId === quiz.courseRunId &&
+      (grade.itemId ? grade.itemId === quiz.id : grade.itemTitle === quiz.title),
   );
   const maxScore = 100;
   if (existingGrade) {
-    existingGrade.itemId = quiz?.id ?? existingGrade.itemId;
-    existingGrade.itemTitle = quiz?.title ?? existingGrade.itemTitle;
+    existingGrade.itemId = quiz.id;
+    existingGrade.itemTitle = quiz.title;
     existingGrade.score = score;
     existingGrade.maxScore = maxScore;
     existingGrade.feedback = feedback;
-  } else if (quiz) {
+  } else {
     state.grades = [
       {
         id: ctx.createId("gr"),
@@ -921,11 +1271,11 @@ function applyReviewQuizAttempt(
       ...state.grades,
     ];
   }
-  const student = state.students.find((item) => item.id === updatedAttempt?.studentId);
+  const student = state.students.find((item) => item.id === updatedAttempt.studentId);
   notify(state, ctx, {
     userId: student?.userId ?? "usr_student_demo",
     title: "Quiz reviewed",
-    body: `${quiz?.title ?? "Quiz"} received ${score}/${maxScore}.`,
+    body: `${quiz.title} received ${score}/${maxScore}.`,
     href: "/app/student/grades",
   });
   appendAudit(
@@ -934,7 +1284,7 @@ function applyReviewQuizAttempt(
     "quiz.reviewed",
     "QuizAttempt",
     updatedAttempt.id,
-    `${quiz?.title ?? "Quiz"} reviewed ${score}/${maxScore}.`,
+    `${quiz.title} reviewed ${score}/${maxScore}.`,
     input.actorId ?? "usr_teacher_demo",
   );
   return updatedAttempt;
@@ -946,6 +1296,7 @@ function applySaveAttendanceBulk(
     classGroupId: string;
     sessionId: string;
     statuses: Record<string, AttendanceStatus>;
+    notes?: Record<string, string>;
     actorId?: string;
   },
   ctx: MutationContext,
@@ -955,6 +1306,7 @@ function applySaveAttendanceBulk(
   if (!classGroup) throw new Error(`Class group ${input.classGroupId} was not found.`);
   if (!session) throw new Error(`Attendance session ${input.sessionId} was not found.`);
   if (session && session.classGroupId !== classGroup.id) throw new Error("Attendance session does not belong to this class group.");
+  assertTeacherCanUseCourseRun(state, input.actorId, classGroup.courseRunId, "Teacher can only save attendance for assigned classes.");
   const roster = new Set(classGroup.studentIds);
   const suppliedStudentIds = Object.keys(input.statuses);
   const invalidStudentId = suppliedStudentIds.find((studentId) => !roster.has(studentId));
@@ -972,7 +1324,8 @@ function applySaveAttendanceBulk(
           sessionKeys.has(record.sessionId) &&
           record.studentId === studentId,
       );
-      return !existing || existing.status !== input.statuses[studentId] || existing.sessionId !== canonicalSessionId;
+      const note = input.notes?.[studentId]?.trim() || undefined;
+      return !existing || existing.status !== input.statuses[studentId] || existing.sessionId !== canonicalSessionId || existing.notes !== note;
     });
   if (!hasAttendanceChange) {
     return state.attendance.filter(
@@ -986,9 +1339,11 @@ function applySaveAttendanceBulk(
         sessionKeys.has(record.sessionId) &&
         record.studentId === studentId,
     );
+    const note = input.notes?.[studentId]?.trim() || undefined;
     if (existing) {
       existing.status = status;
       existing.sessionId = canonicalSessionId;
+      existing.notes = note;
     } else {
       state.attendance = [
         {
@@ -997,6 +1352,7 @@ function applySaveAttendanceBulk(
           studentId,
           sessionId: canonicalSessionId,
           status,
+          notes: note,
         },
         ...state.attendance,
       ];
@@ -1328,6 +1684,51 @@ function applyIssueCertificate(
   return updated;
 }
 
+function applyRejectCertificate(
+  state: PlatformState,
+  input: { certificateId: string; reason: string; actorId?: string },
+  ctx: MutationContext,
+) {
+  const reason = input.reason.trim();
+  if (!reason) return undefined;
+  let updated: Certificate | undefined;
+  let changed = false;
+  state.certificates = state.certificates.map((certificate) => {
+    if (certificate.id !== input.certificateId) return certificate;
+    if (certificate.status === "issued" || certificate.status === "revoked") return certificate;
+    if (certificate.status === "rejected") {
+      updated = certificate;
+      return certificate;
+    }
+    if (certificate.status !== "pending_approval" && certificate.status !== "approved") return certificate;
+    changed = true;
+    updated = {
+      ...certificate,
+      status: "rejected",
+      approvedBy: undefined,
+      approvedAt: undefined,
+      issuedBy: undefined,
+      issuedAt: undefined,
+      rejectedBy: input.actorId ?? "usr_hod_demo",
+      rejectedAt: ctx.now(),
+      rejectionReason: reason,
+    };
+    return updated;
+  });
+  if (updated && changed) {
+    appendAudit(
+      state,
+      ctx,
+      "certificate.rejected",
+      "Certificate",
+      updated.id,
+      `Rejected certificate ${updated.verificationCode}: ${reason}.`,
+      input.actorId ?? "usr_hod_demo",
+    );
+  }
+  return updated;
+}
+
 function applyRecordPayment(
   state: PlatformState,
   input: {
@@ -1341,6 +1742,10 @@ function applyRecordPayment(
 ) {
   const invoice = state.invoices.find((item) => item.id === input.invoiceId);
   if (!invoice) return undefined;
+  const student = state.students.find((item) => item.id === invoice.studentId);
+  const user = state.users.find((item) => item.id === student?.userId);
+  const enrollment = state.enrollments.find((item) => item.studentId === invoice.studentId);
+  const classGroup = state.classGroups.find((item) => item.id === enrollment?.classGroupId);
   const paidSoFar = state.payments
     .filter((payment) => payment.invoiceId === invoice.id && payment.status === "paid")
     .reduce((sum, payment) => sum + payment.amount, 0);
@@ -1369,7 +1774,7 @@ function applyRecordPayment(
     "payment.recorded",
     "Payment",
     payment.id,
-    `Recorded ${invoice.currency} ${amount} for ${invoice.id}; balance ${Math.max(0, invoice.amount - nextPaid)}.`,
+    `Recorded ${invoice.currency} ${amount} for ${user?.name ?? invoice.studentId} on ${invoice.id}${enrollment ? ` / ${enrollment.id}` : ""}${classGroup ? ` / ${classGroup.name}` : ""}; balance ${Math.max(0, invoice.amount - nextPaid)}.`,
     input.actorId ?? "usr_registrar_demo",
   );
   return payment;
@@ -1382,6 +1787,11 @@ function applyRecordPlacementResult(
 ) {
   const booking = state.placementTests.find((item) => item.id === input.bookingId) ?? state.placementTests[0];
   if (!booking) return undefined;
+  const target = resolveCourseTarget(state, {
+    courseInterest: booking.subject,
+    recommendedLevel: input.recommendedLevel,
+    currentLevel: booking.currentLevel,
+  });
   const existing = state.placementResults.find((item) => item.bookingId === booking.id);
   const result: PlacementTestResult = {
     id: existing?.id ?? ctx.createId("ptr"),
@@ -1403,9 +1813,12 @@ function applyRecordPlacementResult(
     id: existingWorkflow?.id ?? ctx.createId("ew"),
     leadId: booking.leadId,
     placementTestId: booking.id,
-    targetCourseId: "course_ar_l3",
+    targetCourseId: target.course.id,
+    targetLevelId: target.course.levelId,
+    recommendedLevel: input.recommendedLevel,
+    source: "placement" as const,
     status: "ready_to_enroll" as const,
-    nextStep: "Confirm package, create invoice, and assign class",
+    nextStep: "Confirm level, assign class, and activate portal",
     updatedAt: ctx.now(),
   };
   state.enrollmentWorkflows = existingWorkflow
@@ -1417,7 +1830,7 @@ function applyRecordPlacementResult(
     existing ? "placement.result_updated" : "placement.result_recorded",
     "PlacementTestResult",
     result.id,
-    `Recorded placement result for ${booking.fullName}.`,
+    `Recorded placement result for ${booking.fullName}: ${input.recommendedLevel} for ${target.course.title}.`,
     input.actorId ?? "usr_registrar_demo",
   );
   return result;
@@ -1425,23 +1838,30 @@ function applyRecordPlacementResult(
 
 function applyConvertLeadToApplication(
   state: PlatformState,
-  input: { leadId: string; actorId?: string },
+  input: { leadId: string; branchId?: string; actorId?: string },
   ctx: MutationContext,
 ) {
   const lead = state.leads.find((item) => item.id === input.leadId) ?? state.leads[0];
   if (!lead) return undefined;
   const existing = state.applications.find((item) => item.leadId === lead.id);
   if (existing) return existing;
+  const branchId = input.branchId ?? defaultAdmissionsBranchId(state, input.actorId);
+  if (!state.branches.some((branch) => branch.id === branchId)) throw new Error("Choose a valid branch for this application.");
   state.leads = state.leads.map((item) => (item.id === lead.id ? { ...item, status: "ready_to_enroll" } : item));
   const application = {
     id: ctx.createId("app"),
     leadId: lead.id,
-    branchId: "br_online",
+    branchId,
     courseInterest: lead.subject,
     schedulePreference: "To confirm",
     status: "pending" as EntityStatus,
   };
   state.applications = [application, ...state.applications];
+  appendInternalCommunicationLog(state, ctx, {
+    actorId: input.actorId ?? "usr_registrar_demo",
+    subject: "Lead conversion",
+    body: `Internal application file prepared for ${lead.fullName}; no external message was sent.`,
+  });
   appendAudit(
     state,
     ctx,
@@ -1454,6 +1874,131 @@ function applyConvertLeadToApplication(
   return application;
 }
 
+function applyConvertApplicationToEnrollmentWorkflow(
+  state: PlatformState,
+  input: { applicationId: string; actorId?: string },
+  ctx: MutationContext,
+) {
+  const application = state.applications.find((item) => item.id === input.applicationId);
+  if (!application) return undefined;
+  const lead = state.leads.find((item) => item.id === application.leadId);
+  if (!lead) throw new Error("Application must stay linked to an intake lead before enrollment.");
+  const target = resolveCourseTarget(state, {
+    courseInterest: application.courseInterest,
+    currentLevel: lead?.notes,
+  });
+  const existingWorkflow = state.enrollmentWorkflows.find(
+    (workflow) => workflow.applicationId === application.id || (workflow.leadId === application.leadId && !workflow.placementTestId),
+  );
+  const workflow = {
+    id: existingWorkflow?.id ?? ctx.createId("ew"),
+    leadId: application.leadId,
+    applicationId: application.id,
+    targetCourseId: target.course.id,
+    targetLevelId: target.course.levelId,
+    recommendedLevel: target.level?.title ?? application.courseInterest,
+    source: "application" as const,
+    status: "ready_to_enroll" as const,
+    nextStep: "Assign course run, class group, and activate portal",
+    updatedAt: ctx.now(),
+  };
+  state.enrollmentWorkflows = existingWorkflow
+    ? state.enrollmentWorkflows.map((item) => (item.id === existingWorkflow.id ? workflow : item))
+    : [workflow, ...state.enrollmentWorkflows];
+  state.applications = state.applications.map((item) =>
+    item.id === application.id ? { ...item, status: "approved" } : item,
+  );
+  if (lead) {
+    state.leads = state.leads.map((item) => (item.id === lead.id ? { ...item, status: "ready_to_enroll" } : item));
+  }
+  if (!existingWorkflow) {
+    appendInternalCommunicationLog(state, ctx, {
+      actorId: input.actorId ?? "usr_registrar_demo",
+      subject: "Enrollment handoff",
+      body: `Internal enrollment handoff prepared for ${lead.fullName}; no external message was sent.`,
+    });
+  }
+  appendAudit(
+    state,
+    ctx,
+    "application.converted",
+    "EnrollmentWorkflow",
+    workflow.id,
+    `Prepared enrollment workflow for ${lead?.fullName ?? application.id}.`,
+    input.actorId ?? "usr_registrar_demo",
+  );
+  return workflow;
+}
+
+function applyCreateStudentLifecycleAccount(
+  state: PlatformState,
+  input: CreateStudentActionInput,
+  ctx: MutationContext,
+) {
+  const result = createStudentEnrollmentRecords(state, input, ctx);
+  if (input.leadId) {
+    state.leads = state.leads.map((item) => (item.id === input.leadId ? { ...item, status: result.student.status } : item));
+  }
+  if (input.applicationId) {
+    state.applications = state.applications.map((item) => (item.id === input.applicationId ? { ...item, status: "approved" } : item));
+  }
+  if (input.placementTestId) {
+    state.placementTests = state.placementTests.map((item) =>
+      item.id === input.placementTestId ? { ...item, status: "completed", recommendedLevel: result.student.currentLevel } : item,
+    );
+  }
+  appendAudit(
+    state,
+    ctx,
+    "student.created",
+    "StudentProfile",
+    result.student.id,
+    `Created ${result.user.name} from ${result.student.source ?? "direct"} intake.`,
+    input.actorId ?? "usr_registrar_demo",
+  );
+  appendAudit(
+    state,
+    ctx,
+    "enrollment.created",
+    "Enrollment",
+    result.enrollment.id,
+    `Assigned ${result.user.name} to ${result.course.title}, ${result.classGroup.name}.`,
+    input.actorId ?? "usr_registrar_demo",
+  );
+  return result;
+}
+
+function applyUpdateStudentStatus(
+  state: PlatformState,
+  input: UpdateStudentStatusActionInput,
+  ctx: MutationContext,
+) {
+  const student = state.students.find((item) => item.id === input.studentId);
+  if (!student) throw new Error("Student record was not found.");
+  const status = normalizeStudentStatus(input.status);
+  const user = state.users.find((item) => item.id === student.userId);
+  const notes = input.notes?.trim();
+  state.students = state.students.map((item) =>
+    item.id === student.id ? { ...item, status, notes: notes ? `${item.notes ? `${item.notes} · ` : ""}${notes}` : item.notes } : item,
+  );
+  state.users = state.users.map((item) =>
+    item.id === student.userId ? { ...item, status: accountStatusFromStudentStatus(status) } : item,
+  );
+  state.enrollments = state.enrollments.map((item) =>
+    item.studentId === student.id ? { ...item, status } : item,
+  );
+  appendAudit(
+    state,
+    ctx,
+    "student.status_updated",
+    "StudentProfile",
+    student.id,
+    `Set ${user?.name ?? student.id} to ${status}.`,
+    input.actorId ?? "usr_registrar_demo",
+  );
+  return state.students.find((item) => item.id === student.id);
+}
+
 function applyActivateEnrollmentWorkflow(
   state: PlatformState,
   input: { workflowId: string; courseRunId?: string; classGroupId?: string; actorId?: string },
@@ -1463,9 +2008,19 @@ function applyActivateEnrollmentWorkflow(
   if (!workflow) return undefined;
 
   const existingStudent = workflow.studentId ? state.students.find((student) => student.id === workflow.studentId) : undefined;
-  if (existingStudent) return existingStudent;
+  if (existingStudent) {
+    const existingEnrollment = state.enrollments.find((enrollment) => enrollment.studentId === existingStudent.id);
+    if (input.courseRunId && existingEnrollment?.courseRunId && input.courseRunId !== existingEnrollment.courseRunId) {
+      throw new Error("Activated enrollment workflows cannot be reassigned to a different course run.");
+    }
+    if (input.classGroupId && existingEnrollment?.classGroupId && input.classGroupId !== existingEnrollment.classGroupId) {
+      throw new Error("Activated enrollment workflows cannot be reassigned to a different class group.");
+    }
+    return existingStudent;
+  }
 
   const lead = workflow.leadId ? state.leads.find((item) => item.id === workflow.leadId) : undefined;
+  const application = workflow.applicationId ? state.applications.find((item) => item.id === workflow.applicationId) : undefined;
   const placement = workflow.placementTestId ? state.placementTests.find((item) => item.id === workflow.placementTestId) : undefined;
   const placementResult = workflow.placementTestId ? state.placementResults.find((item) => item.bookingId === workflow.placementTestId) : undefined;
   const targetCourseId = workflow.targetCourseId;
@@ -1484,12 +2039,30 @@ function applyActivateEnrollmentWorkflow(
   const course = state.courses.find((item) => item.id === courseRun.courseId);
   const program = state.programs.find((item) => item.id === course?.programId);
   const packageRow = state.packages.find((item) => item.courseId === courseRun.courseId && item.status === "active");
-  const name = lead?.fullName ?? placement?.fullName ?? `Student ${ctx.now().slice(0, 10)}`;
-  const email = (lead?.email ?? placement?.email ?? `${ctx.createId("student")}@nilelearn.local`).toLowerCase();
-  const phone = lead?.phone ?? placement?.phone ?? "";
+  const resolvedLevelLabel =
+    placementResult?.recommendedLevel ??
+    placement?.recommendedLevel ??
+    workflow.recommendedLevel ??
+    placement?.currentLevel ??
+    state.levels.find((level) => level.id === workflow.targetLevelId || level.id === course?.levelId)?.title ??
+    "Placement pending";
+  const name = (lead?.fullName ?? placement?.fullName ?? "").trim();
+  const email = (lead?.email ?? placement?.email ?? "").trim().toLowerCase();
+  const phone = (lead?.phone ?? placement?.phone ?? "").trim();
+  if (!name || !email || !phone) {
+    throw new Error("Enrollment activation requires lead or placement identity with name, email, and phone.");
+  }
+  if (!email.includes("@")) {
+    throw new Error("Enrollment activation requires a valid intake email.");
+  }
+  if (state.users.some((item) => item.email.toLowerCase() === email)) {
+    throw new Error("This email is already in the identity directory.");
+  }
   const studentStatus: StudentStatus = "active";
   const userId = ctx.createId("usr_student");
   const studentId = ctx.createId("stu");
+  const enrollmentId = ctx.createId("enr");
+  const invoiceId = ctx.createId("inv");
 
   state.users = [
     {
@@ -1511,7 +2084,9 @@ function applyActivateEnrollmentWorkflow(
       id: studentId,
       userId,
       status: studentStatus,
-      currentLevel: placementResult?.recommendedLevel ?? placement?.currentLevel ?? "Placement pending",
+      source: workflow.source ?? (workflow.placementTestId ? "placement" : workflow.applicationId ? "application" : "lead"),
+      currentLevel: resolvedLevelLabel,
+      courseInterest: application?.courseInterest ?? placement?.subject ?? lead?.subject,
       notes: lead?.notes,
       country: lead?.country ?? "Egypt",
       preferredLanguage: program?.language ?? "English",
@@ -1521,13 +2096,18 @@ function applyActivateEnrollmentWorkflow(
   ];
   state.enrollments = [
     {
-      id: ctx.createId("enr"),
+      id: enrollmentId,
       studentId,
       courseRunId: courseRun.id,
+      levelId: course?.levelId,
+      classGroupId: classGroup.id,
+      teacherId: courseRun.teacherId,
+      source: workflow.source ?? (workflow.placementTestId ? "placement" : workflow.applicationId ? "application" : "lead"),
       status: studentStatus,
       progress: 0,
       attendanceRate: 0,
       currentGrade: 0,
+      createdAt: ctx.now(),
     },
     ...state.enrollments,
   ];
@@ -1548,7 +2128,7 @@ function applyActivateEnrollmentWorkflow(
   ];
   state.invoices = [
     {
-      id: ctx.createId("inv"),
+      id: invoiceId,
       studentId,
       amount: packageRow?.amount ?? 0,
       currency: packageRow?.currency ?? "EGP",
@@ -1562,6 +2142,8 @@ function applyActivateEnrollmentWorkflow(
       ? {
           ...item,
           studentId,
+          courseRunId: courseRun.id,
+          classGroupId: classGroup.id,
           status: studentStatus,
           nextStep: "Portal active, class assigned, invoice pending payment",
           updatedAt: ctx.now(),
@@ -1571,13 +2153,25 @@ function applyActivateEnrollmentWorkflow(
   if (lead) {
     state.leads = state.leads.map((item) => (item.id === lead.id ? { ...item, status: "active" } : item));
   }
+  if (application) {
+    state.applications = state.applications.map((item) => (item.id === application.id ? { ...item, status: "approved" } : item));
+  }
+  appendAudit(
+    state,
+    ctx,
+    "student.created",
+    "StudentProfile",
+    studentId,
+    `Created ${name} from ${workflow.source ?? "enrollment"} workflow.`,
+    input.actorId ?? "usr_registrar_demo",
+  );
   appendAudit(
     state,
     ctx,
     "enrollment.activated",
     "EnrollmentWorkflow",
     workflow.id,
-    `Activated ${name} for ${course?.title ?? courseRun.courseId} in ${classGroup.name}.`,
+    `Activated ${name} for ${course?.title ?? courseRun.courseId} in ${classGroup.name}; enrollment ${enrollmentId}, invoice ${invoiceId}.`,
     input.actorId ?? "usr_registrar_demo",
   );
   return state.students.find((student) => student.id === studentId);
@@ -1641,7 +2235,53 @@ function studentStatusFromAccountStatus(status: EntityStatus): StudentStatus {
   return "active";
 }
 
+function accountStatusFromStudentStatus(status: StudentStatus): EntityStatus {
+  if (status === "paused") return "paused";
+  if (status === "completed") return "completed";
+  if (status === "cancelled") return "cancelled";
+  if (status === "lead" || status === "trial_booked" || status === "placement_booked" || status === "placement_completed" || status === "ready_to_enroll") {
+    return "pending";
+  }
+  return "active";
+}
+
 const accountStatuses: EntityStatus[] = ["active", "pending", "paused"];
+const studentLifecycleStatuses: StudentStatus[] = [
+  "lead",
+  "trial_booked",
+  "placement_booked",
+  "placement_completed",
+  "ready_to_enroll",
+  "enrolled",
+  "active",
+  "paused",
+  "completed",
+  "cancelled",
+];
+const staffRoles: StaffRole[] = ["teacher", "registrar", "headofdepartment", "branchadmin", "superadmin"];
+const staffPermissionScopes = new Set<StaffPermissionScope>(["department", "branch", "admissions", "operations", "global"]);
+const staffAvailabilityStatuses = new Set<StaffAvailabilityStatus>(["available", "limited", "unavailable", "not_applicable"]);
+const defaultStaffScopeByRole: Record<StaffRole, StaffPermissionScope> = {
+  teacher: "department",
+  registrar: "admissions",
+  headofdepartment: "department",
+  branchadmin: "operations",
+  superadmin: "global",
+};
+const defaultOperationalScopeByRole: Record<StaffRole, string[]> = {
+  teacher: ["classes", "attendance", "grading"],
+  registrar: ["leads", "placement", "enrollments", "payments"],
+  headofdepartment: ["curriculum", "teachers", "certificates", "reports"],
+  branchadmin: ["rooms", "schedule", "attendance", "payments"],
+  superadmin: ["users", "roles", "permissions", "audit"],
+};
+const staffTitleByRole: Record<StaffRole, string> = {
+  teacher: "Teacher",
+  registrar: "Registrar",
+  headofdepartment: "Head of Department",
+  branchadmin: "Branch Admin",
+  superadmin: "Super Admin",
+};
 
 function validateAccountScope(state: PlatformState, input: CreateUserActionInput) {
   if (!roleOrder.includes(input.role)) {
@@ -1660,6 +2300,244 @@ function validateAccountScope(state: PlatformState, input: CreateUserActionInput
     throw new Error("Selected department is not available in the chosen branch.");
   }
   return { status, branch, department };
+}
+
+function normalizeStaffScopeInput(input: CreateStaffUserActionInput) {
+  if ((input.role as Role) === "student") {
+    throw new Error("Student accounts must be created through registrar admissions.");
+  }
+  if (!staffRoles.includes(input.role)) throw new Error("Choose a staff role.");
+  const branchId = input.role === "superadmin" ? input.branchId ?? "br_global" : input.branchId;
+  const departmentId = input.role === "superadmin" ? input.departmentId ?? "dep_platform" : input.departmentId;
+  const permissionScope = input.permissionScope ?? defaultStaffScopeByRole[input.role];
+  const availabilityStatus = input.availabilityStatus ?? (input.role === "teacher" ? "available" : "not_applicable");
+  return { branchId, departmentId, permissionScope, availabilityStatus };
+}
+
+function validateStaffAccountScope(state: PlatformState, input: CreateStaffUserActionInput) {
+  const status = validateAccountStatus(input.status);
+  const { branchId, departmentId, permissionScope, availabilityStatus } = normalizeStaffScopeInput(input);
+  if (!staffPermissionScopes.has(permissionScope)) throw new Error("Choose a valid permission scope.");
+  if (!staffAvailabilityStatuses.has(availabilityStatus)) throw new Error("Choose a valid availability status.");
+  const branch = state.branches.find((item) => item.id === branchId);
+  if (!branch) throw new Error("Choose a valid branch for this staff account.");
+  const department = state.departments.find((item) => item.id === departmentId);
+  if (!department) throw new Error("Choose a valid department for this staff account.");
+  if (!department.branchIds.includes(branch.id) && branch.id !== "br_global") {
+    throw new Error("Selected department is not available in the chosen branch.");
+  }
+  if (input.role === "teacher") {
+    if (!input.subjects?.map((item) => item.trim()).filter(Boolean).length) {
+      throw new Error("Teacher accounts require at least one subject.");
+    }
+    if (!input.teachingLevels?.map((item) => item.trim()).filter(Boolean).length) {
+      throw new Error("Teacher accounts require at least one teaching level.");
+    }
+    if (availabilityStatus === "not_applicable") {
+      throw new Error("Teacher accounts require an availability status.");
+    }
+  }
+  if (input.role === "registrar" && permissionScope !== "admissions") {
+    throw new Error("Registrar accounts require admissions permission scope.");
+  }
+  if (input.role === "headofdepartment" && permissionScope !== "department") {
+    throw new Error("HOD accounts require department permission scope.");
+  }
+  if (input.role === "branchadmin") {
+    if (permissionScope !== "operations") throw new Error("Branch admin accounts require operations permission scope.");
+    if (!input.operationalScope?.map((item) => item.trim()).filter(Boolean).length) {
+      throw new Error("Branch admin accounts require at least one operational scope.");
+    }
+  }
+  if (input.role === "superadmin" && permissionScope !== "global") {
+    throw new Error("Super admin accounts require global permission scope.");
+  }
+  return { status, branch, department, branchId: branch.id, departmentId: department.id, permissionScope, availabilityStatus };
+}
+
+function isMinorAgeGroup(ageGroup: string) {
+  const normalized = ageGroup.trim().toLowerCase();
+  return Boolean(normalized && !/adult|18\+|university|parent not required/.test(normalized));
+}
+
+function normalizeStudentStatus(status?: StudentStatus) {
+  const nextStatus = status ?? "active";
+  if (!studentLifecycleStatuses.includes(nextStatus)) throw new Error("Choose a valid student status.");
+  return nextStatus;
+}
+
+function resolveCourseTarget(
+  state: PlatformState,
+  input: {
+    courseInterest?: string;
+    recommendedLevel?: string;
+    currentLevel?: string;
+    targetCourseId?: string;
+  },
+) {
+  const text = `${input.courseInterest ?? ""} ${input.recommendedLevel ?? ""} ${input.currentLevel ?? ""}`.toLowerCase();
+  const targetCourseId =
+    input.targetCourseId ??
+    (/(quran|tajweed|recitation|memorization|memorisation)/i.test(text) ? "course_qt_1" : "course_ar_l3");
+  const course =
+    state.courses.find((item) => item.id === targetCourseId) ??
+    state.courses.find((item) => text && item.title.toLowerCase().includes(text)) ??
+    state.courses.find((item) => item.id === "course_ar_l3") ??
+    state.courses[0];
+  if (!course) throw new Error("Choose a valid course for this student.");
+  const level = state.levels.find((item) => item.id === course.levelId);
+  return { course, level };
+}
+
+function resolveEnrollmentAssignment(
+  state: PlatformState,
+  input: { branchId: string; courseRunId: string; classGroupId: string; targetCourseId?: string },
+) {
+  const branch = state.branches.find((item) => item.id === input.branchId);
+  if (!branch) throw new Error("Choose a valid branch for this student.");
+  const courseRun = state.courseRuns.find((item) => item.id === input.courseRunId);
+  if (!courseRun) throw new Error("Choose a valid course run for this student.");
+  if (input.targetCourseId && courseRun.courseId !== input.targetCourseId) {
+    throw new Error("Selected course run must match the student course interest.");
+  }
+  if (courseRun.branchId !== branch.id) {
+    throw new Error("Student branch must match the selected course and class branch.");
+  }
+  const classGroup = state.classGroups.find((item) => item.id === input.classGroupId);
+  if (!classGroup || classGroup.courseRunId !== courseRun.id) {
+    throw new Error("Selected class group must belong to the selected course run.");
+  }
+  if (classGroup.studentIds.length >= classGroup.capacity) {
+    throw new Error("Selected class is already at capacity.");
+  }
+  return { branch, courseRun, classGroup };
+}
+
+function createStudentEnrollmentRecords(
+  state: PlatformState,
+  input: CreateStudentActionInput,
+  ctx: MutationContext,
+) {
+  const name = input.fullName.trim();
+  const email = input.email.trim().toLowerCase();
+  const phone = input.phone.trim();
+  const preferredLanguage = input.preferredLanguage.trim() || "English";
+  const courseInterest = input.courseInterest.trim();
+  const ageGroup = input.ageGroup.trim();
+  const currentLevel = (input.placementResult ?? input.currentLevel ?? "").trim();
+  const studentStatus = normalizeStudentStatus(input.status);
+
+  if (!name || !email || !phone) throw new Error("Full name, email, and phone are required.");
+  if (!email.includes("@")) throw new Error("Enter a valid email address.");
+  if (state.users.some((user) => user.email.toLowerCase() === email)) {
+    throw new Error("This email is already in the identity directory.");
+  }
+  if (!courseInterest) throw new Error("Subject or course interest is required.");
+  if (!ageGroup) throw new Error("Age group is required.");
+  if (isMinorAgeGroup(ageGroup) && (!input.guardianName?.trim() || !input.guardianPhone?.trim())) {
+    throw new Error("Guardian name and phone are required for minor students.");
+  }
+  if (!currentLevel) throw new Error("Current level or placement result is required.");
+
+  const target = resolveCourseTarget(state, {
+    courseInterest,
+    recommendedLevel: input.placementResult,
+    currentLevel,
+  });
+  const { branch, courseRun, classGroup } = resolveEnrollmentAssignment(state, {
+    branchId: input.branchId,
+    courseRunId: input.courseRunId,
+    classGroupId: input.classGroupId,
+    targetCourseId: target.course.id,
+  });
+  const program = state.programs.find((item) => item.id === target.course.programId);
+  const packageRow = state.packages.find((item) => item.courseId === courseRun.courseId && item.status === "active");
+  const userId = ctx.createId("usr_student");
+  const studentId = ctx.createId("stu");
+  const enrollmentId = ctx.createId("enr");
+  const source = input.source ?? "direct";
+  const user = {
+    id: userId,
+    name,
+    email,
+    phone,
+    notes: input.notes?.trim() || undefined,
+    roles: ["student"],
+    activeRole: "student",
+    branchId: branch.id,
+    departmentId: program?.departmentId ?? "dep_arabic",
+    status: accountStatusFromStudentStatus(studentStatus),
+  } satisfies PlatformState["users"][number];
+  const student = {
+    id: studentId,
+    userId,
+    status: studentStatus,
+    source,
+    guardianName: input.guardianName?.trim() || undefined,
+    guardianPhone: input.guardianPhone?.trim() || undefined,
+    currentLevel,
+    ageGroup,
+    courseInterest,
+    notes: input.notes?.trim() || undefined,
+    country: "Egypt",
+    preferredLanguage,
+    timezone: branch.timezone,
+  } satisfies PlatformState["students"][number];
+  const enrollment = {
+    id: enrollmentId,
+    studentId,
+    courseRunId: courseRun.id,
+    levelId: target.course.levelId,
+    classGroupId: classGroup.id,
+    teacherId: courseRun.teacherId,
+    source,
+    status: studentStatus,
+    progress: 0,
+    attendanceRate: 0,
+    currentGrade: 0,
+    createdAt: ctx.now(),
+  } satisfies PlatformState["enrollments"][number];
+  const lessonIds = state.modules
+    .filter((module) => module.courseId === courseRun.courseId)
+    .flatMap((module) => state.lessons.filter((lesson) => lesson.moduleId === module.id).map((lesson) => lesson.id));
+  const invoice = packageRow
+    ? {
+        id: ctx.createId("inv"),
+        studentId,
+        amount: packageRow.amount,
+        currency: packageRow.currency,
+        dueAt: ctx.now().slice(0, 10),
+        status: "pending" as const,
+      }
+    : undefined;
+
+  state.users = [user, ...state.users];
+  state.students = [student, ...state.students];
+  state.enrollments = [enrollment, ...state.enrollments];
+  state.classGroups = state.classGroups.map((group) =>
+    group.id === classGroup.id ? { ...group, studentIds: [...group.studentIds, studentId] } : group,
+  );
+  state.lessonProgress = [
+    ...lessonIds.map((lessonId) => ({
+      id: ctx.createId("lp"),
+      studentId,
+      lessonId,
+      status: "not_started" as const,
+    })),
+    ...state.lessonProgress,
+  ];
+  if (invoice) state.invoices = [invoice, ...state.invoices];
+
+  return {
+    user,
+    student,
+    enrollment,
+    classGroup,
+    courseRun,
+    course: target.course,
+    level: target.level,
+    invoice,
+  };
 }
 
 function validateUserScopeUpdate(state: PlatformState, input: UpdateUserActionInput, currentUser: PlatformState["users"][number]) {
@@ -1726,6 +2604,19 @@ function applyUpdateUserAccount(
   const teacherProfile = state.teachers.find((item) => item.userId === user.id);
   if (teacherProfile && input.departmentId) {
     state.teachers = state.teachers.map((item) => item.userId === user.id ? { ...item, departmentId: department.id } : item);
+  }
+  if (input.status || input.branchId || input.departmentId) {
+    state.staffProfiles = (state.staffProfiles ?? []).map((item) =>
+      item.userId === user.id
+        ? {
+            ...item,
+            branchIds: input.branchId ? [branch.id] : item.branchIds,
+            departmentIds: input.departmentId ? [department.id] : item.departmentIds,
+            status,
+            updatedAt: ctx.now(),
+          }
+        : item,
+    );
   }
 
   const summary = changes.length
@@ -1821,6 +2712,68 @@ function applyUpdateBranch(
   };
 }
 
+function applyUpdateRoomStatus(
+  state: PlatformState,
+  input: UpdateRoomStatusActionInput,
+  ctx: MutationContext,
+) {
+  const room = state.rooms.find((item) => item.id === input.roomId);
+  if (!room) throw new Error(`Room ${input.roomId} was not found.`);
+  const status = validateAccountStatus(input.status, room.status);
+  state.rooms = state.rooms.map((item) => (item.id === room.id ? { ...item, status } : item));
+  appendAudit(
+    state,
+    ctx,
+    "room.status_updated",
+    "Room",
+    room.id,
+    `Set ${room.name} status from ${room.status} to ${status}.`,
+    input.actorId ?? "usr_branch_demo",
+  );
+  return {
+    room: state.rooms.find((item) => item.id === room.id)!,
+    previousStatus: room.status,
+  };
+}
+
+function applyCreateRoom(
+  state: PlatformState,
+  input: CreateRoomActionInput,
+  ctx: MutationContext,
+) {
+  const branch = state.branches.find((item) => item.id === input.branchId);
+  const name = input.name.trim();
+  const equipment = (input.equipment ?? []).map((item) => item.trim()).filter(Boolean);
+  const capacity = Math.floor(input.capacity);
+  if (!branch) throw new Error(`Branch ${input.branchId} was not found.`);
+  if (!name) throw new Error("Room name is required.");
+  if (!Number.isFinite(capacity) || capacity < 1 || capacity > 200) {
+    throw new Error("Room capacity must be between 1 and 200.");
+  }
+  if (state.rooms.some((item) => item.branchId === branch.id && item.name.trim().toLowerCase() === name.toLowerCase())) {
+    throw new Error(`${name} already exists in ${branch.name}.`);
+  }
+  const room: Room = {
+    id: ctx.createId("room"),
+    branchId: branch.id,
+    name,
+    capacity,
+    equipment,
+    status: "active",
+  };
+  state.rooms = [room, ...state.rooms];
+  appendAudit(
+    state,
+    ctx,
+    "room.created",
+    "Room",
+    room.id,
+    `Added ${room.name} to ${branch.name} with ${room.capacity} seats.`,
+    input.actorId ?? "usr_branch_demo",
+  );
+  return { room, branch };
+}
+
 function getIntegration(state: PlatformState, integrationId: IntegrationConfig["id"]) {
   const integration = state.integrations.find((item) => item.id === integrationId);
   if (!integration) throw new Error(`Integration ${integrationId} was not found.`);
@@ -1896,6 +2849,50 @@ function applyCheckSystemHealth(
   return {
     score,
     checkedAt: ctx.now(),
+  };
+}
+
+function applySavePlatformSettings(
+  state: PlatformState,
+  input: SavePlatformSettingsActionInput,
+  ctx: MutationContext,
+) {
+  const organization = input.organization.trim();
+  const defaultLanguage = input.defaultLanguage.trim();
+  const academicTerm = input.academicTerm.trim();
+  const retentionDays = Math.round(Number(input.retentionDays));
+
+  if (!organization) throw new Error("Organization is required.");
+  if (!defaultLanguage) throw new Error("Default language is required.");
+  if (!academicTerm) throw new Error("Academic term is required.");
+  if (!Number.isFinite(retentionDays) || retentionDays < 30 || retentionDays > 3650) {
+    throw new Error("Audit retention days must be between 30 and 3650.");
+  }
+
+  const savedAt = ctx.now();
+  const settings = {
+    organization,
+    defaultLanguage,
+    academicTerm,
+    retentionDays,
+    updatedAt: savedAt,
+    updatedBy: input.actorId ?? "usr_admin_demo",
+  };
+  state.settings = settings;
+
+  appendAudit(
+    state,
+    ctx,
+    "settings.saved",
+    "PlatformSettings",
+    "global",
+    `${organization} · ${defaultLanguage} · ${academicTerm} · ${retentionDays} day retention.`,
+    input.actorId ?? "usr_admin_demo",
+  );
+
+  return {
+    settings,
+    savedAt,
   };
 }
 
@@ -1998,10 +2995,15 @@ function applyCreateUserAccount(
       id: ctx.createId("enr"),
       studentId,
       courseRunId: courseRun.id,
+      levelId: course?.levelId,
+      classGroupId: classGroup.id,
+      teacherId: courseRun.teacherId,
+      source: "direct",
       status: studentStatus,
       progress: 0,
       attendanceRate: 0,
       currentGrade: 0,
+      createdAt: ctx.now(),
     };
     state.students = [student, ...state.students];
     state.enrollments = [enrollment, ...state.enrollments];
@@ -2022,6 +3024,7 @@ function applyCreateUserAccount(
 
   if (input.role === "teacher") {
     const specialties = Array.from(new Set([...(input.subjects ?? []), ...(input.specialization ?? [])].map((item) => item.trim()).filter(Boolean)));
+    const teachingLevels = Array.from(new Set((input.specialization ?? []).map((item) => item.trim()).filter(Boolean)));
     teacherAssignment = applyAssignTeacherToCourseRun(
       state,
       {
@@ -2030,6 +3033,7 @@ function applyCreateUserAccount(
         status,
         departmentId: input.departmentId,
         specialties,
+        teachingLevels,
         availability: input.availability ?? [],
         actorId: input.actorId,
       },
@@ -2059,6 +3063,102 @@ function applyCreateUserAccount(
   };
 }
 
+function applyCreateStaffUserAccount(
+  state: PlatformState,
+  input: CreateStaffUserActionInput,
+  ctx: MutationContext,
+) {
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  const phone = input.phone?.trim() || undefined;
+  if (!name || !email) throw new Error("Full name and email are required.");
+  if (!email.includes("@")) throw new Error("Enter a valid email address.");
+  if (state.users.some((user) => user.email.toLowerCase() === email)) {
+    throw new Error("This email is already in the identity directory.");
+  }
+
+  const { status, branch, department, branchId, departmentId, permissionScope, availabilityStatus } =
+    validateStaffAccountScope(state, input);
+  const userId = ctx.createId(`usr_${input.role}`);
+  const subjects = Array.from(new Set((input.subjects ?? []).map((item) => item.trim()).filter(Boolean)));
+  const teachingLevels = Array.from(new Set((input.teachingLevels ?? []).map((item) => item.trim()).filter(Boolean)));
+  const operationalScope = Array.from(
+    new Set(((input.operationalScope?.length ? input.operationalScope : defaultOperationalScopeByRole[input.role]) ?? [])
+      .map((item) => item.trim())
+      .filter(Boolean)),
+  );
+  const user = {
+    id: userId,
+    name,
+    email,
+    phone,
+    notes: input.notes?.trim() || undefined,
+    roles: [input.role],
+    activeRole: input.role,
+    branchId,
+    departmentId,
+    status,
+  } satisfies PlatformState["users"][number];
+  const staffProfile: StaffProfile = {
+    id: ctx.createId("staff"),
+    userId,
+    role: input.role,
+    branchIds: [branch.id],
+    departmentIds: [department.id],
+    permissionScope,
+    title: staffTitleByRole[input.role],
+    subjects,
+    teachingLevels,
+    availabilityStatus,
+    operationalScope,
+    status,
+    createdAt: ctx.now(),
+    updatedAt: ctx.now(),
+  };
+  let teacherProfile: PlatformState["teachers"][number] | undefined;
+
+  state.users = [user, ...state.users];
+  state.staffProfiles = [staffProfile, ...(state.staffProfiles ?? [])];
+  if (input.role === "teacher") {
+    teacherProfile = {
+      id: ctx.createId("tch"),
+      userId,
+      departmentId,
+      branchId,
+      subjects,
+      teachingLevels,
+      specialties: Array.from(new Set([...subjects, ...teachingLevels])),
+      availability: [availabilityStatus],
+      availabilityStatus,
+      assignedClassIds: [],
+      status,
+    };
+    state.teachers = [teacherProfile, ...state.teachers];
+  }
+
+  const relationshipSummary =
+    input.role === "teacher"
+      ? `Teacher profile created for ${department.name} with ${subjects.length} subject(s), ${teachingLevels.length} teaching level(s), and ${availabilityStatus} availability.`
+      : `${staffTitleByRole[input.role]} profile created with ${permissionScope} scope for ${branch.name} / ${department.name}.`;
+  appendAudit(
+    state,
+    ctx,
+    "staff.user.created",
+    "User",
+    userId,
+    `Created ${staffTitleByRole[input.role]} account for ${name}. ${relationshipSummary}`,
+    input.actorId ?? "usr_admin_demo",
+  );
+
+  return {
+    user,
+    staffProfile,
+    teacherProfile,
+    permissions: rolePermissions[input.role] ?? [],
+    relationshipSummary,
+  };
+}
+
 function applyAssignTeacherToCourseRun(
   state: PlatformState,
   input: AssignTeacherActionInput,
@@ -2083,6 +3183,10 @@ function applyAssignTeacherToCourseRun(
   const classGroups = state.classGroups.filter((group) => group.courseRunId === courseRun.id);
   const classGroupIds = new Set(classGroups.map((group) => group.id));
   const specialties = Array.from(new Set((input.specialties ?? []).map((item) => item.trim()).filter(Boolean)));
+  const courseLevelLabels = [course?.title, course?.levelId].filter(Boolean) as string[];
+  const teachingLevels = Array.from(
+    new Set([...(input.teachingLevels ?? []).map((item) => item.trim()).filter(Boolean), ...courseLevelLabels]),
+  );
   const availability = Array.from(new Set((input.availability ?? []).map((item) => item.trim()).filter(Boolean)));
   const departmentId = input.departmentId ?? user.departmentId ?? "dep_arabic";
   const department = state.departments.find((item) => item.id === departmentId);
@@ -2094,9 +3198,9 @@ function applyAssignTeacherToCourseRun(
     throw new Error("Teacher department must own the selected course run.");
   }
   const status = validateAccountStatus(input.status, user.status);
-  const previousTeacher =
-    courseRun.teacherId && courseRun.teacherId !== user.id ? state.users.find((item) => item.id === courseRun.teacherId) : undefined;
-  const previousTeacherLabel = previousTeacher?.name ?? (courseRun.teacherId && courseRun.teacherId !== user.id ? courseRun.teacherId : "");
+  const previousTeacherUserId = courseRun.teacherId && courseRun.teacherId !== user.id ? courseRun.teacherId : undefined;
+  const previousTeacher = previousTeacherUserId ? state.users.find((item) => item.id === previousTeacherUserId) : undefined;
+  const previousTeacherLabel = previousTeacher?.name ?? previousTeacherUserId ?? "";
   const parsedSlots = availability.map((slot) => parseTeacherAvailabilitySlot(slot, courseRun.branchId, user.id, ctx));
   if (availability.length && parsedSlots.some((slot) => !slot)) {
     throw new Error("Use availability like Mon 09:00 or Wed 09:00-10:30.");
@@ -2105,15 +3209,36 @@ function applyAssignTeacherToCourseRun(
     throw new Error("Add at least one valid availability slot.");
   }
 
+  if (previousTeacherUserId) {
+    state.teachers = state.teachers.map((teacher) =>
+      teacher.userId === previousTeacherUserId
+        ? {
+            ...teacher,
+            assignedClassIds: (teacher.assignedClassIds ?? []).filter((classGroupId) => !classGroupIds.has(classGroupId)),
+          }
+        : teacher,
+    );
+  }
+
   const existingProfile = state.teachers.find((teacher) => teacher.userId === user.id);
+  const existingStaffProfile = (state.staffProfiles ?? []).find((profile) => profile.userId === user.id && profile.role === "teacher");
+  const staffSubjects = Array.from(
+    new Set([...(existingProfile?.subjects ?? []), ...specialties, course?.title ?? courseRun.courseId].filter((item): item is string => Boolean(item))),
+  );
   if (existingProfile) {
     state.teachers = state.teachers.map((teacher) =>
       teacher.id === existingProfile.id
         ? {
             ...teacher,
             departmentId,
+            branchId: courseRun.branchId,
+            subjects: Array.from(new Set([...(teacher.subjects ?? []), ...specialties])),
+            teachingLevels: Array.from(new Set([...(teacher.teachingLevels ?? []), ...teachingLevels])),
             specialties: Array.from(new Set([...teacher.specialties, ...specialties])),
             availability: Array.from(new Set([...teacher.availability, ...availability])),
+            availabilityStatus: availability.length ? "available" : teacher.availabilityStatus,
+            assignedClassIds: Array.from(new Set([...(teacher.assignedClassIds ?? []), ...classGroups.map((group) => group.id)])),
+            status,
           }
         : teacher,
     );
@@ -2123,8 +3248,14 @@ function applyAssignTeacherToCourseRun(
         id: ctx.createId("tch"),
         userId: user.id,
         departmentId,
+        branchId: courseRun.branchId,
+        subjects: specialties,
+        teachingLevels,
         specialties,
         availability,
+        availabilityStatus: availability.length ? "available" : "limited",
+        assignedClassIds: classGroups.map((group) => group.id),
+        status,
       },
       ...state.teachers,
     ];
@@ -2142,7 +3273,46 @@ function applyAssignTeacherToCourseRun(
         }
       : item,
   );
+  const updatedStaffProfiles = (state.staffProfiles ?? []).map((profile) =>
+    profile.userId === user.id && profile.role === "teacher"
+      ? {
+          ...profile,
+          branchIds: Array.from(new Set([...profile.branchIds, courseRun.branchId])),
+          departmentIds: Array.from(new Set([...profile.departmentIds, departmentId])),
+          subjects: Array.from(new Set([...profile.subjects, ...staffSubjects])),
+          teachingLevels: Array.from(new Set([...profile.teachingLevels, ...teachingLevels])),
+          availabilityStatus: availability.length ? "available" : profile.availabilityStatus,
+          operationalScope: Array.from(new Set([...profile.operationalScope, "classes", "attendance", "grading", "progress"])),
+          status,
+          updatedAt: ctx.now(),
+        }
+      : profile,
+  );
+  state.staffProfiles = existingStaffProfile
+    ? updatedStaffProfiles
+    : [
+        {
+          id: ctx.createId("staff"),
+          userId: user.id,
+          role: "teacher",
+          branchIds: [courseRun.branchId],
+          departmentIds: [departmentId],
+          permissionScope: "department",
+          title: staffTitleByRole.teacher,
+          subjects: staffSubjects,
+          teachingLevels,
+          availabilityStatus: availability.length ? "available" : "limited",
+          operationalScope: Array.from(new Set([...defaultOperationalScopeByRole.teacher, "progress"])),
+          status,
+          createdAt: ctx.now(),
+          updatedAt: ctx.now(),
+        },
+        ...updatedStaffProfiles,
+      ];
   state.courseRuns = state.courseRuns.map((run) => (run.id === courseRun.id ? { ...run, teacherId: user.id } : run));
+  state.enrollments = state.enrollments.map((enrollment) =>
+    enrollment.courseRunId === courseRun.id ? { ...enrollment, teacherId: user.id } : enrollment,
+  );
   state.events = state.events.map((event) =>
     event.classGroupId && classGroupIds.has(event.classGroupId) ? { ...event, ownerId: user.id } : event,
   );
@@ -2166,7 +3336,7 @@ function applyAssignTeacherToCourseRun(
   const result = {
     teacher: state.users.find((item) => item.id === user.id)!,
     previousTeacher,
-    previousTeacherId: previousTeacherLabel && !previousTeacher ? courseRun.teacherId : undefined,
+    previousTeacherId: previousTeacherUserId && !previousTeacher ? previousTeacherUserId : undefined,
     profile: state.teachers.find((teacher) => teacher.userId === user.id),
     courseRun: state.courseRuns.find((run) => run.id === courseRun.id)!,
     classGroups,
@@ -2372,6 +3542,16 @@ export function applyPlatformWorkflowAction(
       const result = applyCreateLead(state, action, ctx);
       return { action: "lead.created", entityType: "Lead", entityId: result.id, summary: `Created lead for ${result.fullName}.`, result };
     }
+    case "application.create": {
+      const result = applyCreateApplication(state, action, ctx);
+      return {
+        action: "application.created",
+        entityType: "Application",
+        entityId: result.application.id,
+        summary: `Created application for ${result.lead.fullName}.`,
+        result,
+      };
+    }
     case "user.create": {
       const result = applyCreateUserAccount(state, action, ctx);
       return {
@@ -2379,6 +3559,36 @@ export function applyPlatformWorkflowAction(
         entityType: "User",
         entityId: result.user.id,
         summary: `Created ${result.user.activeRole} account for ${result.user.name}.`,
+        result,
+      };
+    }
+    case "staff.user.create": {
+      const result = applyCreateStaffUserAccount(state, action, ctx);
+      return {
+        action: "staff.user.created",
+        entityType: "User",
+        entityId: result.user.id,
+        summary: `Created ${result.staffProfile.title} account for ${result.user.name}.`,
+        result,
+      };
+    }
+    case "student.create": {
+      const result = applyCreateStudentLifecycleAccount(state, action, ctx);
+      return {
+        action: "student.created",
+        entityType: "StudentProfile",
+        entityId: result.student.id,
+        summary: `Created student ${result.user.name} and assigned ${result.classGroup.name}.`,
+        result,
+      };
+    }
+    case "student.status.update": {
+      const result = applyUpdateStudentStatus(state, action, ctx);
+      return {
+        action: "student.status_updated",
+        entityType: "StudentProfile",
+        entityId: result?.id ?? action.studentId,
+        summary: result ? `Updated student ${result.id} to ${result.status}.` : "No student updated.",
         result,
       };
     }
@@ -2412,6 +3622,26 @@ export function applyPlatformWorkflowAction(
         result,
       };
     }
+    case "room.status.update": {
+      const result = applyUpdateRoomStatus(state, action, ctx);
+      return {
+        action: "room.status_updated",
+        entityType: "Room",
+        entityId: result.room.id,
+        summary: `${result.room.name} set to ${result.room.status}.`,
+        result,
+      };
+    }
+    case "room.create": {
+      const result = applyCreateRoom(state, action, ctx);
+      return {
+        action: "room.created",
+        entityType: "Room",
+        entityId: result.room.id,
+        summary: `${result.room.name} added to ${result.branch.name}.`,
+        result,
+      };
+    }
     case "integration.status.update": {
       const result = applyUpdateIntegrationStatus(state, action, ctx);
       return {
@@ -2442,6 +3672,16 @@ export function applyPlatformWorkflowAction(
         result,
       };
     }
+    case "settings.save": {
+      const result = applySavePlatformSettings(state, action, ctx);
+      return {
+        action: "settings.saved",
+        entityType: "PlatformSettings",
+        entityId: "global",
+        summary: `Saved platform settings for ${result.settings.organization}.`,
+        result,
+      };
+    }
     case "placement.create": {
       const result = applyCreatePlacementBooking(state, action, ctx);
       return {
@@ -2449,6 +3689,36 @@ export function applyPlatformWorkflowAction(
         entityType: "PlacementTestBooking",
         entityId: result.id,
         summary: `Booked placement test for ${result.fullName}.`,
+        result,
+      };
+    }
+    case "curriculum.module.create": {
+      const result = applyCreateCurriculumModule(state, action, ctx);
+      return {
+        action: "curriculum.module_created",
+        entityType: "Module",
+        entityId: result.id,
+        summary: `Added module ${result.title}.`,
+        result,
+      };
+    }
+    case "course.status.update": {
+      const result = applyUpdateCourseStatus(state, action, ctx);
+      return {
+        action: "course.status_updated",
+        entityType: "Course",
+        entityId: result.id,
+        summary: `Set ${result.title} to ${result.status}.`,
+        result,
+      };
+    }
+    case "material.publish.update": {
+      const result = applyUpdateMaterialPublish(state, action, ctx);
+      return {
+        action: result.published ? "material.published" : "material.unpublished",
+        entityType: "LessonResource",
+        entityId: result.id,
+        summary: `${result.title} marked ${result.published ? "published" : "unpublished"}.`,
         result,
       };
     }
@@ -2557,6 +3827,16 @@ export function applyPlatformWorkflowAction(
         result,
       };
     }
+    case "certificate.reject": {
+      const result = applyRejectCertificate(state, action, ctx);
+      return {
+        action: "certificate.rejected",
+        entityType: "Certificate",
+        entityId: result?.id ?? action.certificateId,
+        summary: result ? `Rejected certificate ${result.verificationCode}.` : "No certificate changed.",
+        result,
+      };
+    }
     case "payment.record": {
       const result = applyRecordPayment(state, action, ctx);
       return {
@@ -2584,6 +3864,16 @@ export function applyPlatformWorkflowAction(
         entityType: "Application",
         entityId: result?.id ?? action.leadId,
         summary: result ? `Converted lead ${action.leadId}.` : "No lead converted.",
+        result,
+      };
+    }
+    case "application.convert": {
+      const result = applyConvertApplicationToEnrollmentWorkflow(state, action, ctx);
+      return {
+        action: "application.converted",
+        entityType: "EnrollmentWorkflow",
+        entityId: result?.id ?? action.applicationId,
+        summary: result ? `Prepared enrollment workflow ${result.id}.` : "No application converted.",
         result,
       };
     }

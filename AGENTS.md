@@ -31,6 +31,58 @@ Build a full role-based learning platform replacing or recreating:
 - super admin portal
 - shared academic operations: assessments, attendance, calendar, certificates, Quran, reports
 
+## Current Development Phase
+
+The platform is in internal alpha stabilization.
+
+Current QA baseline:
+
+- Portal QA: 921 checks, 0 failures.
+- This baseline must not be broken.
+
+Current priority:
+
+1. Preserve clean portal QA.
+2. Stabilize internal user/role/admin workflows.
+3. Improve UI route by route.
+4. Prepare production data architecture.
+5. Do not integrate external systems yet.
+
+Do not implement yet:
+
+- live Moodle sync
+- live EMS sync
+- payment gateway
+- real email/SMS/WhatsApp sending
+- meeting provider
+- production file/media storage
+
+Integration pages may remain as configuration/status placeholders.
+
+Every task must:
+
+- keep scope small
+- avoid unrelated refactors
+- preserve RBAC
+- preserve portal QA
+- run validation
+- report exact files changed
+- report exact commands run
+
+When changing UI:
+
+- follow DESIGN.md
+- do not create generic admin screens
+- keep the UI simple, clean, and easy
+- improve one route or one component family at a time
+
+When changing workflows:
+
+- update tests
+- update portal QA only if the product behavior intentionally changed
+- preserve audit logging
+- preserve server-side action gates
+
 ## Design Source Of Truth
 
 Before creating or editing any UI, read `DESIGN.md`. All pages must follow the Nile Learn design language. Do not create plain default shadcn/dashboard UI. Do not create random colors, random spacing, or generic ugly admin screens. Reuse the design tokens and page components from `DESIGN.md`.

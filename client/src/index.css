@@ -4155,6 +4155,72 @@
     gap: 10px;
   }
 
+  .academic-oversight-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .academic-health-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .academic-health-list article {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.92);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .academic-health-list article div {
+    min-width: 0;
+  }
+
+  .academic-health-list strong,
+  .academic-health-list small {
+    display: block;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .academic-health-list strong {
+    color: var(--foreground);
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
+  .academic-health-list small {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .academic-health-list span,
+  .academic-health-list em {
+    width: fit-content;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--role-tint) 66%, white);
+    color: var(--role-color);
+    padding: 3px 7px;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .academic-health-list em {
+    grid-column: 1 / -1;
+    justify-self: start;
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
   .academic-governance-kpis .platform-mini-metric {
     min-width: 0;
     border: 1px solid var(--border);
@@ -4545,6 +4611,30 @@
     gap: 6px;
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .platform-certificate-reject-reason {
+    min-width: min(220px, 100%);
+    display: grid;
+    gap: 5px;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .platform-certificate-reject-reason input {
+    width: 100%;
+    min-height: 34px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fffdf9;
+    color: var(--foreground);
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    outline: none;
+    text-transform: none;
   }
 
   .branch-ops-workspace {
@@ -4940,9 +5030,15 @@
 
   .registrar-actions a,
   .registrar-lead-form button,
+  .registrar-application-form button,
   .registrar-lead-list button,
+  .registrar-application-list button,
+  .registrar-placement-booking-form button,
   .registrar-placement-card button,
-  .registrar-invoice-list button {
+  .registrar-student-create-form button,
+  .registrar-student-status-control button,
+  .registrar-invoice-list button,
+  .registrar-row-link {
     min-height: 38px;
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -4962,8 +5058,14 @@
   .registrar-actions a:hover,
   .registrar-actions a.active,
   .registrar-lead-form button:hover,
+  .registrar-application-form button:hover,
   .registrar-lead-list button:hover,
+  .registrar-application-list button:hover,
+  .registrar-placement-booking-form button:hover,
   .registrar-placement-card button:hover,
+  .registrar-student-create-form button:hover,
+  .registrar-student-status-control button:hover,
+  .registrar-row-link:hover,
   .registrar-invoice-list button:hover {
     transform: translateY(-1px);
     border-color: color-mix(in srgb, var(--role-color) 28%, var(--border));
@@ -4971,7 +5073,12 @@
   }
 
   .registrar-lead-list button:disabled,
+  .registrar-application-form button:disabled,
+  .registrar-application-list button:disabled,
+  .registrar-placement-booking-form button:disabled,
   .registrar-placement-card button:disabled,
+  .registrar-student-create-form button:disabled,
+  .registrar-student-status-control button:disabled,
   .registrar-invoice-list button:disabled {
     cursor: not-allowed;
     opacity: 0.62;
@@ -5061,8 +5168,15 @@
 
   .registrar-lead-form input,
   .registrar-lead-form select,
+  .registrar-application-form input,
+  .registrar-application-form select,
+  .registrar-placement-booking-form input,
+  .registrar-placement-booking-form select,
   .registrar-placement-card input,
-  .registrar-placement-card select {
+  .registrar-placement-card select,
+  .registrar-student-create-form input,
+  .registrar-student-create-form select,
+  .registrar-student-status-control select {
     width: 100%;
     min-height: 38px;
     border: 1px solid var(--border);
@@ -5101,6 +5215,15 @@
   .registrar-application-list article,
   .registrar-student-class-list article {
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .registrar-application-list article,
+  .registrar-student-class-list article {
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+  }
+
+  .registrar-workflow-list article {
+    grid-template-columns: minmax(180px, 1fr) auto minmax(260px, 0.9fr) auto;
   }
 
   .registrar-lead-list small,
@@ -5146,6 +5269,121 @@
     cursor: not-allowed;
   }
 
+  .registrar-workflow-assignment {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    align-items: end;
+  }
+
+  .registrar-workflow-assignment label {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    font-weight: 850;
+    text-transform: uppercase;
+  }
+
+  .registrar-workflow-assignment select {
+    min-width: 0;
+    width: 100%;
+    min-height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--foreground);
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 800;
+    outline: none;
+  }
+
+  .registrar-workflow-assignment select:focus-visible {
+    border-color: color-mix(in srgb, var(--role-color) 42%, var(--border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--role-color) 12%, transparent);
+  }
+
+  .registrar-workflow-assignment > small {
+    grid-column: 1 / -1;
+  }
+
+  .registrar-detail-empty {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.72);
+    padding: 12px;
+  }
+
+  .registrar-detail-empty > div {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .registrar-detail-empty strong,
+  .registrar-detail-empty small {
+    display: block;
+  }
+
+  .registrar-detail-empty small {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .registrar-operations-panel {
+    margin-top: 14px;
+  }
+
+  .registrar-operations-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .registrar-operations-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .registrar-operations-list article {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.9);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .registrar-operations-list strong,
+  .registrar-operations-list small {
+    display: block;
+    min-width: 0;
+  }
+
+  .registrar-operations-list small {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .registrar-operations-list span {
+    width: fit-content;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--role-tint) 66%, white);
+    color: var(--role-color);
+    padding: 3px 7px;
+    font-size: 10px;
+    font-weight: 850;
+  }
+
   .registrar-lead-form {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5153,8 +5391,22 @@
     align-items: end;
   }
 
+  .registrar-application-form {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.92);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    align-items: end;
+  }
+
   .registrar-lead-form label,
-  .registrar-placement-card label {
+  .registrar-application-form label,
+  .registrar-placement-booking-form label,
+  .registrar-placement-card label,
+  .registrar-student-create-form label {
     display: grid;
     gap: 6px;
     color: var(--foreground);
@@ -5163,10 +5415,37 @@
   }
 
   .registrar-lead-form button,
-  .registrar-placement-card button {
+  .registrar-application-form button,
+  .registrar-placement-booking-form button,
+  .registrar-placement-card button,
+  .registrar-student-create-form button,
+  .registrar-student-status-control button {
     background: var(--role-color);
     color: white;
     border-color: var(--role-color);
+  }
+
+  .registrar-placement-booking-form {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.92);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    align-items: end;
+  }
+
+  .registrar-placement-booking-form .wide {
+    grid-column: 1 / -1;
+  }
+
+  .registrar-application-form .wide {
+    grid-column: span 2;
+  }
+
+  .registrar-placement-booking-form button {
+    grid-column: 1 / -1;
   }
 
   .registrar-placement-card {
@@ -5182,6 +5461,60 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) 96px;
     gap: 8px;
+  }
+
+  .registrar-student-create-panel {
+    grid-column: span 2;
+  }
+
+  .registrar-student-create-form {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.92);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    align-items: end;
+  }
+
+  .registrar-student-create-form .wide {
+    grid-column: span 2;
+  }
+
+  .registrar-student-create-summary {
+    min-height: 38px;
+    border: 1px solid color-mix(in srgb, var(--role-color) 18%, var(--border));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--role-tint) 58%, white);
+    padding: 7px 10px;
+    display: grid;
+    align-content: center;
+    gap: 2px;
+  }
+
+  .registrar-student-create-summary span,
+  .registrar-student-create-summary small {
+    display: block;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .registrar-student-create-summary span {
+    color: var(--role-color);
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .registrar-student-create-summary small {
+    color: var(--muted-foreground);
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .registrar-row-link {
+    min-height: 32px;
+    padding-inline: 10px;
   }
 
   .registrar-payment-desk {
@@ -5518,6 +5851,181 @@
   .registrar-detail-grid > button:disabled {
     cursor: not-allowed;
     opacity: 0.62;
+  }
+
+  .registrar-student-detail-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 0.55fr);
+    gap: 10px;
+  }
+
+  .registrar-student-detail-workspace > section {
+    min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--role-color) 14%, var(--border));
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.86);
+    padding: 11px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .registrar-student-detail-workspace > section.wide {
+    grid-column: 1 / -1;
+  }
+
+  .registrar-panel-head.compact strong {
+    font-size: 14px;
+  }
+
+  .registrar-lifecycle-rail {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .registrar-lifecycle-rail article {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 9px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .registrar-lifecycle-rail span {
+    width: fit-content;
+    border-radius: 999px;
+    padding: 3px 7px;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .registrar-lifecycle-rail span.done {
+    background: color-mix(in srgb, var(--nc-green) 14%, white);
+    color: var(--nc-green);
+  }
+
+  .registrar-lifecycle-rail span.pending {
+    background: color-mix(in srgb, var(--home-gold) 18%, white);
+    color: var(--home-brown);
+  }
+
+  .registrar-lifecycle-rail strong {
+    color: var(--foreground);
+    font-size: 12px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+	  .registrar-student-status-control {
+	    display: grid;
+	    grid-template-columns: minmax(0, 1fr) auto;
+	    gap: 8px;
+	  }
+
+	  .registrar-student-next-action {
+	    border: 1px solid color-mix(in srgb, var(--role-color) 14%, var(--border));
+	    border-radius: 8px;
+	    background: color-mix(in srgb, var(--role-tint) 44%, white);
+	    padding: 9px 10px;
+	    display: grid;
+	    gap: 3px;
+	  }
+
+	  .registrar-student-next-action span,
+	  .registrar-student-fact-list span {
+	    color: var(--muted-foreground);
+	    font-size: 10px;
+	    font-weight: 900;
+	    letter-spacing: 0;
+	    text-transform: uppercase;
+	  }
+
+	  .registrar-student-next-action strong {
+	    color: var(--foreground);
+	    font-size: 13px;
+	    line-height: 1.25;
+	  }
+
+	  .registrar-student-fact-list {
+	    display: grid;
+	    gap: 8px;
+	  }
+
+	  .registrar-student-fact-list article {
+	    min-width: 0;
+	    border: 1px solid var(--border);
+	    border-radius: 8px;
+	    background: rgba(255, 253, 249, 0.94);
+	    padding: 9px;
+	    display: grid;
+	    gap: 5px;
+	  }
+
+	  .registrar-student-fact-list strong,
+	  .registrar-student-fact-list small {
+	    min-width: 0;
+	    overflow-wrap: anywhere;
+	  }
+
+	  .registrar-student-fact-list strong {
+	    color: var(--foreground);
+	    font-size: 13px;
+	    line-height: 1.25;
+	  }
+
+	  .registrar-student-fact-list small {
+	    color: var(--muted-foreground);
+	    font-size: 11px;
+	    line-height: 1.35;
+	  }
+
+	  .registrar-student-enrollment-list {
+	    display: grid;
+	    gap: 8px;
+  }
+
+  .registrar-student-enrollment-list article {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.94);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .registrar-student-enrollment-list strong,
+  .registrar-student-enrollment-list small {
+    display: block;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .registrar-student-enrollment-list strong {
+    color: var(--foreground);
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .registrar-student-enrollment-list small {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .registrar-student-enrollment-list span {
+    width: fit-content;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--role-tint) 66%, white);
+    color: var(--role-color);
+    padding: 3px 7px;
+    font-size: 10px;
+    font-weight: 850;
   }
 
   .teacher-delivery-workspace {
@@ -5995,6 +6503,442 @@
     padding: 3px 7px;
     font-size: 10px;
     font-weight: 850;
+  }
+
+  .teacher-command-layout,
+  .teacher-command-grid {
+    display: grid;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .teacher-command-layout {
+    grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.62fr);
+  }
+
+  .teacher-command-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teacher-command-now,
+  .teacher-command-profile,
+  .teacher-command-panel {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background:
+      radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--role-color) 8%, transparent), transparent 10rem),
+      rgba(255, 253, 249, 0.94);
+    padding: 14px;
+    box-shadow: 0 14px 34px rgba(26, 26, 26, 0.04);
+  }
+
+  .teacher-command-now {
+    display: grid;
+    gap: 13px;
+  }
+
+  .teacher-command-now p {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .teacher-command-now dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .teacher-command-now dl > div,
+  .teacher-command-profile-grid span {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--role-tint) 56%, white);
+    padding: 9px;
+  }
+
+  .teacher-command-now dt {
+    color: var(--muted-foreground);
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .teacher-command-now dd {
+    margin: 3px 0 0;
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 850;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-command-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .teacher-command-profile {
+    display: grid;
+    gap: 12px;
+  }
+
+  .teacher-command-profile-grid {
+    display: grid;
+    gap: 8px;
+  }
+
+  .teacher-command-profile-grid span {
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-command-panel {
+    display: grid;
+    gap: 12px;
+  }
+
+  .teacher-command-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .teacher-command-list a,
+  .teacher-command-list article {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.9);
+    padding: 10px;
+    color: var(--foreground);
+    text-decoration: none;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+  }
+
+  .teacher-command-list article {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-command-list a:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--role-color) 28%, var(--border));
+    background: color-mix(in srgb, var(--role-tint) 62%, white);
+  }
+
+  .teacher-command-list a > span {
+    min-width: 34px;
+    height: 30px;
+    border-radius: 8px;
+    background: var(--role-color);
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 7px;
+    font-size: 10px;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .teacher-command-list div {
+    min-width: 0;
+  }
+
+  .teacher-command-list strong {
+    display: block;
+    color: var(--foreground);
+    font-size: 13px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-command-list small {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-command-list em {
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--role-tint) 66%, white);
+    color: var(--role-color);
+    padding: 4px 8px;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .registrar-command-layout,
+  .registrar-command-grid {
+    display: grid;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .registrar-command-pipeline {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background:
+      linear-gradient(135deg, rgba(255, 253, 249, 0.96), color-mix(in srgb, var(--role-tint) 28%, white)),
+      rgba(255, 253, 249, 0.94);
+    padding: 14px;
+    box-shadow: 0 14px 34px rgba(26, 26, 26, 0.04);
+    display: grid;
+    gap: 12px;
+  }
+
+  .registrar-command-pipeline-track {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .registrar-command-pipeline-step {
+    position: relative;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.86);
+    padding: 10px;
+    color: var(--foreground);
+    text-decoration: none;
+    display: grid;
+    gap: 8px;
+    transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+  }
+
+  .registrar-command-pipeline-step:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--role-color) 28%, var(--border));
+    background: color-mix(in srgb, var(--role-tint) 64%, white);
+  }
+
+  .registrar-command-pipeline-step > span {
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .registrar-command-pipeline-step strong {
+    display: block;
+    color: var(--foreground);
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .registrar-command-pipeline-step small {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .registrar-command-pipeline-step em {
+    width: fit-content;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--role-tint) 70%, white);
+    color: var(--role-color);
+    padding: 4px 8px;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .registrar-command-pipeline-arrow {
+    position: absolute;
+    top: 18px;
+    right: -12px;
+    z-index: 1;
+    color: var(--muted-foreground);
+    background: var(--background);
+    border-radius: 999px;
+  }
+
+  .registrar-command-layout {
+    grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.62fr);
+  }
+
+  .registrar-command-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .registrar-command-now,
+  .registrar-command-finance,
+  .registrar-command-panel {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background:
+      radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--role-color) 8%, transparent), transparent 10rem),
+      rgba(255, 253, 249, 0.94);
+    padding: 14px;
+    box-shadow: 0 14px 34px rgba(26, 26, 26, 0.04);
+  }
+
+  .registrar-command-now,
+  .registrar-command-finance,
+  .registrar-command-panel {
+    display: grid;
+    gap: 12px;
+  }
+
+  .registrar-command-now p {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .registrar-command-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .registrar-command-finance dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .registrar-command-finance dl > div {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--role-tint) 56%, white);
+    padding: 9px;
+  }
+
+  .registrar-command-finance dt {
+    color: var(--muted-foreground);
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+  }
+
+  .registrar-command-finance dd {
+    margin: 3px 0 0;
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 850;
+    line-height: 1.3;
+  }
+
+  .registrar-command-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .registrar-command-list a,
+  .registrar-command-list article {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 253, 249, 0.9);
+    padding: 10px;
+    color: var(--foreground);
+    text-decoration: none;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+  }
+
+  .registrar-command-list article {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .registrar-command-list a:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--role-color) 28%, var(--border));
+    background: color-mix(in srgb, var(--role-tint) 62%, white);
+  }
+
+  .registrar-command-list a > span {
+    min-width: 34px;
+    min-height: 30px;
+    border-radius: 8px;
+    background: var(--role-color);
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 7px;
+    font-size: 10px;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  .registrar-command-list div {
+    min-width: 0;
+  }
+
+  .registrar-command-list strong {
+    display: block;
+    color: var(--foreground);
+    font-size: 13px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .registrar-command-list small {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .registrar-command-list em {
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--role-tint) 66%, white);
+    color: var(--role-color);
+    padding: 4px 8px;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .platform-attendance-note-input {
+    min-width: min(220px, 100%);
+    min-height: 36px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fffdf9;
+    color: var(--foreground);
+    padding: 0 10px;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .platform-attendance-note-input:focus {
+    border-color: color-mix(in srgb, var(--role-color) 34%, var(--border));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--role-color) 12%, transparent);
   }
 
   .platform-academic-status-strip article:nth-child(2n),
@@ -9114,6 +10058,7 @@
     color: var(--primary);
   }
 
+  .platform-certificate-status.rejected,
   .platform-certificate-status.revoked {
     border-color: rgba(199, 91, 57, 0.24);
     background: rgba(199, 91, 57, 0.11);
@@ -11054,6 +11999,14 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .registrar-command-pipeline-track {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .registrar-command-pipeline-arrow {
+      display: none;
+    }
+
     .platform-report-row {
       grid-template-columns: 1fr;
       gap: 9px;
@@ -11135,6 +12088,7 @@
     }
 
     .academic-governance-hero,
+    .academic-oversight-grid,
     .academic-governance-layout,
     .academic-governance-lower-grid,
     .branch-ops-hero,
@@ -11143,6 +12097,11 @@
     .registrar-hero,
     .registrar-layout,
     .registrar-lower-grid,
+    .registrar-command-layout,
+    .registrar-command-grid,
+    .registrar-student-detail-workspace,
+    .teacher-command-layout,
+    .teacher-command-grid,
     .teacher-delivery-hero,
     .teacher-delivery-layout,
     .teacher-delivery-lower-grid {
@@ -11222,8 +12181,20 @@
     .academic-module-form,
     .branch-room-form,
     .registrar-lead-form,
+    .registrar-application-form,
+    .registrar-student-create-form,
     .teacher-session-form {
       grid-template-columns: 1fr;
+    }
+
+    .registrar-student-create-panel,
+    .registrar-application-form .wide,
+    .registrar-student-create-form .wide {
+      grid-column: auto;
+    }
+
+    .registrar-lifecycle-rail {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 
@@ -11517,6 +12488,7 @@
     .admin-access-kpis,
     .admin-access-role-grid,
     .academic-governance-kpis,
+    .academic-oversight-grid,
     .academic-course-stats,
     .branch-ops-kpis,
     .branch-readiness-list,
@@ -11903,8 +12875,17 @@
 
     .admin-branch-list article,
     .academic-class-list article,
-    .academic-module-list article {
+    .academic-module-list article,
+    .registrar-application-list article,
+    .registrar-student-class-list article,
+    .registrar-student-enrollment-list article {
       align-items: start;
+      grid-template-columns: 1fr;
+    }
+
+    .registrar-lifecycle-rail,
+    .registrar-student-status-control {
+      grid-template-columns: 1fr;
     }
 
     .admin-permission-grid button,
@@ -12077,11 +13058,16 @@
     .branch-room-form,
     .registrar-kpis,
     .registrar-actions,
+    .registrar-command-pipeline-track,
+    .registrar-command-finance dl,
     .registrar-lead-form,
+    .registrar-application-form,
     .registrar-detail-grid,
     .registrar-placement-inputs,
     .teacher-delivery-kpis,
     .teacher-delivery-actions,
+    .teacher-command-now dl,
+    .teacher-command-profile-grid,
     .teacher-assessment-command-grid,
     .teacher-readiness-list,
     .teacher-session-form {
@@ -12111,6 +13097,7 @@
     .registrar-lead-list article,
     .registrar-application-list article,
     .registrar-workflow-list article,
+    .registrar-operations-list article,
     .registrar-student-class-list article,
     .registrar-invoice-list article,
     .teacher-session-card,
@@ -12129,16 +13116,38 @@
     .registrar-lead-list span,
     .registrar-application-list span,
     .registrar-workflow-list span,
+    .registrar-operations-list span,
     .registrar-student-class-list span,
     .registrar-invoice-list span,
     .registrar-lead-list button,
+    .registrar-application-list button,
+    .registrar-application-list .registrar-row-link,
     .registrar-workflow-list button,
     .registrar-invoice-list button {
       width: 100%;
     }
 
+    .registrar-command-actions a,
+    .registrar-command-list a,
+    .registrar-command-list article {
+      width: 100%;
+    }
+
+    .registrar-workflow-assignment,
+    .registrar-detail-empty {
+      grid-template-columns: 1fr;
+      width: 100%;
+    }
+
+    .registrar-detail-empty {
+      display: grid;
+      justify-items: stretch;
+    }
+
     .teacher-session-actions,
     .teacher-session-actions button,
+    .teacher-command-actions a,
+    .teacher-command-actions button,
     .teacher-material-list button,
     .teacher-lesson-list span,
     .teacher-roster-list span,
@@ -13186,9 +14195,14 @@
     }
 
     .platform-attendance-grid button,
+    .platform-attendance-note-input,
     .platform-attendance-grid article > div:last-child .platform-attendance-chip {
       width: 100%;
       border-radius: 8px;
+    }
+
+    .platform-attendance-note-input {
+      grid-column: 1 / -1;
     }
 
     .platform-attendance-toolbar button {

@@ -948,6 +948,12 @@ const pageCopy: Record<string, { title: string; description: string; kind: PageC
     kind: "list",
     action: "Create application",
   },
+  "application-detail": {
+    title: "Application detail",
+    description: "Application file, branch scope, course interest, communication log, enrollment handoff, and audit trail.",
+    kind: "detail",
+    action: "Prepare enrollment",
+  },
   "student-detail": {
     title: "Student detail",
     description: "Profile, guardian, enrollments, attendance, grades, payments, documents, messages, and support tickets.",

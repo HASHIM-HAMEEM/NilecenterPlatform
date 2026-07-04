@@ -2,6 +2,14 @@ import { rolePermissions } from "../platformData.js";
 import type { PlatformState } from "./types.js";
 
 export const seedPlatformState: PlatformState = {
+  settings: {
+    organization: "Nile Center",
+    defaultLanguage: "English",
+    academicTerm: "Summer 2026",
+    retentionDays: 365,
+    updatedAt: "2026-06-26T08:00:00+03:00",
+    updatedBy: "usr_admin_demo",
+  },
   users: [
     { id: "usr_student_demo", name: "Student Demo", email: "student.demo@nilelearn.local", roles: ["student"], activeRole: "student", branchId: "br_online", departmentId: "dep_arabic", status: "active" },
     { id: "usr_student_cairo_demo", name: "Cairo Student Demo", email: "cairo.student.demo@nilelearn.local", roles: ["student"], activeRole: "student", branchId: "br_cairo", departmentId: "dep_arabic", status: "active" },
@@ -77,16 +85,35 @@ export const seedPlatformState: PlatformState = {
     { id: "class_ar_l3_assign_qa", courseRunId: "run_ar_l3_assign_qa", name: "Arabic L3 - Assignment QA", capacity: 8, schedule: "Fri 09:00", roomId: "room_online_a", meetingLinkId: "meet_ar_l3", studentIds: ["stu_demo"] },
   ],
   students: [
-    { id: "stu_demo", userId: "usr_student_demo", status: "active", country: "Demo Country", preferredLanguage: "English", timezone: "Africa/Cairo" },
-    { id: "stu_cairo_demo", userId: "usr_student_cairo_demo", status: "active", country: "Egypt", preferredLanguage: "English", timezone: "Africa/Cairo" },
+    { id: "stu_demo", userId: "usr_student_demo", status: "active", source: "direct", currentLevel: "Arabic Level 3", ageGroup: "Adult", courseInterest: "Arabic Language", country: "Demo Country", preferredLanguage: "English", timezone: "Africa/Cairo" },
+    { id: "stu_cairo_demo", userId: "usr_student_cairo_demo", status: "active", source: "direct", currentLevel: "Arabic Level 3", ageGroup: "Adult", courseInterest: "Arabic Language", country: "Egypt", preferredLanguage: "English", timezone: "Africa/Cairo" },
   ],
   teachers: [
-    { id: "tch_demo", userId: "usr_teacher_demo", departmentId: "dep_arabic", specialties: ["Arabic grammar", "Tajweed"], availability: ["Mon 09:00", "Tue 10:30", "Thu 10:30"] },
+    {
+      id: "tch_demo",
+      userId: "usr_teacher_demo",
+      departmentId: "dep_arabic",
+      branchId: "br_online",
+      subjects: ["Arabic grammar", "Tajweed"],
+      teachingLevels: ["Arabic Level 3", "Tajweed 1"],
+      specialties: ["Arabic grammar", "Tajweed"],
+      availability: ["Mon 09:00", "Tue 10:30", "Thu 10:30"],
+      availabilityStatus: "available",
+      assignedClassIds: ["class_ar_l3_a", "class_ar_l3_cairo", "class_qt_1_b", "class_ar_l3_assign_qa"],
+      status: "active",
+    },
+  ],
+  staffProfiles: [
+    { id: "staff_teacher_demo", userId: "usr_teacher_demo", role: "teacher", branchIds: ["br_online"], departmentIds: ["dep_arabic"], permissionScope: "department", title: "Teacher", subjects: ["Arabic grammar", "Tajweed"], teachingLevels: ["Arabic Level 3", "Tajweed 1"], availabilityStatus: "available", operationalScope: ["classes", "attendance", "grading"], status: "active", createdAt: "2026-06-26T08:00:00+03:00", updatedAt: "2026-06-26T08:00:00+03:00" },
+    { id: "staff_registrar_demo", userId: "usr_registrar_demo", role: "registrar", branchIds: ["br_cairo"], departmentIds: ["dep_admissions"], permissionScope: "admissions", title: "Registrar", subjects: [], teachingLevels: [], availabilityStatus: "not_applicable", operationalScope: ["leads", "placement", "enrollments", "payments"], status: "active", createdAt: "2026-06-26T08:00:00+03:00", updatedAt: "2026-06-26T08:00:00+03:00" },
+    { id: "staff_hod_demo", userId: "usr_hod_demo", role: "headofdepartment", branchIds: ["br_global"], departmentIds: ["dep_arabic"], permissionScope: "department", title: "Head of Department", subjects: [], teachingLevels: ["Arabic Language", "Quran and Tajweed"], availabilityStatus: "not_applicable", operationalScope: ["curriculum", "teachers", "certificates", "reports"], status: "active", createdAt: "2026-06-26T08:00:00+03:00", updatedAt: "2026-06-26T08:00:00+03:00" },
+    { id: "staff_branch_demo", userId: "usr_branch_demo", role: "branchadmin", branchIds: ["br_cairo"], departmentIds: ["dep_operations"], permissionScope: "operations", title: "Branch Admin", subjects: [], teachingLevels: [], availabilityStatus: "not_applicable", operationalScope: ["rooms", "schedule", "attendance", "payments"], status: "active", createdAt: "2026-06-26T08:00:00+03:00", updatedAt: "2026-06-26T08:00:00+03:00" },
+    { id: "staff_admin_demo", userId: "usr_admin_demo", role: "superadmin", branchIds: ["br_global"], departmentIds: ["dep_platform"], permissionScope: "global", title: "Super Admin", subjects: [], teachingLevels: [], availabilityStatus: "not_applicable", operationalScope: ["users", "roles", "permissions", "audit"], status: "active", createdAt: "2026-06-26T08:00:00+03:00", updatedAt: "2026-06-26T08:00:00+03:00" },
   ],
   enrollments: [
-    { id: "enr_ar_l3", studentId: "stu_demo", courseRunId: "run_ar_l3_2026", status: "active", progress: 68, attendanceRate: 94, currentGrade: 88 },
-    { id: "enr_ar_l3_cairo", studentId: "stu_cairo_demo", courseRunId: "run_ar_l3_cairo_2026", status: "active", progress: 52, attendanceRate: 90, currentGrade: 84 },
-    { id: "enr_qt_1", studentId: "stu_demo", courseRunId: "run_qt_1_2026", status: "active", progress: 45, attendanceRate: 91, currentGrade: 92 },
+    { id: "enr_ar_l3", studentId: "stu_demo", courseRunId: "run_ar_l3_2026", levelId: "lvl_ar_l3", classGroupId: "class_ar_l3_a", teacherId: "usr_teacher_demo", source: "direct", status: "active", progress: 68, attendanceRate: 94, currentGrade: 88, createdAt: "2026-06-01T09:00:00+03:00" },
+    { id: "enr_ar_l3_cairo", studentId: "stu_cairo_demo", courseRunId: "run_ar_l3_cairo_2026", levelId: "lvl_ar_l3", classGroupId: "class_ar_l3_cairo", teacherId: "usr_teacher_demo", source: "direct", status: "active", progress: 52, attendanceRate: 90, currentGrade: 84, createdAt: "2026-06-01T09:00:00+03:00" },
+    { id: "enr_qt_1", studentId: "stu_demo", courseRunId: "run_qt_1_2026", levelId: "lvl_qt_1", classGroupId: "class_qt_1_b", teacherId: "usr_teacher_demo", source: "direct", status: "active", progress: 45, attendanceRate: 91, currentGrade: 92, createdAt: "2026-06-01T09:00:00+03:00" },
   ],
   lessonProgress: [
     { id: "lp_ar_conditional", studentId: "stu_demo", lessonId: "lesson_ar_conditional", status: "in_progress", notes: "Watched once, needs quiz." },
@@ -200,7 +227,7 @@ export const seedPlatformState: PlatformState = {
     { id: "ptr_demo_1", bookingId: "pt_demo_1", examinerId: "usr_teacher_demo", score: 74, recommendedLevel: "Arabic Level 2", notes: "Good reading base, needs grammar review.", createdAt: "2026-06-26T12:00:00+03:00" },
   ],
   enrollmentWorkflows: [
-    { id: "ew_demo_1", leadId: "lead_demo_1", placementTestId: "pt_demo_1", targetCourseId: "course_ar_l3", status: "ready_to_enroll", nextStep: "Confirm package and create invoice", updatedAt: "2026-06-26T12:10:00+03:00" },
+    { id: "ew_demo_1", leadId: "lead_demo_1", applicationId: "app_demo_1", placementTestId: "pt_demo_1", targetCourseId: "course_ar_l3", targetLevelId: "lvl_ar_l3", recommendedLevel: "Arabic Level 2", source: "placement", status: "ready_to_enroll", nextStep: "Confirm package and create invoice", updatedAt: "2026-06-26T12:10:00+03:00" },
   ],
   invoices: [
     { id: "inv_demo_1", studentId: "stu_demo", amount: 2400, currency: "EGP", dueAt: "2026-06-30", status: "pending" },
@@ -218,6 +245,7 @@ export const seedPlatformState: PlatformState = {
   ],
   certificates: [
     { id: "cert_ar_2", studentId: "stu_demo", courseId: "course_ar_l3", status: "pending_approval", grade: 88, attendanceRate: 94, verificationCode: "NCL-AR2-DEMO" },
+    { id: "cert_ar_reject_demo", studentId: "stu_demo", courseId: "course_ar_l3", status: "pending_approval", grade: 86, attendanceRate: 91, verificationCode: "NCL-AR-REJECT-QA" },
   ],
   quranPlans: [
     { id: "qp_demo", studentId: "stu_demo", target: "Juz 1-5", currentJuz: "Juz 2", revisionCycle: "Every 7 days", teacherId: "usr_teacher_demo" },

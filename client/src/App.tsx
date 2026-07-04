@@ -66,6 +66,7 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
   { path: "/app/teacher/quran-review", role: "teacher", pageId: "quran-review" },
 
   { path: "/app/registrar/leads/:leadId", role: "registrar", pageId: "lead-detail" },
+  { path: "/app/registrar/applications/:applicationId", role: "registrar", pageId: "application-detail" },
   { path: "/app/registrar/students/:studentId", role: "registrar", pageId: "student-detail" },
   { path: "/app/registrar/placement-tests/:bookingId", role: "registrar", pageId: "placement-detail" },
   { path: "/app/registrar/leads", role: "registrar", pageId: "leads" },

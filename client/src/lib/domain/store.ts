@@ -41,6 +41,18 @@ type CreateLeadInput = Pick<
   source?: Lead["source"];
 };
 
+type CreateApplicationInput = {
+  fullName: string;
+  email: string;
+  phone: string;
+  branchId: string;
+  courseInterest: string;
+  schedulePreference: string;
+  country?: string;
+  notes?: string;
+  source?: Lead["source"];
+};
+
 type CreatePlacementInput = Pick<
   PlacementTestBooking,
   "fullName" | "email" | "phone" | "subject" | "preferredDate" | "currentLevel"
@@ -148,6 +160,7 @@ function normalizeStoredState(value: unknown): PlatformState {
     ...seed,
     ...stored,
     users: mergeById(seed.users, stored.users),
+    staffProfiles: mergeById(seed.staffProfiles, stored.staffProfiles),
     courseRuns: mergeById(seed.courseRuns, stored.courseRuns),
     classGroups: mergeById(seed.classGroups, stored.classGroups),
     events: mergeById(seed.events, stored.events),
@@ -262,6 +275,14 @@ class PlatformStore {
     return this.applyAction({ type: "lead.create", ...input }).result as Lead;
   }
 
+  createApplication(input: CreateApplicationInput, actorId = "usr_registrar_demo") {
+    return this.applyAction({ type: "application.create", ...input, actorId }).result as {
+      lead: Lead;
+      application: PlatformState["applications"][number];
+      communicationLog: CommunicationLog;
+    };
+  }
+
   createPlacementBooking(input: CreatePlacementInput) {
     return this.applyAction({ type: "placement.create", ...input }).result as PlacementTestBooking;
   }
@@ -354,9 +375,12 @@ class PlatformStore {
     classGroupId: string,
     sessionId: string,
     statuses: Record<string, AttendanceStatus>,
+    notesOrActorId: Record<string, string> | string = {},
     actorId = "usr_teacher_demo"
   ) {
-    return this.applyAction({ type: "attendance.save", classGroupId, sessionId, statuses, actorId }).result as PlatformState["attendance"];
+    const notes = typeof notesOrActorId === "string" ? {} : notesOrActorId;
+    const nextActorId = typeof notesOrActorId === "string" ? notesOrActorId : actorId;
+    return this.applyAction({ type: "attendance.save", classGroupId, sessionId, statuses, notes, actorId: nextActorId }).result as PlatformState["attendance"];
   }
 
   createCalendarEvent(
@@ -381,6 +405,10 @@ class PlatformStore {
 
   issueCertificate(certificateId: string, actorId: string) {
     return this.applyAction({ type: "certificate.issue", certificateId, actorId }).result as Certificate | undefined;
+  }
+
+  rejectCertificate(certificateId: string, actorId: string, reason: string) {
+    return this.applyAction({ type: "certificate.reject", certificateId, reason, actorId }).result as Certificate | undefined;
   }
 
   recordPayment(
@@ -412,6 +440,18 @@ class PlatformStore {
     return this.applyAction({ type: "lead.convert", leadId, actorId }).result as PlatformState["applications"][number] | undefined;
   }
 
+  convertApplicationToEnrollment(applicationId: string, actorId = "usr_registrar_demo") {
+    return this.applyAction({ type: "application.convert", applicationId, actorId }).result as PlatformState["enrollmentWorkflows"][number] | undefined;
+  }
+
+  createStudent(input: Extract<import("./actions").PlatformWorkflowAction, { type: "student.create" }>) {
+    return this.applyAction(input).result;
+  }
+
+  updateStudentStatus(studentId: string, status: PlatformState["students"][number]["status"], actorId = "usr_registrar_demo") {
+    return this.applyAction({ type: "student.status.update", studentId, status, actorId }).result as PlatformState["students"][number] | undefined;
+  }
+
   activateEnrollmentWorkflow(
     workflowId: string,
     options: { courseRunId?: string; classGroupId?: string; actorId?: string } = {}
@@ -437,15 +477,16 @@ class PlatformStore {
       status: options.status,
       departmentId: options.departmentId,
       specialties: options.specialties,
+      teachingLevels: options.teachingLevels,
       availability: options.availability,
       actorId: options.actorId ?? "usr_admin_demo",
-	    }).result as {
-	      teacher: PlatformState["users"][number];
-        previousTeacher?: PlatformState["users"][number];
-        previousTeacherId?: string;
-	      profile?: PlatformState["teachers"][number];
-	      courseRun: PlatformState["courseRuns"][number];
-	      classGroups: PlatformState["classGroups"];
+    }).result as {
+      teacher: PlatformState["users"][number];
+      previousTeacher?: PlatformState["users"][number];
+      previousTeacherId?: string;
+      profile?: PlatformState["teachers"][number];
+      courseRun: PlatformState["courseRuns"][number];
+      classGroups: PlatformState["classGroups"];
       availability: PlatformState["teacherAvailability"];
     };
   }

@@ -150,12 +150,14 @@ const certificateStatusLabels: Record<Certificate["status"], string> = {
   pending_approval: "Pending approval",
   approved: "Approved",
   issued: "Issued",
+  rejected: "Rejected",
   revoked: "Revoked",
 };
 const certificateStatusOptions: Certificate["status"][] = [
   "pending_approval",
   "approved",
   "issued",
+  "rejected",
   "draft",
   "revoked",
 ];
@@ -278,7 +280,8 @@ function getCertificateSummary(
     .filter(
       audit =>
         (audit.action === "certificate.approved" ||
-          audit.action === "certificate.issued") &&
+          audit.action === "certificate.issued" ||
+          audit.action === "certificate.rejected") &&
         (!certificateIds || certificateIds.has(audit.entityId))
     )
     .sort(
@@ -859,6 +862,21 @@ function isAttendanceSessionSaved(
 }
 
 function getHodClassIds(state: PlatformStateSnapshot, actorId: string) {
+  const courseIds = getHodCourseIds(state, actorId);
+  const courseRunIds = new Set(
+    state.courseRuns
+      .filter(run => courseIds.has(run.courseId))
+      .map(run => run.id)
+  );
+
+  return new Set(
+    state.classGroups
+      .filter(group => courseRunIds.has(group.courseRunId))
+      .map(group => group.id)
+  );
+}
+
+function getHodCourseIds(state: PlatformStateSnapshot, actorId: string) {
   const actor = state.users.find(user => user.id === actorId);
   const departmentIds = new Set(
     state.departments
@@ -879,16 +897,33 @@ function getHodClassIds(state: PlatformStateSnapshot, actorId: string) {
       .filter(course => programIds.has(course.programId))
       .map(course => course.id)
   );
-  const courseRunIds = new Set(
+
+  return courseIds;
+}
+
+function getHodStudentIds(state: PlatformStateSnapshot, actorId: string) {
+  const courseIds = getHodCourseIds(state, actorId);
+  const runIds = new Set(
     state.courseRuns
       .filter(run => courseIds.has(run.courseId))
       .map(run => run.id)
   );
+  const classStudentIds = state.classGroups
+    .filter(group => runIds.has(group.courseRunId))
+    .flatMap(group => group.studentIds);
+  const enrollmentStudentIds = state.enrollments
+    .filter(enrollment => runIds.has(enrollment.courseRunId))
+    .map(enrollment => enrollment.studentId);
+  return new Set([...classStudentIds, ...enrollmentStudentIds]);
+}
 
+function getHodCertificateIds(state: PlatformStateSnapshot, actorId: string) {
+  const courseIds = getHodCourseIds(state, actorId);
+  const studentIds = getHodStudentIds(state, actorId);
   return new Set(
-    state.classGroups
-      .filter(group => courseRunIds.has(group.courseRunId))
-      .map(group => group.id)
+    state.certificates
+      .filter(certificate => courseIds.has(certificate.courseId) && studentIds.has(certificate.studentId))
+      .map(certificate => certificate.id)
   );
 }
 
@@ -1090,7 +1125,7 @@ function LearningWorkflow({
   const [quizAnswer, setQuizAnswer] = useState("Correct");
   const [manualRunId, setManualRunId] = useState<string | null>(null);
   const [manualLessonId, setManualLessonId] = useState<string | null>(null);
-  const studentId = "stu_demo";
+  const studentId = state.students[0]?.id ?? "stu_demo";
   const routeCourseId = params?.courseId;
   const routeLessonId = params?.lessonId;
   const enrollments = state.enrollments.filter(
@@ -1102,9 +1137,10 @@ function LearningWorkflow({
         item => item.id === enrollment.courseRunId
       );
       const course = state.courses.find(item => item.id === run?.courseId);
-      const classGroup = state.classGroups.find(
-        item => item.courseRunId === run?.id
-      );
+      const classGroup =
+        state.classGroups.find(item => item.id === enrollment.classGroupId) ??
+        state.classGroups.find(item => item.courseRunId === run?.id && item.studentIds.includes(enrollment.studentId)) ??
+        state.classGroups.find(item => item.courseRunId === run?.id);
       return run && course ? { enrollment, run, course, classGroup } : null;
     })
     .filter(Boolean) as Array<{
@@ -1129,7 +1165,7 @@ function LearningWorkflow({
   const classGroup =
     selectedOption?.classGroup ??
     state.classGroups.find(item => item.courseRunId === run?.id);
-  const teacher = state.teachers.find(item => item.id === run?.teacherId);
+  const teacher = state.teachers.find(item => item.userId === run?.teacherId);
   const teacherUser = state.users.find(
     item => item.id === teacher?.userId || item.id === run?.teacherId
   );
@@ -1549,10 +1585,10 @@ function LearningWorkflow({
               <span>
                 <Award size={16} /> Certificate path
               </span>
-              <strong>
-                {state.certificates.find(item => item.courseId === course.id)
+	              <strong>
+	                {state.certificates.find(item => item.courseId === course.id && item.studentId === studentId)
                   ?.verificationCode ?? "Pending"}
-              </strong>
+	              </strong>
             </div>
             <p>
               Eligibility uses lesson completion, grade, attendance, and teacher
@@ -4229,9 +4265,11 @@ function AttendanceWorkflow({
   const [statuses, setStatuses] = useState<Record<string, AttendanceStatus>>(
     {}
   );
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const [initialStatuses, setInitialStatuses] = useState<Record<string, AttendanceStatus>>(
     {}
   );
+  const [initialNotes, setInitialNotes] = useState<Record<string, string>>({});
   const selectedRun = state.courseRuns.find(run => run.id === selectedClass?.courseRunId);
   const selectedCourse = state.courses.find(course => course.id === selectedRun?.courseId);
   const selectedBranch = state.branches.find(branch => branch.id === selectedRun?.branchId);
@@ -4267,7 +4305,9 @@ function AttendanceWorkflow({
   const savedRecordStudentIds = new Set(savedRecords.map(record => record.studentId));
   const dirtyStudentIds = selectedClass
     ? selectedClass.studentIds.filter(
-        studentId => statuses[studentId] !== initialStatuses[studentId]
+        studentId =>
+          statuses[studentId] !== initialStatuses[studentId] ||
+          (notes[studentId] ?? "").trim() !== (initialNotes[studentId] ?? "").trim()
       )
     : [];
   const dirtyStudentIdSet = new Set(dirtyStudentIds);
@@ -4311,6 +4351,7 @@ function AttendanceWorkflow({
       classGroupId: selectedClass.id,
       sessionId: session.id,
       statuses,
+      notes,
     });
     setSaving(false);
     if (!result.ok || !result.data) {
@@ -4332,8 +4373,22 @@ function AttendanceWorkflow({
         return [studentId, savedRecord?.status ?? statuses[studentId] ?? "present"];
       })
     ) as Record<string, AttendanceStatus>;
+    const savedNotes = Object.fromEntries(
+      selectedClass.studentIds.map(studentId => {
+        const savedRecord = actionData.state.attendance.find(
+          record =>
+            record.classGroupId === selectedClass.id &&
+            record.studentId === studentId &&
+            (record.sessionId === session.id ||
+              record.sessionId === session.eventId)
+        );
+        return [studentId, savedRecord?.notes ?? notes[studentId] ?? ""];
+      })
+    ) as Record<string, string>;
     setStatuses(savedStatuses);
     setInitialStatuses(savedStatuses);
+    setNotes(savedNotes);
+    setInitialNotes(savedNotes);
     platformStore.setState(actionData.state);
     refresh();
     toast.success("Attendance saved", {
@@ -4376,6 +4431,7 @@ function AttendanceWorkflow({
   useEffect(() => {
     if (!selectedClass || !session) {
       setStatuses({});
+      setNotes({});
       return;
     }
     const nextStatuses = Object.fromEntries(
@@ -4390,8 +4446,22 @@ function AttendanceWorkflow({
         return [studentId, current?.status ?? "present"];
       })
       ) as Record<string, AttendanceStatus>;
+    const nextNotes = Object.fromEntries(
+      selectedClass.studentIds.map(studentId => {
+        const current = state.attendance.find(
+          record =>
+            record.classGroupId === selectedClass.id &&
+            record.studentId === studentId &&
+            (record.sessionId === session.id ||
+              record.sessionId === session.eventId)
+        );
+        return [studentId, current?.notes ?? ""];
+      })
+    ) as Record<string, string>;
     setStatuses(nextStatuses);
     setInitialStatuses(nextStatuses);
+    setNotes(nextNotes);
+    setInitialNotes(nextNotes);
   }, [selectedClass?.id, session?.id, session?.eventId, state.attendance]);
 
   const scopeLabel =
@@ -4652,6 +4722,19 @@ function AttendanceWorkflow({
                       >
                         {rowDirty ? "Unsaved" : rowSaved ? "Saved" : "Pending"}
                       </span>
+                      <input
+                        className="platform-attendance-note-input"
+                        value={notes[studentId] ?? ""}
+                        placeholder="Short attendance note"
+                        disabled={saving || isSyncLoading || !editableAttendance}
+                        aria-label={`${user?.name ?? studentId} attendance note`}
+                        onChange={event =>
+                          setNotes(prev => ({
+                            ...prev,
+                            [studentId]: event.target.value,
+                          }))
+                        }
+                      />
                     </div>
                   </article>
                 );
@@ -4712,6 +4795,7 @@ function AttendanceWorkflow({
                         <span className={`platform-attendance-chip ${record.status}`}>
                           {attendanceStatusLabels[record.status]}
                         </span>
+                        {record.notes ? <small>{record.notes}</small> : null}
                       </div>
                     </article>
                   );
@@ -5529,9 +5613,14 @@ function CertificateWorkflow({
   }
 
   const canManageCertificates = role === "headofdepartment";
+  const actor = getRoleActorUser(state, role);
+  const hodCertificateIds =
+    role === "headofdepartment" ? getHodCertificateIds(state, actor.id) : undefined;
   const [statusFilter, setStatusFilter] = useState<Certificate["status"] | "all">("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
   const certificateOptions = state.certificates.filter(certificate => {
+    if (hodCertificateIds && !hodCertificateIds.has(certificate.id)) return false;
     if (statusFilter !== "all" && certificate.status !== statusFilter) return false;
     const student = state.students.find(item => item.id === certificate.studentId);
     const user = state.users.find(item => item.id === student?.userId);
@@ -5572,7 +5661,9 @@ function CertificateWorkflow({
         selected &&
         audit.entityType === "Certificate" &&
         audit.entityId === selected.id &&
-        (audit.action === "certificate.approved" || audit.action === "certificate.issued")
+        (audit.action === "certificate.approved" ||
+          audit.action === "certificate.issued" ||
+          audit.action === "certificate.rejected")
     )
     .sort(
       (a, b) =>
@@ -5580,7 +5671,7 @@ function CertificateWorkflow({
     );
   const certificateSummary = getCertificateSummary(
     state,
-    new Set(state.certificates.map(certificate => certificate.id))
+    hodCertificateIds ?? new Set(state.certificates.map(certificate => certificate.id))
   );
   const [verificationCode, setVerificationCode] = useState(
     selected?.status === "issued" ? selected.verificationCode : ""
@@ -5599,17 +5690,29 @@ function CertificateWorkflow({
   }, [certificateOptions, selected]);
 
   const runCertificateAction = async (
-    actionType: "certificate.approve" | "certificate.issue",
+    actionType: "certificate.approve" | "certificate.issue" | "certificate.reject",
     certificate: Certificate
   ) => {
     const nextKey = `${actionType}:${certificate.id}`;
     setSavingKey(nextKey);
     setWorkflowMessage("");
     setWorkflowError("");
-    const result = await runPlatformWorkflowActionRequest({
-      type: actionType,
-      certificateId: certificate.id,
-    });
+    const rejectionReason =
+      actionType === "certificate.reject"
+        ? rejectReasons[certificate.id]?.trim() ?? ""
+        : "";
+    const result = await runPlatformWorkflowActionRequest(
+      actionType === "certificate.reject"
+        ? {
+            type: actionType,
+            certificateId: certificate.id,
+            reason: rejectionReason,
+          }
+        : {
+            type: actionType,
+            certificateId: certificate.id,
+          },
+    );
     setSavingKey("");
     if (!result.ok || !result.data) {
       const message = result.error ?? "Certificate workflow failed.";
@@ -5628,6 +5731,8 @@ function CertificateWorkflow({
       const message =
         actionType === "certificate.issue"
           ? "Certificate was not issued because it is not approved yet."
+          : actionType === "certificate.reject"
+            ? "Certificate state did not change."
           : "Certificate state did not change.";
       setWorkflowMessage(message);
       toast.info(message);
@@ -5636,11 +5741,20 @@ function CertificateWorkflow({
     const message =
       actionType === "certificate.approve"
         ? `Approved ${changed.verificationCode}.`
-        : `Issued ${changed.verificationCode}.`;
+        : actionType === "certificate.issue"
+          ? `Issued ${changed.verificationCode}.`
+          : `Rejected ${changed.verificationCode}.`;
     setWorkflowMessage(`${message} Saved to ${result.data.persistence}.`);
-    toast.success(actionType === "certificate.approve" ? "Certificate approved" : "Certificate issued", {
+    toast.success(
+      actionType === "certificate.approve"
+        ? "Certificate approved"
+        : actionType === "certificate.issue"
+          ? "Certificate issued"
+          : "Certificate rejected",
+      {
       description: result.data.persistence,
-    });
+      },
+    );
   };
 
   return (
@@ -5693,8 +5807,13 @@ function CertificateWorkflow({
                   certificate.grade >= 80 && certificate.attendanceRate >= 80;
                 const canApprove =
                   certificate.status === "pending_approval" && eligible;
+                const canReject =
+                  certificate.status === "pending_approval" ||
+                  certificate.status === "approved";
+                const rejectReason = rejectReasons[certificate.id]?.trim() ?? "";
                 const approveKey = `certificate.approve:${certificate.id}`;
                 const issueKey = `certificate.issue:${certificate.id}`;
+                const rejectKey = `certificate.reject:${certificate.id}`;
                 return (
                   <article
                     key={certificate.id}
@@ -5728,6 +5847,21 @@ function CertificateWorkflow({
                       </button>
                       {canManageCertificates ? (
                         <>
+                          {canReject ? (
+                            <label className="platform-certificate-reject-reason">
+                              Reject reason
+                              <input
+                                value={rejectReasons[certificate.id] ?? ""}
+                                onChange={event =>
+                                  setRejectReasons(current => ({
+                                    ...current,
+                                    [certificate.id]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Eligibility note"
+                              />
+                            </label>
+                          ) : null}
                           <button
                             type="button"
                             disabled={!canApprove || Boolean(savingKey)}
@@ -5747,6 +5881,13 @@ function CertificateWorkflow({
                             onClick={() => runCertificateAction("certificate.issue", certificate)}
                           >
                             {savingKey === issueKey ? "Issuing" : issued ? "Issued" : approved ? "Issue" : "Approve first"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!canReject || !rejectReason || Boolean(savingKey)}
+                            onClick={() => runCertificateAction("certificate.reject", certificate)}
+                          >
+                            {savingKey === rejectKey ? "Rejecting" : canReject ? "Reject" : "Closed"}
                           </button>
                         </>
                       ) : null}
@@ -5839,7 +5980,9 @@ function CertificateWorkflow({
                     <strong>
                       {audit.action === "certificate.issued"
                         ? "Issued"
-                        : "Approved"}
+                        : audit.action === "certificate.rejected"
+                          ? "Rejected"
+                          : "Approved"}
                     </strong>
                     <small>{audit.summary} · {formatDateTime(audit.createdAt)}</small>
                   </div>
@@ -6734,8 +6877,10 @@ function ReportsWorkflow({
   const sortedRawRows = sortedReportRows.map((row) => row.raw);
   const displayRows = sortedReportRows.slice(0, 8).map((row) => row.display);
   const reportCertificateIds =
-    role === "superadmin" || role === "headofdepartment"
+    role === "superadmin"
       ? new Set(state.certificates.map(certificate => certificate.id))
+      : role === "headofdepartment"
+        ? getHodCertificateIds(state, actorId)
       : undefined;
   const exceptionRows = filteredRows.filter(
     (row) =>
@@ -7165,10 +7310,10 @@ function CertificateGovernancePanel({
         <MiniMetric label="Open" value={String(summary.statusCounts.pending_approval)} />
         <MiniMetric label="Approved" value={String(summary.statusCounts.approved)} />
         <MiniMetric label="Issued" value={String(summary.statusCounts.issued)} />
-        <MiniMetric label="Documents" value={String(summary.issuedDocuments.length)} />
+        <MiniMetric label="Rejected" value={String(summary.statusCounts.rejected)} />
       </div>
       <div className="platform-attendance-status-grid">
-        {certificateStatusOptions.slice(0, 3).map(status => (
+        {certificateStatusOptions.slice(0, 4).map(status => (
           <article key={status}>
             <span className={`platform-certificate-status ${status}`}>
               {certificateStatusLabels[status]}
