@@ -51,6 +51,32 @@ afterEach(() => {
 });
 
 describe("server platform action scope gates", () => {
+  it("overwrites spoofed student and actor ids with the authenticated student session", async () => {
+    const result = await applyPlatformWorkflowAction(
+      {
+        type: "assignment.submit",
+        assignmentId: "asg_ar_grammar",
+        response: "Server-scoped student response",
+        studentId: "stu_cairo_demo",
+        actorId: "usr_admin_demo",
+      },
+      sessionFor("student"),
+    );
+
+    const submission = result.state.assignmentSubmissions.find(
+      (item) => item.assignmentId === "asg_ar_grammar" && item.response === "Server-scoped student response",
+    );
+
+    expect(submission).toMatchObject({
+      studentId: "stu_demo",
+      response: "Server-scoped student response",
+    });
+    expect(result.state.auditLogs[0]).toMatchObject({
+      action: "assignment.resubmitted",
+      actorId: "usr_student_demo",
+    });
+  });
+
   it("allows only super admins to create staff users and writes audit with the session actor", async () => {
     await expect(
       applyPlatformWorkflowAction(
@@ -169,6 +195,32 @@ describe("server platform action scope gates", () => {
     ).rejects.toThrow("Teacher can only save attendance for assigned classes.");
   });
 
+  it("overwrites spoofed teacher calendar owners with the authenticated teacher session", async () => {
+    const result = await applyPlatformWorkflowAction(
+      {
+        type: "calendar.create",
+        eventType: "reminder",
+        title: "Teacher scoped reminder",
+        startsAt: "2026-07-06T09:00:00+03:00",
+        endsAt: "2026-07-06T09:15:00+03:00",
+        branchId: "br_online",
+        ownerId: "usr_admin_demo",
+      },
+      sessionFor("teacher"),
+    );
+
+    const createdEvent = result.result.result as { event: { ownerId: string; branchId: string } };
+
+    expect(createdEvent.event).toMatchObject({
+      ownerId: "usr_teacher_demo",
+      branchId: "br_online",
+    });
+    expect(result.state.auditLogs[0]).toMatchObject({
+      action: "calendar.created",
+      actorId: "usr_teacher_demo",
+    });
+  });
+
   it("blocks branch admins from mutating rooms and payments outside their branch", async () => {
     const branchSession = sessionFor("branchadmin");
 
@@ -198,6 +250,27 @@ describe("server platform action scope gates", () => {
   });
 
   it("blocks registrars from admissions actions outside configured branch scope", async () => {
+    const allowed = await applyPlatformWorkflowAction(
+      {
+        type: "application.create",
+        fullName: "Online Scope Applicant",
+        email: "online.scope.applicant@nilelearn.local",
+        phone: "+20 100 000 4141",
+        branchId: "br_online",
+        courseInterest: "Arabic Language",
+        schedulePreference: "Evening",
+      },
+      sessionFor("registrar"),
+    );
+
+    const application = allowed.result.result as { application: { branchId: string } };
+
+    expect(application.application.branchId).toBe("br_online");
+    expect(allowed.state.auditLogs[0]).toMatchObject({
+      action: "application.created",
+      actorId: "usr_registrar_demo",
+    });
+
     await expect(
       applyPlatformWorkflowAction(
         {
