@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { getSessionStore } from "./sessionStore.js";
 
 export type ServerRole = "student" | "teacher" | "registrar" | "headofdepartment" | "branchadmin" | "superadmin";
 
@@ -16,7 +17,6 @@ export type ServerSession = {
 
 const COOKIE_NAME = "nilelearn_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
-const sessions = new Map<string, ServerSession>();
 
 const demoUsers: Record<ServerRole, { id: string; email: string; name: string }> = {
   student: { id: "usr_student_demo", email: "student.demo@nilelearn.local", name: "Student Demo" },
@@ -95,17 +95,17 @@ function createSession(input: Omit<ServerSession, "id" | "createdAt" | "expiresA
   const createdAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
   const session: ServerSession = { id, createdAt, expiresAt, ...input };
-  sessions.set(id, session);
+  getSessionStore().create(session);
   return session;
 }
 
 export function getRequestSession(req: SessionCookieRequest) {
   const sessionId = parseCookies(req)[COOKIE_NAME];
   if (!sessionId) return null;
-  const session = sessions.get(sessionId);
+  const session = getSessionStore().get(sessionId);
   if (!session) return null;
   if (Date.parse(session.expiresAt) <= Date.now()) {
-    sessions.delete(sessionId);
+    getSessionStore().delete(sessionId);
     return null;
   }
   return session;
@@ -113,7 +113,7 @@ export function getRequestSession(req: SessionCookieRequest) {
 
 export function endRequestSession(req: SessionCookieRequest, res: SessionCookieResponse) {
   const sessionId = parseCookies(req)[COOKIE_NAME];
-  if (sessionId) sessions.delete(sessionId);
+  if (sessionId) getSessionStore().delete(sessionId);
   clearSessionCookie(res);
 }
 

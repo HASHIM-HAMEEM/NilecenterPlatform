@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { signIn } from "../../../../server/auth";
+import { attachSession, endRequestSession, getRequestSession, signIn, type ServerSession } from "../../../../server/auth";
+import { resetDefaultSessionStore, setSessionStore, type SessionStore } from "../../../../server/sessionStore";
 
 const originalEnv = {
   DEMO_AUTH_ENABLED: process.env.DEMO_AUTH_ENABLED,
@@ -21,6 +22,7 @@ afterEach(() => {
   process.env.SUPABASE_PUBLISHABLE_KEY = originalEnv.SUPABASE_PUBLISHABLE_KEY;
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = originalEnv.VITE_SUPABASE_PUBLISHABLE_KEY;
   process.env.VITE_SUPABASE_ANON_KEY = originalEnv.VITE_SUPABASE_ANON_KEY;
+  resetDefaultSessionStore();
 });
 
 describe("server demo auth", () => {
@@ -53,5 +55,102 @@ describe("server demo auth", () => {
     const session = await signIn("teacher.demo@nilelearn.local", "demo1234", "teacher");
     expect(session.provider).toBe("demo");
     expect(session.activeRole).toBe("teacher");
+  });
+});
+
+describe("server session store", () => {
+  function responseRecorder() {
+    const headers = new Map<string, string>();
+    return {
+      headers,
+      response: {
+        setHeader(name: string, value: string) {
+          headers.set(name, value);
+        },
+      },
+    };
+  }
+
+  function requestWithCookie(cookie?: string) {
+    return { headers: { cookie } };
+  }
+
+  function testSession(overrides: Partial<ServerSession> = {}): ServerSession {
+    return {
+      id: "sess_test_1",
+      userId: "usr_student_demo",
+      email: "student.demo@nilelearn.local",
+      name: "Student Demo",
+      roles: ["student"],
+      activeRole: "student",
+      provider: "demo",
+      createdAt: "2026-07-04T00:00:00.000Z",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      ...overrides,
+    };
+  }
+
+  function createInspectableStore() {
+    const sessions = new Map<string, ServerSession>();
+    const store: SessionStore = {
+      create(session) {
+        sessions.set(session.id, session);
+      },
+      get(sessionId) {
+        return sessions.get(sessionId) ?? null;
+      },
+      delete(sessionId) {
+        sessions.delete(sessionId);
+      },
+      clear() {
+        sessions.clear();
+      },
+    };
+    return { store, sessions };
+  }
+
+  it("reads request sessions through the configured server store", () => {
+    const { store } = createInspectableStore();
+    const restoreStore = setSessionStore(store);
+    const session = testSession();
+    store.create(session);
+
+    expect(getRequestSession(requestWithCookie("nilelearn_session=sess_test_1"))).toEqual(session);
+
+    restoreStore();
+  });
+
+  it("attaches and ends sessions through the configured server store", () => {
+    const { store, sessions } = createInspectableStore();
+    const restoreStore = setSessionStore(store);
+    const { headers, response } = responseRecorder();
+    const session = testSession();
+
+    store.create(session);
+    const body = attachSession(response, session);
+    const cookie = headers.get("Set-Cookie") ?? "";
+
+    expect(body).toMatchObject({ userId: "usr_student_demo", activeRole: "student", provider: "demo" });
+    expect(cookie).toContain("nilelearn_session=sess_test_1");
+    expect(cookie).toContain("HttpOnly");
+
+    endRequestSession(requestWithCookie("nilelearn_session=sess_test_1"), response);
+
+    expect(sessions.has("sess_test_1")).toBe(false);
+    expect(headers.get("Set-Cookie")).toContain("Max-Age=0");
+
+    restoreStore();
+  });
+
+  it("deletes expired sessions from the configured server store", () => {
+    const { store, sessions } = createInspectableStore();
+    const restoreStore = setSessionStore(store);
+    const session = testSession({ expiresAt: "2000-01-01T00:00:00.000Z" });
+    store.create(session);
+
+    expect(getRequestSession(requestWithCookie("nilelearn_session=sess_test_1"))).toBeNull();
+    expect(sessions.has("sess_test_1")).toBe(false);
+
+    restoreStore();
   });
 });
