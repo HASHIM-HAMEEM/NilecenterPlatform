@@ -51,6 +51,104 @@ afterEach(() => {
 });
 
 describe("server platform action scope gates", () => {
+  it("allows only super admins to create staff users and writes audit with the session actor", async () => {
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "staff.user.create",
+          name: "Blocked Registrar Staff",
+          email: "blocked.registrar.staff@nilelearn.local",
+          role: "registrar",
+          branchId: "br_cairo",
+          departmentId: "dep_admissions",
+          permissionScope: "admissions",
+        },
+        sessionFor("registrar"),
+      ),
+    ).rejects.toThrow("Role registrar cannot run staff.user.create.");
+
+    const result = await applyPlatformWorkflowAction(
+      {
+        type: "staff.user.create",
+        name: "QA Registrar Staff",
+        email: "qa.registrar.staff@nilelearn.local",
+        role: "registrar",
+        branchId: "br_cairo",
+        departmentId: "dep_admissions",
+        permissionScope: "admissions",
+        actorId: "usr_registrar_demo",
+      },
+      sessionFor("superadmin"),
+    );
+
+    const created = result.result.result as {
+      user: { id: string; activeRole: string; branchId?: string; departmentId?: string };
+      staffProfile: { userId: string; role: string; branchIds: string[]; departmentIds: string[] };
+    };
+    const audit = result.state.auditLogs.find((item) => item.entityId === created.user.id);
+
+    expect(created.user).toMatchObject({
+      activeRole: "registrar",
+      branchId: "br_cairo",
+      departmentId: "dep_admissions",
+    });
+    expect(created.staffProfile).toMatchObject({
+      userId: created.user.id,
+      role: "registrar",
+      branchIds: ["br_cairo"],
+      departmentIds: ["dep_admissions"],
+    });
+    expect(audit).toMatchObject({
+      action: "staff.user.created",
+      actorId: "usr_admin_demo",
+    });
+  });
+
+  it("keeps user updates super-admin-only and ignores client actor spoofing", async () => {
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "user.update",
+          userId: "usr_teacher_demo",
+          activeRole: "teacher",
+          roles: ["teacher"],
+          branchId: "br_online",
+          departmentId: "dep_arabic",
+          status: "paused",
+        },
+        sessionFor("branchadmin"),
+      ),
+    ).rejects.toThrow("Role branchadmin cannot run user.update.");
+
+    const result = await applyPlatformWorkflowAction(
+      {
+        type: "user.update",
+        userId: "usr_teacher_demo",
+        activeRole: "teacher",
+        roles: ["teacher"],
+        branchId: "br_online",
+        departmentId: "dep_arabic",
+        status: "paused",
+        actorId: "usr_teacher_demo",
+      },
+      sessionFor("superadmin"),
+    );
+    const updatedUser = result.state.users.find((item) => item.id === "usr_teacher_demo");
+    const staffProfile = result.state.staffProfiles.find((item) => item.userId === "usr_teacher_demo" && item.role === "teacher");
+
+    expect(updatedUser).toMatchObject({ status: "paused", branchId: "br_online", departmentId: "dep_arabic" });
+    expect(staffProfile).toMatchObject({ status: "paused", branchIds: ["br_online"], departmentIds: ["dep_arabic"] });
+    expect(result.result).toMatchObject({
+      action: "user.updated",
+      entityId: "usr_teacher_demo",
+    });
+    expect(result.state.auditLogs[0]).toMatchObject({
+      action: "user.updated",
+      actorId: "usr_admin_demo",
+      entityId: "usr_teacher_demo",
+    });
+  });
+
   it("blocks unassigned teachers from class attendance actions", async () => {
     const spareTeacher = sessionFor("teacher", {
       userId: "usr_teacher_spare",
