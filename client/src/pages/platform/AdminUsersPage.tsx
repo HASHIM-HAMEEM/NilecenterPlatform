@@ -174,6 +174,15 @@ function statusTone(status: EntityStatus): "green" | "amber" | "slate" {
   return "slate";
 }
 
+function roleInitials(role: Role) {
+  return roleMeta[role].label
+    .split(/\s+/)
+    .map(word => word[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 export default function AdminUsersPage({ mode = "list" }: AdminUsersPageProps) {
   const [version, setVersion] = useState(0);
   const [query, setQuery] = useState("");
@@ -650,7 +659,7 @@ export default function AdminUsersPage({ mode = "list" }: AdminUsersPageProps) {
                           color: userMeta.color,
                         }}
                       >
-                        {userMeta.shortLabel}
+                        {roleInitials(safeRole(user.activeRole))}
                       </span>
                       <span>
                         <strong>{user.name}</strong>

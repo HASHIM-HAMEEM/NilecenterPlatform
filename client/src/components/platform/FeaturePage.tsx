@@ -1124,9 +1124,6 @@ function AdminAccessExperience({
   const activeUsers = state.users.filter(
     user => user.status === "active"
   ).length;
-  const multiRoleUsers = state.users.filter(
-    user => user.roles.length > 1
-  ).length;
   const selectedRoleUsers = state.users.filter(user =>
     user.roles.includes(selectedRole)
   ).length;
@@ -1289,6 +1286,46 @@ function AdminAccessExperience({
       )
     )
     .slice(0, 5);
+  const accessMode =
+    pageId === "permissions"
+      ? "permissions"
+      : pageId === "branches"
+        ? "branches"
+        : pageId === "roles"
+          ? "roles"
+          : "users";
+  const accessCopy: Record<
+    typeof accessMode,
+    { title: string; description: string; context: string }
+  > = {
+    users: {
+      title: "User directory",
+      description: "Find people, review status, and open the right account.",
+      context: "People",
+    },
+    roles: {
+      title: "Roles and access",
+      description: "Choose a user, set their role, branch, and department.",
+      context: "Role assignment",
+    },
+    permissions: {
+      title: "Access rules",
+      description: "Review one role and update the actions it can perform.",
+      context: "Permissions",
+    },
+    branches: {
+      title: "Branch access",
+      description: "Review branch status and the users connected to each site.",
+      context: "Branches",
+    },
+  };
+  const showDirectory = accessMode === "roles" || accessMode === "users";
+  const showSelectedAccount = accessMode === "roles" || accessMode === "users";
+  const showCreateAccount = accessMode === "users";
+  const showPermissionPanel =
+    accessMode === "roles" || accessMode === "permissions";
+  const showBranchPanel = accessMode === "roles" || accessMode === "branches";
+  const showAuditPanel = accessMode !== "users";
   const focusLabel =
     pageId === "branches"
       ? "Branch access"
@@ -1707,9 +1744,9 @@ function AdminAccessExperience({
     <div className="admin-access-workspace">
       <PlatformWorkspaceHeader
         className="admin-access-hero"
-        title="Access control"
-        description="Manage users, roles, access rules, and branch access with activity history."
-        context={<span>{focusLabel}</span>}
+        title={accessCopy[accessMode].title}
+        description={accessCopy[accessMode].description}
+        context={<span>{accessCopy[accessMode].context}</span>}
         actionsClassName="admin-access-hero-actions"
         actions={
           <>
@@ -1763,814 +1800,841 @@ function AdminAccessExperience({
           label="Role coverage"
           value={`${permissionCoverage}%`}
         />
-        <AdminAccessMetric label="Multi-role" value={String(multiRoleUsers)} />
       </div>
 
-      <div className="admin-access-layout">
-        <section className="admin-access-panel directory">
-          <div className="admin-access-panel-head">
-            <div>
-              <span>Identity directory</span>
-              <strong>{visibleUsers.length} users</strong>
-            </div>
-            <UserPlus size={18} />
-          </div>
-          <div className="platform-toolbar-search admin-access-search">
-            <Search size={15} />
-            <input
-              aria-label="Search users, roles, branches"
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-              placeholder="Search users, roles, branches"
-            />
-          </div>
-          <div className="admin-access-user-list">
-            {visibleUsers.map(user => {
-              const branch = state.branches.find(
-                item => item.id === user.branchId
-              );
-              const department = state.departments.find(
-                item => item.id === user.departmentId
-              );
-              const userMeta = metaForRole(user.activeRole);
-              return (
-                <button
-                  key={user.id}
-                  className={selectedUser?.id === user.id ? "active" : ""}
-                  onClick={() => {
-                    setSelectedUserId(user.id);
-                    setSelectedRole(safeRole(user.activeRole));
-                  }}
-                >
-                  <span
-                    style={{ background: userMeta.tint, color: userMeta.color }}
-                  >
-                    {userMeta.shortLabel}
-                  </span>
-                  <div>
-                    <strong>{user.name}</strong>
-                    <small>
-                      {branch?.name ?? "No branch"} ·{" "}
-                      {department?.name ?? "No department"}
-                    </small>
-                  </div>
-                  <em>{user.status}</em>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <section
-          className="admin-access-panel selected-user"
-          aria-busy={savingAccess}
+      {showDirectory || showSelectedAccount || showCreateAccount ? (
+        <div
+          className={`admin-access-layout ${showCreateAccount ? "with-create" : "without-create"}`}
         >
-          <div className="admin-access-panel-head">
-            <div>
-              <span>Selected account</span>
-              <strong>{selectedUser?.name ?? "No user"}</strong>
-            </div>
-            <button onClick={toggleUserStatus} disabled={savingAccess}>
-              {savingAccess
-                ? "Saving"
-                : selectedUser?.status === "active"
-                  ? "Pause"
-                  : "Activate"}
-            </button>
-          </div>
-          {selectedUser ? (
-            <>
-              <div className="admin-access-user-profile">
-                <span style={{ background: selectedUserMeta.color }}>
-                  {selectedUserMeta.shortLabel}
-                </span>
+          {showDirectory ? (
+            <section className="admin-access-panel directory">
+              <div className="admin-access-panel-head">
                 <div>
-                  <strong>{selectedUser.email}</strong>
-                  <small>
-                    {activeBranch?.name ?? "No branch"} ·{" "}
-                    {activeDepartment?.name ?? "No department"}
-                  </small>
+                  <span>Identity directory</span>
+                  <strong>{visibleUsers.length} users</strong>
                 </div>
+                <UserPlus size={18} />
               </div>
-
-              <div className="admin-access-field-grid">
-                <label>
-                  Active role
-                  <select
-                    value={safeRole(selectedUser.activeRole)}
-                    disabled={savingAccess}
-                    onChange={event =>
-                      setUserRole(selectedUser.id, event.target.value)
-                    }
-                  >
-                    {roleOrder.map(role => (
-                      <option key={role} value={role}>
-                        {roleMeta[role].label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Branch
-                  <select
-                    value={selectedUser.branchId ?? ""}
-                    disabled={savingAccess}
-                    onChange={event =>
-                      updateUserScope("branchId", event.target.value)
-                    }
-                  >
-                    {state.branches.map(branch => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Department
-                  <select
-                    value={selectedUser.departmentId ?? ""}
-                    disabled={savingAccess}
-                    onChange={event =>
-                      updateUserScope("departmentId", event.target.value)
-                    }
-                  >
-                    {state.departments.map(department => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <div className="platform-toolbar-search admin-access-search">
+                <Search size={15} />
+                <input
+                  aria-label="Search users, roles, branches"
+                  value={query}
+                  onChange={event => setQuery(event.target.value)}
+                  placeholder="Search users, roles, branches"
+                />
               </div>
-
-              <div
-                className="admin-access-role-grid"
-                aria-label={`${selectedUser.name} roles`}
-              >
-                {roleOrder.map(role => (
-                  <button
-                    key={role}
-                    className={
-                      selectedUser.roles.includes(role) ? "active" : ""
-                    }
-                    disabled={savingAccess}
-                    onClick={() => toggleUserRole(selectedUser.id, role)}
-                  >
-                    <span
-                      style={{
-                        background: roleMeta[role].tint,
-                        color: roleMeta[role].color,
+              <div className="admin-access-user-list">
+                {visibleUsers.map(user => {
+                  const branch = state.branches.find(
+                    item => item.id === user.branchId
+                  );
+                  const department = state.departments.find(
+                    item => item.id === user.departmentId
+                  );
+                  const userMeta = metaForRole(user.activeRole);
+                  return (
+                    <button
+                      key={user.id}
+                      className={selectedUser?.id === user.id ? "active" : ""}
+                      onClick={() => {
+                        setSelectedUserId(user.id);
+                        setSelectedRole(safeRole(user.activeRole));
                       }}
                     >
-                      {roleMeta[role].shortLabel}
-                    </span>
-                    <strong>{roleMeta[role].label}</strong>
-                    {selectedUser.activeRole === role ? <em>active</em> : null}
-                  </button>
-                ))}
-              </div>
-
-              <div className="admin-access-review-card">
-                <strong>
-                  {selectedStaffProfile?.title ?? "Related profile"}
-                </strong>
-                <small>
-                  {selectedStaffProfile
-                    ? `${selectedStaffProfile.permissionScope} access · ${selectedStaffBranches || "No branch"} · ${selectedStaffDepartments || "No department"}`
-                    : "No staff profile is linked to this account yet."}
-                </small>
-                <span>
-                  {selectedStaffProfile
-                    ? `${selectedPermissionSummary.length} permission(s) available. ${selectedStaffProfile.operationalScope.join(", ") || "No operational scope recorded."}`
-                    : "Student profiles are managed through registrar admissions; staff profiles are created here."}
-                </span>
-              </div>
-
-              <div className="admin-audit-list">
-                {selectedUserAuditRows.length ? (
-                  selectedUserAuditRows.map(auditRow => (
-                    <article key={auditRow.id}>
-                      <strong>{auditRow.action}</strong>
-                      <small>{auditRow.summary}</small>
-                      <span>
-                        {new Date(auditRow.createdAt).toLocaleString()}
+                      <span
+                        style={{
+                          background: userMeta.tint,
+                          color: userMeta.color,
+                        }}
+                      >
+                        {userMeta.shortLabel}
                       </span>
-                    </article>
-                  ))
-                ) : (
-                  <article>
-                    <strong>No recent activity</strong>
-                    <small>
-                      Role, scope, and creation changes will appear here.
-                    </small>
-                  </article>
-                )}
+                      <div>
+                        <strong>{user.name}</strong>
+                        <small>
+                          {branch?.name ?? "No branch"} ·{" "}
+                          {department?.name ?? "No department"}
+                        </small>
+                      </div>
+                      <em>{user.status}</em>
+                    </button>
+                  );
+                })}
               </div>
+            </section>
+          ) : null}
 
-              {accessUpdateError ? (
-                <div className="platform-empty-state error">
-                  <strong>Access update was not saved</strong>
-                  <span>{accessUpdateError}</span>
+          {showSelectedAccount ? (
+            <section
+              className="admin-access-panel selected-user"
+              aria-busy={savingAccess}
+            >
+              <div className="admin-access-panel-head">
+                <div>
+                  <span>Selected account</span>
+                  <strong>{selectedUser?.name ?? "No user"}</strong>
                 </div>
-              ) : null}
+                <button onClick={toggleUserStatus} disabled={savingAccess}>
+                  {savingAccess
+                    ? "Saving"
+                    : selectedUser?.status === "active"
+                      ? "Pause"
+                      : "Activate"}
+                </button>
+              </div>
+              {selectedUser ? (
+                <>
+                  <div className="admin-access-user-profile">
+                    <span style={{ background: selectedUserMeta.color }}>
+                      {selectedUserMeta.shortLabel}
+                    </span>
+                    <div>
+                      <strong>{selectedUser.email}</strong>
+                      <small>
+                        {activeBranch?.name ?? "No branch"} ·{" "}
+                        {activeDepartment?.name ?? "No department"}
+                      </small>
+                    </div>
+                  </div>
 
-              {selectedUser.activeRole === "teacher" ? (
-                <div className="admin-access-teacher-links">
-                  <div>
-                    <span>Teacher workspace ready</span>
+                  <div className="admin-access-field-grid">
+                    <label>
+                      Active role
+                      <select
+                        value={safeRole(selectedUser.activeRole)}
+                        disabled={savingAccess}
+                        onChange={event =>
+                          setUserRole(selectedUser.id, event.target.value)
+                        }
+                      >
+                        {roleOrder.map(role => (
+                          <option key={role} value={role}>
+                            {roleMeta[role].label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Branch
+                      <select
+                        value={selectedUser.branchId ?? ""}
+                        disabled={savingAccess}
+                        onChange={event =>
+                          updateUserScope("branchId", event.target.value)
+                        }
+                      >
+                        {state.branches.map(branch => (
+                          <option key={branch.id} value={branch.id}>
+                            {branch.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Department
+                      <select
+                        value={selectedUser.departmentId ?? ""}
+                        disabled={savingAccess}
+                        onChange={event =>
+                          updateUserScope("departmentId", event.target.value)
+                        }
+                      >
+                        {state.departments.map(department => (
+                          <option key={department.id} value={department.id}>
+                            {department.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div
+                    className="admin-access-role-grid"
+                    aria-label={`${selectedUser.name} roles`}
+                  >
+                    {roleOrder.map(role => (
+                      <button
+                        key={role}
+                        className={
+                          selectedUser.roles.includes(role) ? "active" : ""
+                        }
+                        disabled={savingAccess}
+                        onClick={() => toggleUserRole(selectedUser.id, role)}
+                      >
+                        <span
+                          style={{
+                            background: roleMeta[role].tint,
+                            color: roleMeta[role].color,
+                          }}
+                        >
+                          {roleMeta[role].shortLabel}
+                        </span>
+                        <strong>{roleMeta[role].label}</strong>
+                        {selectedUser.activeRole === role ? (
+                          <em>active</em>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="admin-access-review-card">
                     <strong>
-                      {selectedTeacherClasses.length} class group(s)
+                      {selectedStaffProfile?.title ?? "Related profile"}
                     </strong>
                     <small>
-                      {selectedTeacherProfile?.specialties.join(", ") ||
-                        "No subjects added"}{" "}
-                      · {selectedTeacherAvailability.length} availability
-                      slot(s)
+                      {selectedStaffProfile
+                        ? `${selectedStaffProfile.permissionScope} access · ${selectedStaffBranches || "No branch"} · ${selectedStaffDepartments || "No department"}`
+                        : "No staff profile is linked to this account yet."}
                     </small>
+                    <span>
+                      {selectedStaffProfile
+                        ? `${selectedPermissionSummary.length} permission(s) available. ${selectedStaffProfile.operationalScope.join(", ") || "No operational scope recorded."}`
+                        : "Student profiles are managed through registrar admissions; staff profiles are created here."}
+                    </span>
                   </div>
-                  <div className="admin-access-teacher-link-grid">
-                    {teacherWorkspaceLinks.length ? (
-                      teacherWorkspaceLinks.map(item => (
-                        <Link key={item.label} href={item.href}>
-                          <span>{item.label}</span>
-                          <strong>{item.value}</strong>
-                        </Link>
+
+                  <div className="admin-audit-list">
+                    {selectedUserAuditRows.length ? (
+                      selectedUserAuditRows.map(auditRow => (
+                        <article key={auditRow.id}>
+                          <strong>{auditRow.action}</strong>
+                          <small>{auditRow.summary}</small>
+                          <span>
+                            {new Date(auditRow.createdAt).toLocaleString()}
+                          </span>
+                        </article>
                       ))
                     ) : (
-                      <span className="admin-access-empty-note">
-                        Assign this teacher to a course run to enable class,
-                        attendance, grading, materials, and feedback tools.
-                      </span>
+                      <article>
+                        <strong>No recent activity</strong>
+                        <small>
+                          Role, scope, and creation changes will appear here.
+                        </small>
+                      </article>
                     )}
                   </div>
-                  <form
-                    className="admin-access-form admin-access-teacher-assignment-form"
-                    onSubmit={assignSelectedTeacher}
-                    aria-busy={assigningTeacher}
-                  >
-                    <div className="admin-access-form-section">
-                      <span>Course run assignment</span>
-                      <label>
-                        Course run
-                        <select
-                          value={teacherAssignmentDraft.courseRunId}
-                          disabled={assigningTeacher}
-                          onChange={event =>
-                            setTeacherAssignmentDraft(value => ({
-                              ...value,
-                              courseRunId: event.target.value,
-                            }))
-                          }
-                        >
-                          <option value="">Choose a live course run</option>
-                          {state.courseRuns
-                            .filter(
-                              run =>
-                                run.status === "active" ||
-                                run.status === "pending"
-                            )
-                            .map(run => {
-                              const course = state.courses.find(
-                                item => item.id === run.courseId
-                              );
-                              const branch = state.branches.find(
-                                item => item.id === run.branchId
-                              );
-                              const teacher = state.users.find(
-                                item => item.id === run.teacherId
-                              );
-                              return (
-                                <option key={run.id} value={run.id}>
-                                  {course?.title ?? run.id} ·{" "}
-                                  {branch?.name ?? "Branch"} ·{" "}
-                                  {teacher?.name ?? "Unassigned"}
-                                </option>
-                              );
-                            })}
-                        </select>
-                      </label>
-                      <label>
-                        Department
-                        <select
-                          value={teacherAssignmentDraft.departmentId}
-                          disabled={
-                            assigningTeacher ||
-                            !teacherAssignmentDraft.courseRunId
-                          }
-                          onChange={event =>
-                            setTeacherAssignmentDraft(value => ({
-                              ...value,
-                              departmentId: event.target.value,
-                            }))
-                          }
-                        >
-                          <option value="">Choose department</option>
-                          {selectedAssignmentValidDepartments.map(
-                            department => (
-                              <option key={department.id} value={department.id}>
-                                {department.name}
-                              </option>
-                            )
-                          )}
-                        </select>
-                      </label>
-                      <label>
-                        Subjects / specialties
-                        <input
-                          value={teacherAssignmentDraft.specialties}
-                          disabled={assigningTeacher}
-                          onChange={event =>
-                            setTeacherAssignmentDraft(value => ({
-                              ...value,
-                              specialties: event.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Availability
-                        <input
-                          value={teacherAssignmentDraft.availability}
-                          disabled={assigningTeacher}
-                          onChange={event =>
-                            setTeacherAssignmentDraft(value => ({
-                              ...value,
-                              availability: event.target.value,
-                            }))
-                          }
-                        />
-                      </label>
+
+                  {accessUpdateError ? (
+                    <div className="platform-empty-state error">
+                      <strong>Access update was not saved</strong>
+                      <span>{accessUpdateError}</span>
                     </div>
-                    <div className="admin-access-review-card">
-                      <strong>
-                        {selectedAssignmentCourse?.title ??
-                          "Selected course run"}
-                      </strong>
-                      <small>
-                        {selectedAssignmentBranch?.name ?? "No branch"} ·{" "}
-                        {selectedAssignmentDepartment?.name ?? "No department"}{" "}
-                        · {selectedAssignmentClasses.length} class group(s)
-                      </small>
-                      <span>
-                        {selectedAssignmentPreviousTeacher &&
-                        selectedAssignmentPreviousTeacher.id !== selectedUser.id
-                          ? `Reassigns from ${selectedAssignmentPreviousTeacher.name}; class events, attendance, grading, materials, quizzes, and feedback move to ${selectedUser.name}.`
-                          : `Keeps ${selectedUser.name} connected to class events, attendance, grading, materials, quizzes, and feedback.`}
-                      </span>
-                    </div>
-                    {teacherAssignError ? (
-                      <div className="platform-empty-state error">
-                        <strong>Assignment was not saved</strong>
-                        <span>{teacherAssignError}</span>
+                  ) : null}
+
+                  {selectedUser.activeRole === "teacher" ? (
+                    <div className="admin-access-teacher-links">
+                      <div>
+                        <span>Teacher workspace ready</span>
+                        <strong>
+                          {selectedTeacherClasses.length} class group(s)
+                        </strong>
+                        <small>
+                          {selectedTeacherProfile?.specialties.join(", ") ||
+                            "No subjects added"}{" "}
+                          · {selectedTeacherAvailability.length} availability
+                          slot(s)
+                        </small>
                       </div>
-                    ) : null}
-                    {teacherAssignStatus ? (
-                      <div className="platform-empty-state success">
-                        <strong>Assignment saved</strong>
-                        <span>{teacherAssignStatus}</span>
+                      <div className="admin-access-teacher-link-grid">
+                        {teacherWorkspaceLinks.length ? (
+                          teacherWorkspaceLinks.map(item => (
+                            <Link key={item.label} href={item.href}>
+                              <span>{item.label}</span>
+                              <strong>{item.value}</strong>
+                            </Link>
+                          ))
+                        ) : (
+                          <span className="admin-access-empty-note">
+                            Assign this teacher to a course run to enable class,
+                            attendance, grading, materials, and feedback tools.
+                          </span>
+                        )}
                       </div>
-                    ) : null}
-                    <button
-                      type="submit"
-                      disabled={
-                        assigningTeacher ||
-                        !teacherAssignmentDraft.courseRunId ||
-                        !teacherAssignmentDraft.departmentId
-                      }
-                    >
-                      <ClipboardCheck size={15} />
-                      {assigningTeacher
-                        ? "Saving assignment"
-                        : selectedAssignmentPreviousTeacher &&
+                      <form
+                        className="admin-access-form admin-access-teacher-assignment-form"
+                        onSubmit={assignSelectedTeacher}
+                        aria-busy={assigningTeacher}
+                      >
+                        <div className="admin-access-form-section">
+                          <span>Course run assignment</span>
+                          <label>
+                            Course run
+                            <select
+                              value={teacherAssignmentDraft.courseRunId}
+                              disabled={assigningTeacher}
+                              onChange={event =>
+                                setTeacherAssignmentDraft(value => ({
+                                  ...value,
+                                  courseRunId: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Choose a live course run</option>
+                              {state.courseRuns
+                                .filter(
+                                  run =>
+                                    run.status === "active" ||
+                                    run.status === "pending"
+                                )
+                                .map(run => {
+                                  const course = state.courses.find(
+                                    item => item.id === run.courseId
+                                  );
+                                  const branch = state.branches.find(
+                                    item => item.id === run.branchId
+                                  );
+                                  const teacher = state.users.find(
+                                    item => item.id === run.teacherId
+                                  );
+                                  return (
+                                    <option key={run.id} value={run.id}>
+                                      {course?.title ?? run.id} ·{" "}
+                                      {branch?.name ?? "Branch"} ·{" "}
+                                      {teacher?.name ?? "Unassigned"}
+                                    </option>
+                                  );
+                                })}
+                            </select>
+                          </label>
+                          <label>
+                            Department
+                            <select
+                              value={teacherAssignmentDraft.departmentId}
+                              disabled={
+                                assigningTeacher ||
+                                !teacherAssignmentDraft.courseRunId
+                              }
+                              onChange={event =>
+                                setTeacherAssignmentDraft(value => ({
+                                  ...value,
+                                  departmentId: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Choose department</option>
+                              {selectedAssignmentValidDepartments.map(
+                                department => (
+                                  <option
+                                    key={department.id}
+                                    value={department.id}
+                                  >
+                                    {department.name}
+                                  </option>
+                                )
+                              )}
+                            </select>
+                          </label>
+                          <label>
+                            Subjects / specialties
+                            <input
+                              value={teacherAssignmentDraft.specialties}
+                              disabled={assigningTeacher}
+                              onChange={event =>
+                                setTeacherAssignmentDraft(value => ({
+                                  ...value,
+                                  specialties: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label>
+                            Availability
+                            <input
+                              value={teacherAssignmentDraft.availability}
+                              disabled={assigningTeacher}
+                              onChange={event =>
+                                setTeacherAssignmentDraft(value => ({
+                                  ...value,
+                                  availability: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="admin-access-review-card">
+                          <strong>
+                            {selectedAssignmentCourse?.title ??
+                              "Selected course run"}
+                          </strong>
+                          <small>
+                            {selectedAssignmentBranch?.name ?? "No branch"} ·{" "}
+                            {selectedAssignmentDepartment?.name ??
+                              "No department"}{" "}
+                            · {selectedAssignmentClasses.length} class group(s)
+                          </small>
+                          <span>
+                            {selectedAssignmentPreviousTeacher &&
                             selectedAssignmentPreviousTeacher.id !==
                               selectedUser.id
-                          ? "Reassign teacher"
-                          : "Assign teacher"}
-                    </button>
-                  </form>
-                </div>
+                              ? `Reassigns from ${selectedAssignmentPreviousTeacher.name}; class events, attendance, grading, materials, quizzes, and feedback move to ${selectedUser.name}.`
+                              : `Keeps ${selectedUser.name} connected to class events, attendance, grading, materials, quizzes, and feedback.`}
+                          </span>
+                        </div>
+                        {teacherAssignError ? (
+                          <div className="platform-empty-state error">
+                            <strong>Assignment was not saved</strong>
+                            <span>{teacherAssignError}</span>
+                          </div>
+                        ) : null}
+                        {teacherAssignStatus ? (
+                          <div className="platform-empty-state success">
+                            <strong>Assignment saved</strong>
+                            <span>{teacherAssignStatus}</span>
+                          </div>
+                        ) : null}
+                        <button
+                          type="submit"
+                          disabled={
+                            assigningTeacher ||
+                            !teacherAssignmentDraft.courseRunId ||
+                            !teacherAssignmentDraft.departmentId
+                          }
+                        >
+                          <ClipboardCheck size={15} />
+                          {assigningTeacher
+                            ? "Saving assignment"
+                            : selectedAssignmentPreviousTeacher &&
+                                selectedAssignmentPreviousTeacher.id !==
+                                  selectedUser.id
+                              ? "Reassign teacher"
+                              : "Assign teacher"}
+                        </button>
+                      </form>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
-            </>
+            </section>
           ) : null}
-        </section>
 
-        <section className="admin-access-panel create-user">
-          <div className="admin-access-panel-head">
-            <div>
-              <span>Create account</span>
-              <strong>{draftRoleMeta.label} setup</strong>
-            </div>
-            <CheckCircle2 size={18} />
-          </div>
-          <form
-            className="admin-access-form admin-access-guided-form"
-            onSubmit={addUser}
-          >
-            <div
-              className="admin-access-step-strip"
-              aria-label="Account creation steps"
-            >
-              <span>Identity</span>
-              <span>Role scope</span>
-              <span>Portal links</span>
-            </div>
-
-            <div className="admin-access-form-section">
-              <span>Identity</span>
-              <label>
-                Full name
-                <input
-                  value={newUser.name}
-                  onChange={event =>
-                    setNewUser(value => ({
-                      ...value,
-                      name: event.target.value,
-                    }))
-                  }
-                  placeholder="New account name"
-                />
-              </label>
-              <label>
-                Email
-                <input
-                  type="email"
-                  value={newUser.email}
-                  onChange={event =>
-                    setNewUser(value => ({
-                      ...value,
-                      email: event.target.value,
-                    }))
-                  }
-                  placeholder="name@nilelearn.local"
-                />
-              </label>
-              <label>
-                Phone / WhatsApp optional
-                <input
-                  value={newUser.phone}
-                  onChange={event =>
-                    setNewUser(value => ({
-                      ...value,
-                      phone: event.target.value,
-                    }))
-                  }
-                  placeholder="+20 100 000 0000"
-                />
-              </label>
-            </div>
-
-            <div className="admin-access-form-section">
-              <span>Role scope</span>
-              <label>
-                Role
-                <select
-                  value={newUser.role}
-                  onChange={event => {
-                    const role = safeStaffRole(event.target.value);
-                    const defaults = staffRoleDefaults[role];
-                    setNewUser(value => ({ ...value, role, ...defaults }));
-                  }}
-                >
-                  {staffRoleOptions.map(role => (
-                    <option key={role} value={role}>
-                      {roleMeta[role].label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Branch
-                <select
-                  value={newUser.branchId}
-                  onChange={event =>
-                    setNewUser(value => ({
-                      ...value,
-                      branchId: event.target.value,
-                    }))
-                  }
-                >
-                  {state.branches.map(branch => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Department
-                <select
-                  value={newUser.departmentId}
-                  onChange={event =>
-                    setNewUser(value => ({
-                      ...value,
-                      departmentId: event.target.value,
-                    }))
-                  }
-                >
-                  {state.departments.map(department => (
-                    <option key={department.id} value={department.id}>
-                      {department.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Status
-                <select
-                  value={newUser.status}
-                  onChange={event =>
-                    setNewUser(value => ({
-                      ...value,
-                      status: event.target.value as EntityStatus,
-                    }))
-                  }
-                >
-                  <option value="active">Active</option>
-                  <option value="pending">Pending</option>
-                  <option value="paused">Paused</option>
-                </select>
-              </label>
-              <label>
-                Access level
-                <select
-                  value={newUser.permissionScope}
-                  onChange={event =>
-                    setNewUser(value => ({
-                      ...value,
-                      permissionScope: event.target
-                        .value as StaffPermissionScope,
-                    }))
-                  }
-                >
-                  <option value="department">Department</option>
-                  <option value="branch">Branch</option>
-                  <option value="admissions">Admissions</option>
-                  <option value="operations">Operations</option>
-                  <option value="global">Global</option>
-                </select>
-              </label>
-            </div>
-
-            {newUser.role === "teacher" ? (
-              <div className="admin-access-form-section">
-                <span>Teacher profile</span>
-                <label>
-                  Subjects taught
-                  <input
-                    value={newUser.subjects}
-                    onChange={event =>
-                      setNewUser(value => ({
-                        ...value,
-                        subjects: event.target.value,
-                      }))
-                    }
-                    placeholder="Arabic, Quran, Tajweed"
-                  />
-                </label>
-                <label>
-                  Teaching levels
-                  <input
-                    value={newUser.teachingLevels}
-                    onChange={event =>
-                      setNewUser(value => ({
-                        ...value,
-                        teachingLevels: event.target.value,
-                      }))
-                    }
-                    placeholder="Arabic Level 3, Tajweed 1"
-                  />
-                </label>
-                <label>
-                  Availability status
-                  <select
-                    value={newUser.availabilityStatus}
-                    onChange={event =>
-                      setNewUser(value => ({
-                        ...value,
-                        availabilityStatus: event.target
-                          .value as StaffAvailabilityStatus,
-                      }))
-                    }
-                  >
-                    <option value="available">Available</option>
-                    <option value="limited">Limited</option>
-                    <option value="unavailable">Unavailable</option>
-                  </select>
-                </label>
+          {showCreateAccount ? (
+            <section className="admin-access-panel create-user">
+              <div className="admin-access-panel-head">
+                <div>
+                  <span>Create account</span>
+                  <strong>{draftRoleMeta.label} setup</strong>
+                </div>
+                <CheckCircle2 size={18} />
               </div>
-            ) : null}
+              <form
+                className="admin-access-form admin-access-guided-form"
+                onSubmit={addUser}
+              >
+                <div
+                  className="admin-access-step-strip"
+                  aria-label="Account creation steps"
+                >
+                  <span>Identity</span>
+                  <span>Role scope</span>
+                  <span>Portal links</span>
+                </div>
 
-            {newUser.role !== "teacher" ? (
-              <div className="admin-access-form-section">
-                <span>Operational profile</span>
-                <label>
-                  Operational scope
-                  <input
-                    value={newUser.operationalScope}
-                    onChange={event =>
-                      setNewUser(value => ({
-                        ...value,
-                        operationalScope: event.target.value,
-                      }))
-                    }
-                    placeholder="rooms, schedule, reports"
-                  />
-                </label>
-                {newUser.role === "headofdepartment" ? (
+                <div className="admin-access-form-section">
+                  <span>Identity</span>
                   <label>
-                    Academic coverage
+                    Full name
                     <input
-                      value={newUser.teachingLevels}
+                      value={newUser.name}
                       onChange={event =>
                         setNewUser(value => ({
                           ...value,
-                          teachingLevels: event.target.value,
+                          name: event.target.value,
                         }))
                       }
-                      placeholder="Arabic Language, Quran and Tajweed"
+                      placeholder="New account name"
                     />
                   </label>
-                ) : null}
-              </div>
-            ) : null}
+                  <label>
+                    Email
+                    <input
+                      type="email"
+                      value={newUser.email}
+                      onChange={event =>
+                        setNewUser(value => ({
+                          ...value,
+                          email: event.target.value,
+                        }))
+                      }
+                      placeholder="name@nilelearn.local"
+                    />
+                  </label>
+                  <label>
+                    Phone / WhatsApp optional
+                    <input
+                      value={newUser.phone}
+                      onChange={event =>
+                        setNewUser(value => ({
+                          ...value,
+                          phone: event.target.value,
+                        }))
+                      }
+                      placeholder="+20 100 000 0000"
+                    />
+                  </label>
+                </div>
 
-            <div className="admin-access-form-section">
-              <span>Notes</span>
-              <label>
-                Operational notes
-                <input
-                  value={newUser.notes}
-                  onChange={event =>
-                    setNewUser(value => ({
-                      ...value,
-                      notes: event.target.value,
-                    }))
-                  }
-                  placeholder="Optional context for admissions or operations"
-                />
-              </label>
-            </div>
+                <div className="admin-access-form-section">
+                  <span>Role scope</span>
+                  <label>
+                    Role
+                    <select
+                      value={newUser.role}
+                      onChange={event => {
+                        const role = safeStaffRole(event.target.value);
+                        const defaults = staffRoleDefaults[role];
+                        setNewUser(value => ({ ...value, role, ...defaults }));
+                      }}
+                    >
+                      {staffRoleOptions.map(role => (
+                        <option key={role} value={role}>
+                          {roleMeta[role].label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Branch
+                    <select
+                      value={newUser.branchId}
+                      onChange={event =>
+                        setNewUser(value => ({
+                          ...value,
+                          branchId: event.target.value,
+                        }))
+                      }
+                    >
+                      {state.branches.map(branch => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Department
+                    <select
+                      value={newUser.departmentId}
+                      onChange={event =>
+                        setNewUser(value => ({
+                          ...value,
+                          departmentId: event.target.value,
+                        }))
+                      }
+                    >
+                      {state.departments.map(department => (
+                        <option key={department.id} value={department.id}>
+                          {department.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Status
+                    <select
+                      value={newUser.status}
+                      onChange={event =>
+                        setNewUser(value => ({
+                          ...value,
+                          status: event.target.value as EntityStatus,
+                        }))
+                      }
+                    >
+                      <option value="active">Active</option>
+                      <option value="pending">Pending</option>
+                      <option value="paused">Paused</option>
+                    </select>
+                  </label>
+                  <label>
+                    Access level
+                    <select
+                      value={newUser.permissionScope}
+                      onChange={event =>
+                        setNewUser(value => ({
+                          ...value,
+                          permissionScope: event.target
+                            .value as StaffPermissionScope,
+                        }))
+                      }
+                    >
+                      <option value="department">Department</option>
+                      <option value="branch">Branch</option>
+                      <option value="admissions">Admissions</option>
+                      <option value="operations">Operations</option>
+                      <option value="global">Global</option>
+                    </select>
+                  </label>
+                </div>
 
-            <div className="admin-access-review-card">
-              <strong>{newUser.name.trim() || "New account"}</strong>
-              <small>
-                {draftRoleMeta.label} · {draftBranch?.name ?? "No branch"} ·{" "}
-                {draftDepartment?.name ?? "No department"}
-              </small>
-              {newUser.role === "teacher" ? (
-                <span>
-                  Creates a teacher profile with{" "}
-                  {splitListInput(newUser.subjects).length} subject(s),{" "}
-                  {splitListInput(newUser.teachingLevels).length} teaching
-                  level(s), and {newUser.availabilityStatus} availability.
-                  Course assignment stays in the selected account panel.
-                </span>
-              ) : (
-                <span>
-                  Creates a {newUser.permissionScope} staff profile with{" "}
-                  {splitListInput(newUser.operationalScope).length} operational
-                  scope item(s) and existing access rules for{" "}
-                  {draftRoleMeta.label}.
-                </span>
-              )}
-            </div>
-
-            {createAccountError ? (
-              <div className="platform-empty-state error">
-                <strong>Account was not created</strong>
-                <span>{createAccountError}</span>
-              </div>
-            ) : null}
-
-            <button type="submit" disabled={creatingAccount}>
-              <UserPlus size={15} />
-              {creatingAccount
-                ? "Creating account"
-                : "Create connected account"}
-            </button>
-          </form>
-        </section>
-      </div>
-
-      <div className="admin-access-lower-grid">
-        <section
-          className="admin-access-panel permission-matrix"
-          aria-busy={savingGovernance}
-        >
-          <div className="admin-access-panel-head">
-            <div>
-              <span>Access rules</span>
-              <strong>{selectedRoleMeta.label}</strong>
-            </div>
-            <select
-              value={safeRole(selectedRole)}
-              disabled={savingGovernance}
-              onChange={event => setSelectedRole(safeRole(event.target.value))}
-              aria-label="Permission role"
-            >
-              {roleOrder.map(role => (
-                <option key={role} value={role}>
-                  {roleMeta[role].label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="admin-permission-grid">
-            {allPermissions.map(permission => {
-              const granted = (state.permissions[selectedRole] ?? []).includes(
-                permission
-              );
-              return (
-                <button
-                  key={permission}
-                  className={granted ? "granted" : ""}
-                  disabled={savingGovernance}
-                  onClick={() => togglePermission(selectedRole, permission)}
-                >
-                  <span>
-                    {granted ? <CheckCircle2 size={14} /> : <X size={14} />}
-                  </span>
-                  <strong>{formatPermission(permission)}</strong>
-                </button>
-              );
-            })}
-          </div>
-          {governanceUpdateError ? (
-            <div className="platform-empty-state error">
-              <strong>Governance update was not saved</strong>
-              <span>{governanceUpdateError}</span>
-            </div>
-          ) : null}
-        </section>
-
-        <section
-          className="admin-access-panel branch-scope"
-          aria-busy={savingGovernance}
-        >
-          <div className="admin-access-panel-head">
-            <div>
-              <span>Branch access</span>
-              <strong>{state.branches.length} branches</strong>
-            </div>
-            <Building2 size={18} />
-          </div>
-          <div className="admin-branch-list">
-            {state.branches.map(branch => {
-              const users = state.users.filter(
-                user => user.branchId === branch.id
-              ).length;
-              const departments = state.departments.filter(department =>
-                department.branchIds.includes(branch.id)
-              ).length;
-              return (
-                <article key={branch.id}>
-                  <div>
-                    <strong>{branch.name}</strong>
-                    <small>
-                      {branch.code} · {branch.timezone} · {users} users ·{" "}
-                      {departments} departments
-                    </small>
+                {newUser.role === "teacher" ? (
+                  <div className="admin-access-form-section">
+                    <span>Teacher profile</span>
+                    <label>
+                      Subjects taught
+                      <input
+                        value={newUser.subjects}
+                        onChange={event =>
+                          setNewUser(value => ({
+                            ...value,
+                            subjects: event.target.value,
+                          }))
+                        }
+                        placeholder="Arabic, Quran, Tajweed"
+                      />
+                    </label>
+                    <label>
+                      Teaching levels
+                      <input
+                        value={newUser.teachingLevels}
+                        onChange={event =>
+                          setNewUser(value => ({
+                            ...value,
+                            teachingLevels: event.target.value,
+                          }))
+                        }
+                        placeholder="Arabic Level 3, Tajweed 1"
+                      />
+                    </label>
+                    <label>
+                      Availability status
+                      <select
+                        value={newUser.availabilityStatus}
+                        onChange={event =>
+                          setNewUser(value => ({
+                            ...value,
+                            availabilityStatus: event.target
+                              .value as StaffAvailabilityStatus,
+                          }))
+                        }
+                      >
+                        <option value="available">Available</option>
+                        <option value="limited">Limited</option>
+                        <option value="unavailable">Unavailable</option>
+                      </select>
+                    </label>
                   </div>
-                  <select
-                    value={branch.status}
-                    disabled={savingGovernance}
-                    onChange={event =>
-                      updateBranchStatus(
-                        branch.id,
-                        event.target.value as EntityStatus
-                      )
-                    }
-                    aria-label={`${branch.name} status`}
-                  >
-                    <option value="active">Active</option>
-                    <option value="paused">Paused</option>
-                    <option value="pending">Pending</option>
-                  </select>
-                </article>
-              );
-            })}
-          </div>
-        </section>
+                ) : null}
 
-        <section className="admin-access-panel audit-feed">
-          <div className="admin-access-panel-head">
-            <div>
-              <span>Activity</span>
-              <strong>Recent access changes</strong>
+                {newUser.role !== "teacher" ? (
+                  <div className="admin-access-form-section">
+                    <span>Operational profile</span>
+                    <label>
+                      Operational scope
+                      <input
+                        value={newUser.operationalScope}
+                        onChange={event =>
+                          setNewUser(value => ({
+                            ...value,
+                            operationalScope: event.target.value,
+                          }))
+                        }
+                        placeholder="rooms, schedule, reports"
+                      />
+                    </label>
+                    {newUser.role === "headofdepartment" ? (
+                      <label>
+                        Academic coverage
+                        <input
+                          value={newUser.teachingLevels}
+                          onChange={event =>
+                            setNewUser(value => ({
+                              ...value,
+                              teachingLevels: event.target.value,
+                            }))
+                          }
+                          placeholder="Arabic Language, Quran and Tajweed"
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="admin-access-form-section">
+                  <span>Notes</span>
+                  <label>
+                    Operational notes
+                    <input
+                      value={newUser.notes}
+                      onChange={event =>
+                        setNewUser(value => ({
+                          ...value,
+                          notes: event.target.value,
+                        }))
+                      }
+                      placeholder="Optional context for admissions or operations"
+                    />
+                  </label>
+                </div>
+
+                <div className="admin-access-review-card">
+                  <strong>{newUser.name.trim() || "New account"}</strong>
+                  <small>
+                    {draftRoleMeta.label} · {draftBranch?.name ?? "No branch"} ·{" "}
+                    {draftDepartment?.name ?? "No department"}
+                  </small>
+                  {newUser.role === "teacher" ? (
+                    <span>
+                      Creates a teacher profile with{" "}
+                      {splitListInput(newUser.subjects).length} subject(s),{" "}
+                      {splitListInput(newUser.teachingLevels).length} teaching
+                      level(s), and {newUser.availabilityStatus} availability.
+                      Course assignment stays in the selected account panel.
+                    </span>
+                  ) : (
+                    <span>
+                      Creates a {newUser.permissionScope} staff profile with{" "}
+                      {splitListInput(newUser.operationalScope).length}{" "}
+                      operational scope item(s) and existing access rules for{" "}
+                      {draftRoleMeta.label}.
+                    </span>
+                  )}
+                </div>
+
+                {createAccountError ? (
+                  <div className="platform-empty-state error">
+                    <strong>Account was not created</strong>
+                    <span>{createAccountError}</span>
+                  </div>
+                ) : null}
+
+                <button type="submit" disabled={creatingAccount}>
+                  <UserPlus size={15} />
+                  {creatingAccount
+                    ? "Creating account"
+                    : "Create connected account"}
+                </button>
+              </form>
+            </section>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className={`admin-access-lower-grid admin-access-${accessMode}`}>
+        {showPermissionPanel ? (
+          <section
+            className="admin-access-panel permission-matrix"
+            aria-busy={savingGovernance}
+          >
+            <div className="admin-access-panel-head">
+              <div>
+                <span>Access rules</span>
+                <strong>{selectedRoleMeta.label}</strong>
+              </div>
+              <select
+                value={safeRole(selectedRole)}
+                disabled={savingGovernance}
+                onChange={event =>
+                  setSelectedRole(safeRole(event.target.value))
+                }
+                aria-label="Permission role"
+              >
+                {roleOrder.map(role => (
+                  <option key={role} value={role}>
+                    {roleMeta[role].label}
+                  </option>
+                ))}
+              </select>
             </div>
-            <ShieldCheck size={18} />
-          </div>
-          <div className="admin-audit-list">
-            {auditRows.map(auditRow => (
-              <article key={auditRow.id}>
-                <strong>{auditRow.action}</strong>
-                <small>{auditRow.summary}</small>
-                <span>{new Date(auditRow.createdAt).toLocaleString()}</span>
-              </article>
-            ))}
-          </div>
-        </section>
+            <div className="admin-permission-grid">
+              {allPermissions.map(permission => {
+                const granted = (
+                  state.permissions[selectedRole] ?? []
+                ).includes(permission);
+                return (
+                  <button
+                    key={permission}
+                    className={granted ? "granted" : ""}
+                    disabled={savingGovernance}
+                    onClick={() => togglePermission(selectedRole, permission)}
+                  >
+                    <span>
+                      {granted ? <CheckCircle2 size={14} /> : <X size={14} />}
+                    </span>
+                    <strong>{formatPermission(permission)}</strong>
+                  </button>
+                );
+              })}
+            </div>
+            {governanceUpdateError ? (
+              <div className="platform-empty-state error">
+                <strong>Governance update was not saved</strong>
+                <span>{governanceUpdateError}</span>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {showBranchPanel ? (
+          <section
+            className="admin-access-panel branch-scope"
+            aria-busy={savingGovernance}
+          >
+            <div className="admin-access-panel-head">
+              <div>
+                <span>Branch access</span>
+                <strong>{state.branches.length} branches</strong>
+              </div>
+              <Building2 size={18} />
+            </div>
+            <div className="admin-branch-list">
+              {state.branches.map(branch => {
+                const users = state.users.filter(
+                  user => user.branchId === branch.id
+                ).length;
+                const departments = state.departments.filter(department =>
+                  department.branchIds.includes(branch.id)
+                ).length;
+                return (
+                  <article key={branch.id}>
+                    <div>
+                      <strong>{branch.name}</strong>
+                      <small>
+                        {branch.code} · {branch.timezone} · {users} users ·{" "}
+                        {departments} departments
+                      </small>
+                    </div>
+                    <select
+                      value={branch.status}
+                      disabled={savingGovernance}
+                      onChange={event =>
+                        updateBranchStatus(
+                          branch.id,
+                          event.target.value as EntityStatus
+                        )
+                      }
+                      aria-label={`${branch.name} status`}
+                    >
+                      <option value="active">Active</option>
+                      <option value="paused">Paused</option>
+                      <option value="pending">Pending</option>
+                    </select>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {showAuditPanel ? (
+          <section className="admin-access-panel audit-feed">
+            <div className="admin-access-panel-head">
+              <div>
+                <span>Activity</span>
+                <strong>Recent access changes</strong>
+              </div>
+              <ShieldCheck size={18} />
+            </div>
+            <div className="admin-audit-list">
+              {auditRows.map(auditRow => (
+                <article key={auditRow.id}>
+                  <strong>{auditRow.action}</strong>
+                  <small>{auditRow.summary}</small>
+                  <span>{new Date(auditRow.createdAt).toLocaleString()}</span>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   );
@@ -3365,6 +3429,10 @@ function AcademicGovernanceExperience({
   const selectedCourse =
     programCourses.find(course => course.id === selectedCourseId) ??
     programCourses[0];
+  const selectedDepartment =
+    academicDepartments.find(
+      department => department.id === selectedProgram?.departmentId
+    ) ?? academicDepartments[0];
   const selectedLevel = state.levels.find(
     level => level.id === selectedCourse?.levelId
   );
@@ -3877,6 +3945,419 @@ function AcademicGovernanceExperience({
           ["Messages", "messages", MessageSquare],
         ]
   ) as Array<[string, string, typeof BookOpen]>;
+  const adminAcademicCopy: Record<
+    string,
+    { title: string; description: string; context: string }
+  > = {
+    departments: {
+      title: "Departments",
+      description:
+        "Manage academic ownership, programs, and teaching coverage.",
+      context: "Department ownership",
+    },
+    programs: {
+      title: "Programs",
+      description: "Review program structure, levels, and course coverage.",
+      context: "Program structure",
+    },
+    courses: {
+      title: "Courses",
+      description: "Update course status and maintain curriculum modules.",
+      context: "Course catalog",
+    },
+  };
+
+  if (scope === "admin") {
+    const pageCopy = adminAcademicCopy[pageId] ?? adminAcademicCopy.departments;
+
+    return (
+      <div
+        className={`academic-governance-workspace admin-academic-focused admin-academic-${pageId}`}
+      >
+        <PlatformWorkspaceHeader
+          className="academic-governance-hero"
+          title={pageCopy.title}
+          description={pageCopy.description}
+          context={<span>{pageCopy.context}</span>}
+          actionsClassName="academic-governance-actions"
+          actions={
+            <>
+              {academicNavItems.map(([label, routeId, Icon]) => (
+                <Link
+                  key={String(routeId)}
+                  href={`/app/admin/${routeId}`}
+                  className={pageId === routeId ? "active" : ""}
+                  aria-current={pageId === routeId ? "page" : undefined}
+                >
+                  <Icon size={15} />
+                  {label as string}
+                </Link>
+              ))}
+            </>
+          }
+        />
+
+        <div className="academic-governance-kpis">
+          <AdminAccessMetric
+            label="Departments"
+            value={String(academicDepartments.length)}
+          />
+          <AdminAccessMetric label="Programs" value={String(programs.length)} />
+          <AdminAccessMetric
+            label="Active courses"
+            value={`${activeCourses}/${scopedCourses.length}`}
+          />
+          <AdminAccessMetric label="Teachers" value={String(teacherCount)} />
+        </div>
+
+        {pageId === "departments" ? (
+          <div className="admin-academic-focus-grid departments">
+            <section className="academic-panel academic-program-rail">
+              <div className="academic-panel-head">
+                <div>
+                  <span>Department directory</span>
+                  <strong>{academicDepartments.length} departments</strong>
+                </div>
+                <Building2 size={18} />
+              </div>
+              <div className="academic-program-list">
+                {academicDepartments.map(department => {
+                  const departmentPrograms = programs.filter(
+                    program => program.departmentId === department.id
+                  );
+                  const departmentTeachers = state.teachers.filter(
+                    teacher => teacher.departmentId === department.id
+                  );
+                  return (
+                    <button
+                      key={department.id}
+                      className={
+                        selectedDepartment?.id === department.id ? "active" : ""
+                      }
+                      onClick={() => {
+                        const program = programs.find(
+                          item => item.departmentId === department.id
+                        );
+                        if (program) selectProgram(program.id);
+                      }}
+                    >
+                      <span>{department.name.slice(0, 2).toUpperCase()}</span>
+                      <div>
+                        <strong>{department.name}</strong>
+                        <small>
+                          {departmentPrograms.length} programs ·{" "}
+                          {departmentTeachers.length} teachers
+                        </small>
+                      </div>
+                      <em>{department.status}</em>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="academic-panel admin-academic-summary-panel">
+              <div className="academic-panel-head">
+                <div>
+                  <span>Department profile</span>
+                  <strong>{selectedDepartment?.name ?? "No department"}</strong>
+                </div>
+                <Users size={18} />
+              </div>
+              <div className="academic-course-stats">
+                <article>
+                  <span>Programs</span>
+                  <strong>
+                    {
+                      programs.filter(
+                        program =>
+                          program.departmentId === selectedDepartment?.id
+                      ).length
+                    }
+                  </strong>
+                </article>
+                <article>
+                  <span>Teachers</span>
+                  <strong>
+                    {
+                      state.teachers.filter(
+                        teacher =>
+                          teacher.departmentId === selectedDepartment?.id
+                      ).length
+                    }
+                  </strong>
+                </article>
+                <article>
+                  <span>Branches</span>
+                  <strong>{selectedDepartment?.branchIds.length ?? 0}</strong>
+                </article>
+              </div>
+              <div className="academic-class-list compact">
+                {programs
+                  .filter(
+                    program => program.departmentId === selectedDepartment?.id
+                  )
+                  .map(program => (
+                    <article key={program.id}>
+                      <div>
+                        <strong>{program.title}</strong>
+                        <small>
+                          {program.language} · {program.category}
+                        </small>
+                      </div>
+                      <span>{program.status}</span>
+                    </article>
+                  ))}
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        {pageId === "programs" ? (
+          <div className="admin-academic-focus-grid programs">
+            <section className="academic-panel academic-program-rail">
+              <div className="academic-panel-head">
+                <div>
+                  <span>Program portfolio</span>
+                  <strong>{visiblePrograms.length} programs</strong>
+                </div>
+                <BookOpen size={18} />
+              </div>
+              <div className="platform-toolbar-search academic-search">
+                <Search size={15} />
+                <input
+                  aria-label="Search academic programs and departments"
+                  value={query}
+                  onChange={event => setQuery(event.target.value)}
+                  placeholder="Search programs"
+                />
+              </div>
+              <div className="academic-program-list">
+                {visiblePrograms.map(program => {
+                  const department = state.departments.find(
+                    item => item.id === program.departmentId
+                  );
+                  const courses = state.courses.filter(
+                    course => course.programId === program.id
+                  );
+                  const levels = state.levels.filter(
+                    level => level.programId === program.id
+                  );
+                  return (
+                    <button
+                      key={program.id}
+                      className={
+                        selectedProgram?.id === program.id ? "active" : ""
+                      }
+                      onClick={() => selectProgram(program.id)}
+                    >
+                      <span>{program.category.slice(0, 2).toUpperCase()}</span>
+                      <div>
+                        <strong>{program.title}</strong>
+                        <small>
+                          {department?.name ?? "No department"} ·{" "}
+                          {courses.length} courses · {levels.length} levels
+                        </small>
+                      </div>
+                      <em>{program.status}</em>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="academic-panel academic-level-panel">
+              <div className="academic-panel-head">
+                <div>
+                  <span>Level structure</span>
+                  <strong>{selectedProgram?.title ?? "Program"}</strong>
+                </div>
+                <Layers size={18} />
+              </div>
+              <div className="academic-level-list">
+                {state.levels
+                  .filter(level => level.programId === selectedProgram?.id)
+                  .sort((a, b) => a.order - b.order)
+                  .map(level => (
+                    <article
+                      key={level.id}
+                      className={selectedLevel?.id === level.id ? "active" : ""}
+                    >
+                      <div>
+                        <strong>{level.title}</strong>
+                        <small>{level.prerequisites.join(" · ")}</small>
+                      </div>
+                      <div>
+                        {level.completionRules.map(rule => (
+                          <span key={rule}>{rule}</span>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        {pageId === "courses" ? (
+          <div className="admin-academic-focus-grid courses">
+            <section className="academic-panel academic-catalog-panel">
+              <div className="academic-panel-head">
+                <div>
+                  <span>Course catalog</span>
+                  <strong>
+                    {selectedProgram?.title ?? "No program selected"}
+                  </strong>
+                </div>
+                <select
+                  value={selectedCourse?.id ?? ""}
+                  onChange={event => setSelectedCourseId(event.target.value)}
+                  aria-label="Selected course"
+                >
+                  {programCourses.map(course => (
+                    <option key={course.id} value={course.id}>
+                      {course.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedCourse ? (
+                <div className="academic-course-profile">
+                  <div>
+                    <span>{selectedLevel?.title ?? "No level"}</span>
+                    <h3>{selectedCourse.title}</h3>
+                    <p>{selectedCourse.description}</p>
+                  </div>
+                  <label>
+                    Course status
+                    <select
+                      value={selectedCourse.status}
+                      disabled={courseStatusSavingKey === selectedCourse.id}
+                      onChange={event =>
+                        void updateCourseStatus(
+                          selectedCourse.id,
+                          event.target.value as Extract<
+                            EntityStatus,
+                            "draft" | "active" | "paused" | "completed"
+                          >
+                        )
+                      }
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="active">Active</option>
+                      <option value="paused">Paused</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+
+              <div className="academic-outcome-list">
+                {(selectedCourse?.outcomes ?? []).map(outcome => (
+                  <span key={outcome}>
+                    <CheckCircle2 size={14} />
+                    {outcome}
+                  </span>
+                ))}
+              </div>
+              <div className="academic-course-stats">
+                <article>
+                  <span>Modules</span>
+                  <strong>{selectedModules.length}</strong>
+                </article>
+                <article>
+                  <span>Lessons</span>
+                  <strong>{selectedLessons.length}</strong>
+                </article>
+                <article>
+                  <span>Resources</span>
+                  <strong>
+                    {
+                      state.resources.filter(resource =>
+                        selectedLessons.some(lesson =>
+                          lesson.resourceIds.includes(resource.id)
+                        )
+                      ).length
+                    }
+                  </strong>
+                </article>
+              </div>
+            </section>
+
+            <section className="academic-panel academic-curriculum-panel">
+              <div className="academic-panel-head">
+                <div>
+                  <span>Curriculum builder</span>
+                  <strong>{selectedCourse?.title ?? "Course"}</strong>
+                </div>
+                <FileText size={18} />
+              </div>
+              <div className="academic-module-list">
+                {selectedModules.map(module => {
+                  const lessons = state.lessons.filter(
+                    lesson => lesson.moduleId === module.id
+                  );
+                  return (
+                    <article key={module.id}>
+                      <div>
+                        <strong>
+                          {module.order}. {module.title}
+                        </strong>
+                        <small>
+                          {lessons.length} lessons ·{" "}
+                          {module.outcomes.join(", ")}
+                        </small>
+                      </div>
+                      <em>
+                        {lessons.reduce(
+                          (sum, lesson) => sum + lesson.durationMinutes,
+                          0
+                        )}{" "}
+                        min
+                      </em>
+                    </article>
+                  );
+                })}
+              </div>
+              <form className="academic-module-form" onSubmit={addModule}>
+                <label>
+                  Module title
+                  <input
+                    value={moduleDraft.title}
+                    onChange={event =>
+                      setModuleDraft(value => ({
+                        ...value,
+                        title: event.target.value,
+                      }))
+                    }
+                    placeholder="New curriculum module"
+                  />
+                </label>
+                <label>
+                  Outcomes
+                  <input
+                    value={moduleDraft.outcomes}
+                    onChange={event =>
+                      setModuleDraft(value => ({
+                        ...value,
+                        outcomes: event.target.value,
+                      }))
+                    }
+                    placeholder="Outcome one, outcome two"
+                  />
+                </label>
+                <button type="submit" disabled={moduleSaving}>
+                  <Plus size={15} />
+                  {moduleSaving ? "Adding..." : "Add module"}
+                </button>
+              </form>
+            </section>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="academic-governance-workspace">
@@ -3891,11 +4372,7 @@ function AcademicGovernanceExperience({
             {academicNavItems.map(([label, routeId, Icon]) => (
               <Link
                 key={String(routeId)}
-                href={
-                  scope === "admin"
-                    ? `/app/admin/${routeId}`
-                    : `/app/hod/${routeId}`
-                }
+                href={`/app/hod/${routeId}`}
                 className={pageId === routeId ? "active" : ""}
                 aria-current={pageId === routeId ? "page" : undefined}
               >
@@ -6299,14 +6776,6 @@ function RegistrarAdmissionsExperience({
             : selectedStudent?.status !== "active"
               ? "Activate portal"
               : "Monitor progress";
-  const paymentBalance = state.invoices.reduce((total, invoice) => {
-    const paid = state.payments
-      .filter(
-        payment => payment.invoiceId === invoice.id && payment.status === "paid"
-      )
-      .reduce((sum, payment) => sum + payment.amount, 0);
-    return total + Math.max(0, invoice.amount - paid);
-  }, 0);
   const registrarAuditRows = state.auditLogs
     .filter(audit =>
       /lead|application|placement|enrollment|payment|invoice|student/i.test(
@@ -6401,42 +6870,112 @@ function RegistrarAdmissionsExperience({
           : activePage === "students"
             ? "Student records"
             : "Admissions pipeline";
-  const showLeadDesk = activePage === "dashboard" || activePage === "leads";
-  const showPlacementDesk =
-    activePage === "dashboard" ||
-    activePage === "placement-tests" ||
-    activePage === "applications";
-  const showFinanceDesk = activePage === "dashboard";
-  const showApplicationsDesk =
-    activePage === "dashboard" ||
-    activePage === "applications" ||
-    activePage === "leads";
-  const showEnrollmentDesk =
-    activePage === "dashboard" ||
-    activePage === "applications" ||
-    activePage === "placement-tests" ||
-    activePage === "enrollments" ||
-    activePage === "classes";
-  const showStudentDesk =
-    activePage === "dashboard" ||
-    activePage === "students" ||
-    activePage === "enrollments" ||
-    activePage === "classes";
-  const showStudentCreateDesk =
-    activePage === "students" ||
-    activePage === "enrollments" ||
-    activePage === "classes";
-  const showAuditDesk =
-    activePage === "dashboard" ||
-    activePage === "reports" ||
-    activePage === "settings";
-  const showOperationsDesk = [
-    "schedule",
-    "messages",
-    "settings",
-    "reports",
-    "classes",
-  ].includes(activePage);
+  const registrarPageCopy =
+    pageId === "lead-detail"
+      ? {
+          title: selectedLead?.fullName ?? "Lead detail",
+          description: "Review one enquiry and its next follow-up.",
+          context: "Lead detail",
+        }
+        : pageId === "application-detail"
+        ? {
+            title: selectedApplicationLead?.fullName ?? "Application detail",
+            description: "Review one application file and next step.",
+            context: "Application detail",
+          }
+        : pageId === "student-detail"
+          ? {
+              title: selectedStudentUser?.name ?? "Student detail",
+              description: "Review one student record and current status.",
+              context: "Student detail",
+            }
+          : pageId === "placement-detail"
+            ? {
+                title: selectedPlacement?.fullName ?? "Placement detail",
+                description: "Record the result for one placement booking.",
+                context: "Placement detail",
+              }
+            : activePage === "leads"
+              ? {
+                  title: "Leads",
+                  description: "Capture enquiries and follow up.",
+                  context: "Admissions pipeline",
+                }
+              : activePage === "applications"
+                ? {
+                    title: "Applications",
+                    description: "Create and review application files.",
+                    context: "Application desk",
+                  }
+                : activePage === "placement-tests"
+                  ? {
+                      title: "Placement tests",
+                      description: "Book placement tests and record results.",
+                      context: "Placement desk",
+                    }
+                  : activePage === "students"
+                    ? {
+                        title: "Students",
+                        description: "Find student records and create students.",
+                        context: "Student records",
+                      }
+                    : activePage === "enrollments"
+                      ? {
+                          title: "Enrollments",
+                          description: "Activate students into courses and classes.",
+                          context: "Enrollment handoff",
+                        }
+                      : activePage === "classes"
+                        ? {
+                            title: "Classes",
+                            description: "Review class assignment and delivery readiness.",
+                            context: "Enrollment delivery",
+                          }
+                        : activePage === "payments"
+                          ? {
+                              title: "Payments",
+                              description: "Record receipts and review open balances.",
+                              context: "Payment desk",
+                            }
+                          : activePage === "messages"
+                            ? {
+                                title: "Messages",
+                                description: "Follow up with admissions contacts.",
+                                context: "Admissions follow-up",
+                              }
+                            : activePage === "reports"
+                              ? {
+                                  title: "Reports",
+                                  description: "Review registrar activity and outcomes.",
+                                  context: "Activity reports",
+                                }
+                              : activePage === "settings"
+                                ? {
+                                    title: "Settings",
+                                    description: "Manage admissions defaults.",
+                                    context: "Admissions settings",
+                                  }
+                                : {
+                                    title: "Admissions",
+                                    description: "Manage one registrar task at a time.",
+                                    context: focusLabel,
+                                  };
+  const isRegistrarDetailPage = [
+    "lead-detail",
+    "application-detail",
+    "student-detail",
+    "placement-detail",
+  ].includes(pageId);
+  const showLeadDesk = activePage === "leads";
+  const showPlacementDesk = activePage === "placement-tests";
+  const showApplicationsDesk = activePage === "applications";
+  const showEnrollmentDesk = activePage === "enrollments";
+  const showStudentDesk = activePage === "students" || activePage === "classes";
+  const showStudentCreateDesk = activePage === "students";
+  const showAuditDesk = activePage === "reports";
+  const showOperationsDesk = ["messages", "settings", "reports", "classes"].includes(
+    activePage
+  );
   const registrarMessages = state.communicationLogs
     .filter(
       log =>
@@ -6758,15 +7297,36 @@ function RegistrarAdmissionsExperience({
   };
 
   const recordInvoicePayment = async (invoiceId: string, balance: number) => {
-    const requestedAmount = Number(paymentAmountDrafts[invoiceId] ?? balance);
+    const paymentRow = Array.from(
+      document.querySelectorAll<HTMLElement>(".registrar-payment-row")
+    ).find(row => row.dataset.invoiceId === invoiceId);
+    const amountInput = paymentRow?.querySelector<HTMLInputElement>(
+      ".registrar-payment-amount-input"
+    );
+    const methodSelect = paymentRow?.querySelector<HTMLSelectElement>(
+      ".registrar-payment-record-fields select"
+    );
+    const referenceInput = Array.from(
+      paymentRow?.querySelectorAll<HTMLInputElement>(
+        ".registrar-payment-record-fields input"
+      ) ?? []
+    ).find(input => !input.classList.contains("registrar-payment-amount-input"));
+    const requestedAmount = Number(
+      paymentAmountDrafts[invoiceId] ?? amountInput?.value ?? balance
+    );
     const result = await runRegistrarAction(
       `payment.record:${invoiceId}`,
       {
         type: "payment.record",
         invoiceId,
         amount: Number.isFinite(requestedAmount) ? requestedAmount : balance,
-        method: paymentMethodDrafts[invoiceId] ?? "manual",
-        reference: paymentReferenceDrafts[invoiceId]?.trim() || undefined,
+        method: (paymentMethodDrafts[invoiceId] ??
+          methodSelect?.value ??
+          "manual") as Payment["method"],
+        reference:
+          paymentReferenceDrafts[invoiceId]?.trim() ||
+          referenceInput?.value.trim() ||
+          undefined,
         actorId,
       },
       "Payment recorded"
@@ -6816,9 +7376,9 @@ function RegistrarAdmissionsExperience({
     <div className="registrar-workspace">
       <PlatformWorkspaceHeader
         className="registrar-hero"
-        title="Admissions workspace"
-        description="Manage leads, applications, placement, enrollments, payments, and follow-up."
-        context={<span>{focusLabel}</span>}
+        title={registrarPageCopy.title}
+        description={registrarPageCopy.description}
+        context={<span>{registrarPageCopy.context}</span>}
         actionsClassName="registrar-actions"
         actions={
           <>
@@ -6845,23 +7405,6 @@ function RegistrarAdmissionsExperience({
           </>
         }
       />
-
-      <div className="registrar-kpis">
-        <AdminAccessMetric label="Leads" value={String(state.leads.length)} />
-        <AdminAccessMetric
-          label="Applications"
-          value={String(state.applications.length)}
-        />
-        <AdminAccessMetric
-          label="Pending placement"
-          value={String(pendingPlacements.length)}
-        />
-        <AdminAccessMetric
-          label="Ready to enroll"
-          value={String(readyWorkflows.length)}
-        />
-        <AdminAccessMetric label="Balance" value={`EGP ${paymentBalance}`} />
-      </div>
 
       {activePage === "payments" ? (
         <div className="registrar-payment-desk">
@@ -6946,6 +7489,7 @@ function RegistrarAdmissionsExperience({
                 <article
                   key={row.invoice.id}
                   className="registrar-payment-row"
+                  data-invoice-id={row.invoice.id}
                   role="row"
                 >
                   <div role="cell">
@@ -7076,47 +7620,6 @@ function RegistrarAdmissionsExperience({
             </div>
           </section>
 
-          <section className="registrar-panel registrar-payment-audit">
-            <div className="registrar-panel-head">
-              <div>
-                <span>Reconciliation audit</span>
-                <strong>Recent payment evidence</strong>
-              </div>
-              <ClipboardCheck size={18} />
-            </div>
-            <div className="admin-audit-list">
-              {registrarAuditRows.filter(row =>
-                /payment|invoice/i.test(
-                  `${row.action} ${row.entityType} ${row.summary}`
-                )
-              ).length ? (
-                registrarAuditRows
-                  .filter(row =>
-                    /payment|invoice/i.test(
-                      `${row.action} ${row.entityType} ${row.summary}`
-                    )
-                  )
-                  .map(auditRow => (
-                    <article key={auditRow.id}>
-                      <strong>{auditRow.action}</strong>
-                      <small>{auditRow.summary}</small>
-                      <span>
-                        {new Date(auditRow.createdAt).toLocaleString()}
-                      </span>
-                    </article>
-                  ))
-              ) : (
-                <article>
-                  <strong>payment.ready</strong>
-                  <small>
-                    Payment records will appear here after a registrar records a
-                    receipt.
-                  </small>
-                  <span>Now</span>
-                </article>
-              )}
-            </div>
-          </section>
         </div>
       ) : (
         <>
@@ -7320,7 +7823,31 @@ function RegistrarAdmissionsExperience({
                             {selectedPlacement?.email ?? "No email"}
                           </small>
                         </article>
+                        <div className="registrar-placement-inputs">
+                          <label>
+                            Recommended level
+                            <input
+                              value={recommendedLevel}
+                              onChange={event =>
+                                setRecommendedLevel(event.target.value)
+                              }
+                            />
+                          </label>
+                          <label>
+                            Score
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={score}
+                              onChange={event =>
+                                setScore(Number(event.target.value))
+                              }
+                            />
+                          </label>
+                        </div>
                         <button
+                          type="button"
                           disabled={
                             !selectedPlacement ||
                             selectedPlacement.status === "completed" ||
@@ -7773,8 +8300,10 @@ function RegistrarAdmissionsExperience({
             </section>
           ) : null}
 
-          <div className="registrar-layout">
-            {showLeadDesk ? (
+          {!isRegistrarDetailPage ? (
+            <>
+              <div className="registrar-layout">
+                {showLeadDesk ? (
               <section className="registrar-panel registrar-intake-panel">
                 <div className="registrar-panel-head">
                   <div>
@@ -7784,7 +8313,14 @@ function RegistrarAdmissionsExperience({
                   <Megaphone size={18} />
                 </div>
                 <div className="registrar-lead-list">
-                  {state.leads.slice(0, 5).map(lead => {
+                  {[...state.leads]
+                    .sort(
+                      (a, b) =>
+                        new Date(b.createdAt).getTime() -
+                        new Date(a.createdAt).getTime()
+                    )
+                    .slice(0, 5)
+                    .map(lead => {
                     const converted = state.applications.some(
                       application => application.leadId === lead.id
                     );
@@ -8080,6 +8616,7 @@ function RegistrarAdmissionsExperience({
                     </label>
                   </div>
                   <button
+                    type="button"
                     disabled={
                       !selectedPlacement ||
                       selectedPlacement.status === "completed" ||
@@ -8391,74 +8928,6 @@ function RegistrarAdmissionsExperience({
               </section>
             ) : null}
 
-            {showFinanceDesk ? (
-              <section className="registrar-panel registrar-finance-panel">
-                <div className="registrar-panel-head">
-                  <div>
-                    <span>Finance</span>
-                    <strong>Invoices and receipts</strong>
-                  </div>
-                  <CreditCard size={18} />
-                </div>
-                <div className="registrar-invoice-list">
-                  {state.invoices.map(invoice => {
-                    const student = state.students.find(
-                      item => item.id === invoice.studentId
-                    );
-                    const user = state.users.find(
-                      item => item.id === student?.userId
-                    );
-                    const paid = state.payments
-                      .filter(
-                        payment =>
-                          payment.invoiceId === invoice.id &&
-                          payment.status === "paid"
-                      )
-                      .reduce((sum, payment) => sum + payment.amount, 0);
-                    const balance = Math.max(0, invoice.amount - paid);
-                    return (
-                      <article key={invoice.id}>
-                        <div>
-                          <strong>{user?.name ?? invoice.studentId}</strong>
-                          <small>
-                            {invoice.id} · {invoice.currency} {invoice.amount} ·
-                            balance {balance}
-                          </small>
-                        </div>
-                        <span>{invoice.status}</span>
-                        <button
-                          disabled={
-                            balance <= 0 ||
-                            invoice.status === "paid" ||
-                            isAnyRegistrarActionPending
-                          }
-                          onClick={() =>
-                            recordInvoicePayment(invoice.id, balance)
-                          }
-                        >
-                          {isActionPending(`payment.record:${invoice.id}`)
-                            ? "Recording..."
-                            : invoice.status === "paid"
-                              ? "Paid"
-                              : "Record payment"}
-                        </button>
-                      </article>
-                    );
-                  })}
-                  {state.invoices.length === 0 ? (
-                    <article className="registrar-empty-row">
-                      <div>
-                        <strong>No invoices</strong>
-                        <small>
-                          Activated enrollments will create payment records
-                          here.
-                        </small>
-                      </div>
-                    </article>
-                  ) : null}
-                </div>
-              </section>
-            ) : null}
           </div>
 
           {showOperationsDesk ? (
@@ -9063,6 +9532,8 @@ function RegistrarAdmissionsExperience({
               </section>
             ) : null}
           </div>
+            </>
+          ) : null}
         </>
       )}
     </div>

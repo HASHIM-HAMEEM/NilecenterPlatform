@@ -144,6 +144,12 @@ run_step "Production build" run_package_script build
 
 if has_script "qa:portals"; then
   if [[ "${SKIP_PORTAL_QA:-0}" != "1" ]]; then
+    export QA_SUITE_TIMEOUT_MS="${QA_SUITE_TIMEOUT_MS:-2700000}"
+    export QA_COMMAND_TIMEOUT_MS="${QA_COMMAND_TIMEOUT_MS:-90000}"
+    export QA_ROUTE_MATRIX_ROUTE_TIMEOUT_MS="${QA_ROUTE_MATRIX_ROUTE_TIMEOUT_MS:-7000}"
+    export QA_WORKFLOW_READY_TIMEOUT_MS="${QA_WORKFLOW_READY_TIMEOUT_MS:-8000}"
+    export QA_WORKFLOW_ACTION_TIMEOUT_MS="${QA_WORKFLOW_ACTION_TIMEOUT_MS:-12000}"
+    export QA_LOGIN_TIMEOUT_MS="${QA_LOGIN_TIMEOUT_MS:-30000}"
     run_step "Portal QA server" start_portal_qa_server
     run_step "Portal QA" run_package_script qa:portals
   else

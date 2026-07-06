@@ -1,9 +1,21 @@
 import express from "express";
-import { attachSession, endRequestSession, getRequestSession, isServerRole, signIn } from "./auth.js";
+import {
+  attachSession,
+  changeDemoPasswordForSession,
+  confirmDemoPasswordReset,
+  endRequestSession,
+  getRequestSession,
+  isServerRole,
+  requestDemoPasswordReset,
+  signIn,
+} from "./auth.js";
 import { loadServerEnv } from "./env.js";
 import { getPlatformBackendState, savePlatformBackendRecord } from "./platformRecords.js";
 import { applyPlatformLearningAction, getPlatformStateSnapshot, parsePlatformLearningAction } from "./platformState.js";
+import { getPlatformStateRepository, normalizePlatformState } from "./platformRepository.js";
 import { getSupabaseServerStatus } from "./supabase.js";
+import { getMessageRecipientScope } from "../client/src/lib/domain/messageScope.js";
+import { seedPlatformState } from "../client/src/lib/domain/seed.js";
 
 const certificateVerifyAttempts = new Map<string, { count: number; resetAt: number }>();
 const certificateVerifyWindowMs = 10 * 60 * 1000;
@@ -11,6 +23,11 @@ const certificateVerifyLimit = 40;
 const certificateCodePattern = /^[a-z0-9][a-z0-9-]{5,63}$/i;
 const platformRecordTypes = ["lead", "placement", "operational"] as const;
 type PlatformRecordType = (typeof platformRecordTypes)[number];
+
+function canResetPlatformStateForQa(req: ApiRequest) {
+  const localOnly = process.env.NILE_PLATFORM_STATE_LOCAL_ONLY === "1" || process.env.QA_PLATFORM_STATE_LOCAL_ONLY === "1";
+  return localOnly && req.get("X-Nile-Learn-Request") === "browser" && req.get("X-Nile-Learn-QA-Reset") === "1";
+}
 
 type ApiRequest = {
   method: string;
@@ -62,6 +79,41 @@ function consumeCertificateVerifyAttempt(req: HeaderRequest) {
   return true;
 }
 
+function createServerId(prefix: string) {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+async function recordAuthAudit(session: ReturnType<typeof getRequestSession>, action: string, summary: string) {
+  if (!session) return null;
+  const repository = getPlatformStateRepository();
+  const snapshot = await repository.readSnapshot();
+  const state = normalizePlatformState(snapshot.state);
+  const audit = {
+    id: createServerId("audit"),
+    actorId: session.userId,
+    action,
+    entityType: "User",
+    entityId: session.userId,
+    summary,
+    createdAt: new Date().toISOString(),
+  };
+  state.auditLogs = [audit, ...state.auditLogs].slice(0, 160);
+  const persistence = await repository.writeSnapshot(state);
+  try {
+    await repository.recordEvent({
+      action,
+      actorId: session.userId,
+      entityType: "User",
+      entityId: session.userId,
+      summary,
+      payload: { provider: session.provider, sourcePersistence: snapshot.persistence },
+    });
+  } catch {
+    // Snapshot audit is enough for the profile activity panel.
+  }
+  return { state, persistence, syncedAt: new Date().toISOString() };
+}
+
 export function registerApiRoutes(app: ApiApp) {
   loadServerEnv();
   app.use(express.json());
@@ -102,6 +154,48 @@ export function registerApiRoutes(app: ApiApp) {
       res.json(attachSession(res, session));
     } catch (error) {
       res.status(401).json({ error: error instanceof Error ? error.message : "Sign in failed." });
+    }
+  });
+
+  app.post("/api/auth/password-reset/request", (req, res) => {
+    const { email, role } = req.body ?? {};
+    if (typeof email !== "string") {
+      res.status(400).json({ error: "Email is required." });
+      return;
+    }
+    res.json(requestDemoPasswordReset(email, isServerRole(role) ? role : undefined));
+  });
+
+  app.post("/api/auth/password-reset/confirm", (req, res) => {
+    const { token, email, password } = req.body ?? {};
+    if (typeof token !== "string" || typeof email !== "string" || typeof password !== "string") {
+      res.status(400).json({ error: "Reset token, email, and password are required." });
+      return;
+    }
+    try {
+      res.json(confirmDemoPasswordReset({ token, email, password }));
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Password reset failed." });
+    }
+  });
+
+  app.post("/api/auth/password-change", async (req, res) => {
+    const session = getRequestSession(req);
+    if (!session) {
+      res.status(401).json({ error: "Sign in required." });
+      return;
+    }
+    const { currentPassword, newPassword } = req.body ?? {};
+    if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+      res.status(400).json({ error: "Current password and new password are required." });
+      return;
+    }
+    try {
+      const result = changeDemoPasswordForSession(session, { currentPassword, newPassword });
+      const audit = await recordAuthAudit(session, "password.changed", "Changed demo account password.");
+      res.json({ ...result, ...audit });
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Password change failed." });
     }
   });
 
@@ -147,6 +241,26 @@ export function registerApiRoutes(app: ApiApp) {
     res.json({
       ...snapshot,
       state: scopePlatformStateForSession(snapshot.state, session),
+    });
+  });
+
+  app.post("/api/platform/state/reset", async (req, res) => {
+    const session = getRequestSession(req);
+    if (!session) {
+      res.status(401).json({ error: "Sign in required." });
+      return;
+    }
+    if (!canResetPlatformStateForQa(req)) {
+      res.status(404).json({ error: "Not found." });
+      return;
+    }
+
+    const state = JSON.parse(JSON.stringify(seedPlatformState)) as PlatformStatePayload;
+    const persistence = await getPlatformStateRepository().writeSnapshot(state);
+    res.json({
+      state: scopePlatformStateForSession(state, session),
+      persistence,
+      syncedAt: new Date().toISOString(),
     });
   });
 
@@ -480,6 +594,30 @@ function reportPresetsForSession(state: PlatformStatePayload, session: NonNullab
   return (state.reportPresets ?? []).filter((item) => item.ownerUserId === session.userId && item.role === session.activeRole);
 }
 
+function portalSettingsForSession(
+  state: PlatformStatePayload,
+  session: NonNullable<ReturnType<typeof getRequestSession>>,
+  user?: PlatformStatePayload["users"][number],
+) {
+  if (session.activeRole === "superadmin") return state.portalSettings ?? [];
+  if (session.activeRole === "registrar") {
+    const branchIds = branchIdsForUserScope(state, user);
+    return (state.portalSettings ?? []).filter((item) => item.role === "registrar" && branchIds.has(item.scopeId));
+  }
+  if (session.activeRole === "branchadmin") {
+    return (state.portalSettings ?? []).filter((item) => item.role === "branchadmin" && item.scopeId === user?.branchId);
+  }
+  if (session.activeRole === "headofdepartment") {
+    const departmentIds = new Set(
+      state.departments
+        .filter((item) => item.ownerUserId === session.userId || item.id === user?.departmentId)
+        .map((item) => item.id),
+    );
+    return (state.portalSettings ?? []).filter((item) => item.role === "headofdepartment" && departmentIds.has(item.scopeId));
+  }
+  return [];
+}
+
 function safeUnmappedRoleState(state: PlatformStatePayload, session: NonNullable<ReturnType<typeof getRequestSession>>) {
   return {
     ...state,
@@ -520,13 +658,14 @@ function safeUnmappedRoleState(state: PlatformStatePayload, session: NonNullable
     documents: state.documents.filter((item) => item.ownerId === session.userId),
     notifications: state.notifications.filter((item) => item.userId === session.userId),
     supportTickets: state.supportTickets.filter((item) => item.requesterId === session.userId),
+    portalSettings: portalSettingsForSession(state, session, state.users.find((item) => item.id === session.userId)),
     reportPresets: reportPresetsForSession(state, session),
     auditLogs: [],
   };
 }
 
 export function scopePlatformStateForSession(state: PlatformStatePayload, session: NonNullable<ReturnType<typeof getRequestSession>>) {
-  if (session.activeRole === "superadmin") return { ...state, reportPresets: reportPresetsForSession(state, session) };
+  if (session.activeRole === "superadmin") return { ...state, portalSettings: portalSettingsForSession(state, session), reportPresets: reportPresetsForSession(state, session) };
 
   const user = state.users.find((item) => item.id === session.userId);
   const branchId = user?.branchId;
@@ -559,9 +698,10 @@ export function scopePlatformStateForSession(state: PlatformStatePayload, sessio
         .filter((item) => classGroupIds.has(item.id) && item.meetingLinkId)
         .map((item) => item.meetingLinkId!),
     );
+    const messageDirectoryUserIds = getMessageRecipientScope(state, session.activeRole, session.userId).visibleUserIds;
     return {
       ...state,
-      users: state.users.filter((item) => item.id === session.userId || assignedTeacherUserIds.has(item.id)),
+      users: state.users.filter((item) => item.id === session.userId || assignedTeacherUserIds.has(item.id) || messageDirectoryUserIds.has(item.id)),
       students: [student],
       teachers: state.teachers.filter((item) => state.courseRuns.some((run) => run.teacherId === item.userId && courseRunIds.has(run.id))),
       staffProfiles: [],
@@ -602,6 +742,7 @@ export function scopePlatformStateForSession(state: PlatformStatePayload, sessio
       teacherAvailability: [],
       lessons: state.lessons.filter((item) => lessonIds.has(item.id)),
       documents: state.documents.filter((item) => item.ownerId === student.id || item.ownerId === session.userId),
+      portalSettings: portalSettingsForSession(state, session, user),
       reportPresets: reportPresetsForSession(state, session),
     };
   }
@@ -619,9 +760,10 @@ export function scopePlatformStateForSession(state: PlatformStatePayload, sessio
     ]);
     const userIds = new Set([session.userId, ...state.students.filter((item) => studentIds.has(item.id)).map((item) => item.userId)]);
     const eventIds = new Set(state.events.filter((item) => item.ownerId === session.userId || (item.classGroupId ? classGroupIds.has(item.classGroupId) : false)).map((item) => item.id));
+    const messageDirectoryUserIds = getMessageRecipientScope(state, session.activeRole, session.userId).visibleUserIds;
     return {
       ...state,
-      users: state.users.filter((item) => userIds.has(item.id)),
+      users: state.users.filter((item) => userIds.has(item.id) || messageDirectoryUserIds.has(item.id)),
       students: state.students.filter((item) => studentIds.has(item.id)),
       teachers: [teacher],
       staffProfiles: state.staffProfiles.filter((item) => item.userId === session.userId),
@@ -656,6 +798,7 @@ export function scopePlatformStateForSession(state: PlatformStatePayload, sessio
       supportTickets: [],
       documents: state.documents.filter((item) => item.ownerId === session.userId),
       certificates: [],
+      portalSettings: portalSettingsForSession(state, session, user),
       reportPresets: reportPresetsForSession(state, session),
       auditLogs: scopedAuditRows(state, classGroupIds, eventIds, new Set(), session.userId),
     };
@@ -669,9 +812,10 @@ export function scopePlatformStateForSession(state: PlatformStatePayload, sessio
     const paymentIds = new Set(state.payments.filter((item) => invoiceIds.has(item.invoiceId)).map((item) => item.id));
     const eventIds = new Set(state.events.filter((item) => item.branchId === branchId || (item.classGroupId ? classGroupIds.has(item.classGroupId) : false)).map((item) => item.id));
     const roomIds = new Set(state.rooms.filter((item) => item.branchId === branchId).map((item) => item.id));
+    const messageDirectoryUserIds = getMessageRecipientScope(state, session.activeRole, session.userId).visibleUserIds;
     return {
       ...state,
-      users: state.users.filter((item) => item.branchId === branchId || item.id === session.userId),
+      users: state.users.filter((item) => item.branchId === branchId || item.id === session.userId || messageDirectoryUserIds.has(item.id)),
       students: state.students.filter((item) => studentIds.has(item.id)),
       teachers: state.teachers.filter((item) => state.users.some((userItem) => userItem.id === item.userId && userItem.branchId === branchId)),
       staffProfiles: state.staffProfiles.filter((item) => item.userId === session.userId || item.branchIds.includes(branchId)),
@@ -707,6 +851,7 @@ export function scopePlatformStateForSession(state: PlatformStatePayload, sessio
       enrollmentWorkflows: state.enrollmentWorkflows.filter((item) => item.studentId ? studentIds.has(item.studentId) : false),
       supportTickets: state.supportTickets.filter((item) => item.requesterId === session.userId),
       documents: state.documents.filter((item) => item.ownerId === session.userId),
+      portalSettings: portalSettingsForSession(state, session, user),
       reportPresets: reportPresetsForSession(state, session),
       auditLogs: scopedAuditRows(state, classGroupIds, eventIds, new Set(), session.userId, new Set(), roomIds, invoiceIds, paymentIds),
     };
@@ -731,9 +876,10 @@ export function scopePlatformStateForSession(state: PlatformStatePayload, sessio
     );
     const placementIds = new Set(state.placementTests.filter((item) => item.branchId ? branchIds.has(item.branchId) : true).map((item) => item.id));
     const leadIds = new Set(state.leads.map((item) => item.id));
+    const messageDirectoryUserIds = getMessageRecipientScope(state, session.activeRole, session.userId).visibleUserIds;
     return {
       ...state,
-      users: state.users.filter((item) => item.id === session.userId || (item.branchId ? branchIds.has(item.branchId) : false)),
+      users: state.users.filter((item) => item.id === session.userId || (item.branchId ? branchIds.has(item.branchId) : false) || messageDirectoryUserIds.has(item.id)),
       students: state.students.filter((item) => studentIds.has(item.id)),
       teachers: state.teachers.filter((item) => branchIds.has(state.users.find((userItem) => userItem.id === item.userId)?.branchId ?? "")),
       staffProfiles: state.staffProfiles.filter((item) => item.userId === session.userId || item.branchIds.some((id) => branchIds.has(id))),
@@ -777,6 +923,7 @@ export function scopePlatformStateForSession(state: PlatformStatePayload, sessio
       }),
       supportTickets: [],
       documents: state.documents.filter((item) => item.ownerId === session.userId),
+      portalSettings: portalSettingsForSession(state, session, user),
       reportPresets: reportPresetsForSession(state, session),
     };
   }
@@ -794,10 +941,15 @@ export function scopePlatformStateForSession(state: PlatformStatePayload, sessio
         .filter((item) => courseIds.has(item.courseId) && studentIds.has(item.studentId))
         .map((item) => item.id),
     );
+    const messageDirectoryUserIds = getMessageRecipientScope(state, session.activeRole, session.userId).visibleUserIds;
     return {
       ...state,
       users: state.users.filter(
-        (item) => item.id === session.userId || (item.departmentId ? departmentIds.has(item.departmentId) : false) || studentIds.has(state.students.find((studentItem) => studentItem.userId === item.id)?.id ?? ""),
+        (item) =>
+          item.id === session.userId ||
+          (item.departmentId ? departmentIds.has(item.departmentId) : false) ||
+          studentIds.has(state.students.find((studentItem) => studentItem.userId === item.id)?.id ?? "") ||
+          messageDirectoryUserIds.has(item.id),
       ),
       staffProfiles: state.staffProfiles.filter((item) => item.userId === session.userId || item.departmentIds.some((id) => departmentIds.has(id))),
       departments: state.departments.filter((item) => departmentIds.has(item.id)),
@@ -842,6 +994,7 @@ export function scopePlatformStateForSession(state: PlatformStatePayload, sessio
       placementResults: [],
       enrollmentWorkflows: state.enrollmentWorkflows.filter((item) => item.studentId ? studentIds.has(item.studentId) : false),
       documents: state.documents.filter((item) => item.ownerId === session.userId || studentIds.has(item.ownerId)),
+      portalSettings: portalSettingsForSession(state, session, user),
       reportPresets: reportPresetsForSession(state, session),
     };
   }

@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { attachSession, endRequestSession, getRequestSession, signIn, type ServerSession } from "../../../../server/auth";
+import {
+  attachSession,
+  changeDemoPasswordForSession,
+  confirmDemoPasswordReset,
+  endRequestSession,
+  getRequestSession,
+  requestDemoPasswordReset,
+  resetDemoPasswordResetState,
+  signIn,
+  type ServerSession,
+} from "../../../../server/auth";
 import { resetDefaultSessionStore, setSessionStore, type SessionStore } from "../../../../server/sessionStore";
 
 const originalEnv = {
@@ -28,6 +38,7 @@ afterEach(() => {
   process.env.SUPABASE_PUBLISHABLE_KEY = originalEnv.SUPABASE_PUBLISHABLE_KEY;
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = originalEnv.VITE_SUPABASE_PUBLISHABLE_KEY;
   process.env.VITE_SUPABASE_ANON_KEY = originalEnv.VITE_SUPABASE_ANON_KEY;
+  resetDemoPasswordResetState();
   resetDefaultSessionStore();
 });
 
@@ -77,6 +88,93 @@ describe("server demo auth", () => {
 
     expect(session.provider).toBe("demo");
     expect(session.activeRole).toBe("student");
+  });
+
+  it("resets a demo password without changing Supabase auth behavior", async () => {
+    useDemoOnlyAuth();
+    process.env.DEMO_AUTH_ENABLED = "true";
+    process.env.NILE_DEMO_PASSWORD = "original-password";
+
+    const request = requestDemoPasswordReset("teacher.demo@nilelearn.local", "teacher");
+    expect(request.ok).toBe(true);
+    expect(request.demoResetPath).toContain("/auth/reset-password?");
+
+    const params = new URLSearchParams(request.demoResetPath!.split("?")[1]);
+    const result = confirmDemoPasswordReset({
+      token: params.get("token") ?? "",
+      email: params.get("email") ?? "",
+      password: "new-demo-password",
+    });
+    expect(result).toMatchObject({ ok: true, role: "teacher" });
+
+    await expect(signIn("teacher.demo@nilelearn.local", "original-password", "teacher")).resolves.toMatchObject({
+      provider: "demo",
+    });
+    const session = await signIn("teacher.demo@nilelearn.local", "new-demo-password", "teacher");
+    expect(session.provider).toBe("demo");
+    expect(session.activeRole).toBe("teacher");
+  });
+
+  it("keeps reset request neutral for unknown accounts", () => {
+    useDemoOnlyAuth();
+    process.env.DEMO_AUTH_ENABLED = "true";
+
+    const request = requestDemoPasswordReset("unknown@example.com", "student");
+
+    expect(request.ok).toBe(true);
+    expect(request.demoResetPath).toBeUndefined();
+  });
+
+  it("changes demo passwords only after validating current password and length", async () => {
+    useDemoOnlyAuth();
+    process.env.DEMO_AUTH_ENABLED = "true";
+    process.env.NILE_DEMO_PASSWORD = "original-password";
+
+    const session = await signIn("teacher.demo@nilelearn.local", "original-password", "teacher");
+
+    expect(() =>
+      changeDemoPasswordForSession(session, {
+        currentPassword: "wrong-password",
+        newPassword: "new-demo-password",
+      })
+    ).toThrow("Current password is incorrect.");
+    expect(() =>
+      changeDemoPasswordForSession(session, {
+        currentPassword: "original-password",
+        newPassword: "short",
+      })
+    ).toThrow("Use at least 8 characters.");
+
+    expect(
+      changeDemoPasswordForSession(session, {
+        currentPassword: "original-password",
+        newPassword: "new-demo-password",
+      })
+    ).toMatchObject({ ok: true, role: "teacher" });
+
+    const nextSession = await signIn("teacher.demo@nilelearn.local", "new-demo-password", "teacher");
+    expect(nextSession.provider).toBe("demo");
+  });
+
+  it("does not fake password changes for provider-managed sessions", () => {
+    const session: ServerSession = {
+      id: "sess_supabase",
+      userId: "usr_teacher_demo",
+      email: "teacher.demo@nilelearn.local",
+      name: "Teacher Demo",
+      roles: ["teacher"],
+      activeRole: "teacher",
+      provider: "supabase",
+      createdAt: "2026-07-04T00:00:00.000Z",
+      expiresAt: "2026-07-04T12:00:00.000Z",
+    };
+
+    expect(() =>
+      changeDemoPasswordForSession(session, {
+        currentPassword: "original-password",
+        newPassword: "new-demo-password",
+      })
+    ).toThrow("Password changes are managed by your sign-in provider.");
   });
 });
 

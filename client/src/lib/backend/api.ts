@@ -55,6 +55,30 @@ export function signInRequest(input: { email: string; password: string; role: Ro
   });
 }
 
+export function requestPasswordReset(input: { email: string; role?: Role }) {
+  return apiJson<{ ok: true; demoResetPath?: string; expiresAt?: string }>("/api/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function confirmPasswordReset(input: { token: string; email: string; password: string }) {
+  return apiJson<{ ok: true; role?: Role }>("/api/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function changePasswordRequest(input: { currentPassword: string; newPassword: string }) {
+  return apiJson<{ ok: true; role?: Role; state?: PlatformState; persistence?: "supabase" | "local"; syncedAt?: string }>(
+    "/api/auth/password-change",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
 export function fetchSessionRequest() {
   return apiJson<AuthSessionDto | null>("/api/auth/session");
 }

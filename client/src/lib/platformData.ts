@@ -137,6 +137,7 @@ export const roleMeta: Record<
     color: string;
     tint: string;
     accent: string;
+    avatar: string;
     branchLabel: string;
   }
 > = {
@@ -147,6 +148,7 @@ export const roleMeta: Record<
     color: "#2D5016",
     tint: "#EEF4EA",
     accent: "#C4A35A",
+    avatar: "SD",
     branchLabel: "Online",
   },
   teacher: {
@@ -156,6 +158,7 @@ export const roleMeta: Record<
     color: "#1A3A5C",
     tint: "#E9F0F7",
     accent: "#C4A35A",
+    avatar: "TD",
     branchLabel: "Arabic Dept.",
   },
   registrar: {
@@ -165,6 +168,7 @@ export const roleMeta: Record<
     color: "#5C2D00",
     tint: "#F5ECE4",
     accent: "#B8A898",
+    avatar: "RD",
     branchLabel: "Branch B1",
   },
   headofdepartment: {
@@ -174,6 +178,7 @@ export const roleMeta: Record<
     color: "#3D1A5C",
     tint: "#F0EAF5",
     accent: "#C4A35A",
+    avatar: "HD",
     branchLabel: "Arabic and Quran",
   },
   branchadmin: {
@@ -183,6 +188,7 @@ export const roleMeta: Record<
     color: "#1A4A3A",
     tint: "#EAF3EF",
     accent: "#C4A35A",
+    avatar: "BD",
     branchLabel: "Cairo B1",
   },
   superadmin: {
@@ -192,6 +198,7 @@ export const roleMeta: Record<
     color: "#4A3A1A",
     tint: "#F1EDE4",
     accent: "#1A1A1A",
+    avatar: "AD",
     branchLabel: "Global",
   },
 };
@@ -360,6 +367,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "certificates:approve",
     "messages:write",
     "reports:read",
+    "settings:write",
   ],
   branchadmin: [
     "dashboard:read",
@@ -522,6 +530,7 @@ export const sidebarByRole: Record<Role, NavItem[]> = {
       icon: "MessageSquare",
     },
     { label: "Reports", href: "/app/registrar/reports", icon: "BarChart3" },
+    { label: "Profile", href: "/app/registrar/profile", icon: "UserCircle" },
     { label: "Settings", href: "/app/registrar/settings", icon: "Settings" },
   ],
   headofdepartment: [
@@ -544,6 +553,8 @@ export const sidebarByRole: Record<Role, NavItem[]> = {
     },
     { label: "Reports", href: "/app/hod/reports", icon: "BarChart3" },
     { label: "Messages", href: "/app/hod/messages", icon: "MessageSquare" },
+    { label: "Profile", href: "/app/hod/profile", icon: "UserCircle" },
+    { label: "Settings", href: "/app/hod/settings", icon: "Settings" },
   ],
   branchadmin: [
     {
@@ -565,6 +576,7 @@ export const sidebarByRole: Record<Role, NavItem[]> = {
     { label: "Payments", href: "/app/branch/payments", icon: "CreditCard" },
     { label: "Reports", href: "/app/branch/reports", icon: "BarChart3" },
     { label: "Messages", href: "/app/branch/messages", icon: "MessageSquare" },
+    { label: "Profile", href: "/app/branch/profile", icon: "UserCircle" },
     { label: "Settings", href: "/app/branch/settings", icon: "Settings" },
   ],
   superadmin: [
@@ -585,6 +597,8 @@ export const sidebarByRole: Record<Role, NavItem[]> = {
     { label: "Departments", href: "/app/admin/departments", icon: "Network" },
     { label: "Programs", href: "/app/admin/programs", icon: "Library" },
     { label: "Courses", href: "/app/admin/courses", icon: "BookOpen" },
+    { label: "Messages", href: "/app/admin/messages", icon: "MessageSquare" },
+    { label: "Profile", href: "/app/admin/profile", icon: "UserCircle" },
     { label: "Certificates", href: "/app/admin/certificates", icon: "Award" },
     { label: "Schedule", href: "/app/admin/schedule", icon: "CalendarDays" },
     { label: "Moodle", href: "/app/admin/moodle-source", icon: "PlugZap" },

@@ -73,12 +73,23 @@ export type PlatformModule = {
   remainingWork: string[];
 };
 
+export type UserNotificationPreferences = {
+  messages: boolean;
+  schedule: boolean;
+  academic: boolean;
+  billing: boolean;
+  system: boolean;
+};
+
 export type User = {
   id: string;
   name: string;
   email: string;
   phone?: string;
   notes?: string;
+  preferredLanguage?: string;
+  timezone?: string;
+  notificationPreferences?: UserNotificationPreferences;
   roles: Role[];
   activeRole: Role;
   branchId?: string;
@@ -266,6 +277,7 @@ export type AssignmentSubmission = {
   submittedAt: string;
   status: EntityStatus;
   response: string;
+  pendingMedia?: PendingMediaAttachment[];
   score?: number;
   feedback?: string;
 };
@@ -320,6 +332,7 @@ export type QuizAttempt = {
   score: number;
   maxScore: number;
   answers: Record<string, string>;
+  pendingMedia?: PendingMediaAttachment[];
 };
 
 export type Grade = {
@@ -551,7 +564,27 @@ export type RecitationSubmission = {
   title: string;
   submittedAt: string;
   status: EntityStatus;
+  pendingMedia?: PendingMediaAttachment[];
   feedback?: string;
+};
+
+export type PendingMediaAttachment = {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  kind: "document" | "image" | "audio" | "video";
+  previewLabel: string;
+  storageStatus: "pending_storage";
+  createdAt: string;
+};
+
+export type MessageAttachment = {
+  name: string;
+  type: string;
+  size: number;
+  kind: "document" | "image";
+  previewLabel: string;
 };
 
 export type Message = {
@@ -560,6 +593,7 @@ export type Message = {
   toUserId: string;
   subject: string;
   body: string;
+  attachments?: MessageAttachment[];
   read: boolean;
   createdAt: string;
 };
@@ -570,6 +604,7 @@ export type CommunicationLog = {
   channel: "in_app" | "email" | "whatsapp" | "phone" | "manual";
   subject: string;
   body: string;
+  attachments?: MessageAttachment[];
   relatedUserId?: string;
   status: EntityStatus;
   createdAt: string;
@@ -658,8 +693,25 @@ export type PlatformSettings = {
   updatedBy?: string;
 };
 
+export type PortalSettingsRole = "registrar" | "headofdepartment" | "branchadmin";
+
+export type ScopedPortalSettings = {
+  role: PortalSettingsRole;
+  scopeId: string;
+  label: string;
+  language: string;
+  timezone: string;
+  notifications: boolean;
+  reviewCadenceDays?: number;
+  paymentReminderDays?: number;
+  attendanceCutoffMinutes?: number;
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
 export type PlatformState = {
   settings: PlatformSettings;
+  portalSettings: ScopedPortalSettings[];
   users: User[];
   branches: Branch[];
   departments: Department[];

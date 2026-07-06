@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { platformStore } from "./store";
 import { applyPlatformWorkflowAction } from "./actions";
+import type { PendingMediaAttachment } from "./types";
 
 function createLocalStorageMock(): Storage {
   const values = new Map<string, string>();
@@ -15,6 +16,19 @@ function createLocalStorageMock(): Storage {
     setItem: vi.fn((key: string, value: string) =>
       values.set(key, String(value))
     ),
+  };
+}
+
+function pendingMedia(kind: PendingMediaAttachment["kind"] = "audio"): PendingMediaAttachment {
+  return {
+    id: `pending_${kind}`,
+    name: kind === "audio" ? "recitation.mp3" : "worksheet.pdf",
+    type: kind === "audio" ? "audio/mpeg" : "application/pdf",
+    size: 2048,
+    kind,
+    previewLabel: kind === "audio" ? "recitation.mp3 · 2 KB" : "worksheet.pdf · 2 KB",
+    storageStatus: "pending_storage",
+    createdAt: "2026-07-06T10:00:00.000Z",
   };
 }
 
@@ -99,8 +113,30 @@ describe("platformStore workflow guards", () => {
     const assignment = platformStore.getState().assignments[0];
 
     expect(() => platformStore.submitAssignment(assignment.id, "   ")).toThrow(
-      "Assignment response is required"
+      "Assignment response or attachment is required"
     );
+  });
+
+  it("stores pending media metadata for file and audio submissions", () => {
+    const assignment = platformStore
+      .getState()
+      .assignments.find(item => item.id === "asg_qt_audio");
+    expect(assignment).toBeTruthy();
+
+    const submission = platformStore.submitAssignment(
+      assignment!.id,
+      "",
+      "stu_demo",
+      "usr_student_demo",
+      [pendingMedia("audio")]
+    );
+
+    expect(submission.pendingMedia).toHaveLength(1);
+    expect(submission.pendingMedia?.[0]).toMatchObject({
+      name: "recitation.mp3",
+      storageStatus: "pending_storage",
+      kind: "audio",
+    });
   });
 
   it("rejects assessment creation for missing course runs", () => {
@@ -513,6 +549,82 @@ describe("platformStore workflow guards", () => {
         schedulePreference: "Evening",
       })
     ).toThrow("already in the identity directory");
+  });
+
+  it("sends messages with attachment metadata, notification, communication log, and audit evidence", () => {
+    const message = platformStore.sendMessage({
+      fromUserId: "usr_teacher_demo",
+      toUserId: "usr_student_demo",
+      subject: "Lesson material",
+      body: "Please review the attached lesson note.",
+      attachments: [
+        {
+          name: "lesson-note.pdf",
+          type: "application/pdf",
+          size: 280000,
+          kind: "document",
+          previewLabel: "PDF - 273 KB",
+        },
+      ],
+    });
+    const after = platformStore.getState();
+
+    expect(message).toMatchObject({
+      fromUserId: "usr_teacher_demo",
+      toUserId: "usr_student_demo",
+      subject: "Lesson material",
+      attachments: [
+        {
+          name: "lesson-note.pdf",
+          kind: "document",
+          previewLabel: "PDF - 273 KB",
+        },
+      ],
+    });
+    expect(after.communicationLogs[0]).toMatchObject({
+      actorId: "usr_teacher_demo",
+      channel: "in_app",
+      subject: "Lesson material",
+      relatedUserId: "usr_student_demo",
+      status: "completed",
+      attachments: message.attachments,
+    });
+    expect(after.notifications[0]).toMatchObject({
+      userId: "usr_student_demo",
+      title: "Lesson material",
+      href: "/app/student/messages",
+    });
+    expect(after.auditLogs[0]).toMatchObject({
+      action: "message.sent",
+      actorId: "usr_teacher_demo",
+      entityType: "Message",
+      entityId: message.id,
+    });
+  });
+
+  it("creates per-recipient rows for internal broadcast messages", () => {
+    const before = platformStore.getState();
+    const message = platformStore.sendMessage({
+      fromUserId: "usr_admin_demo",
+      toUserId: "usr_student_demo",
+      recipientUserIds: ["usr_student_demo", "usr_teacher_demo"],
+      subject: "Platform notice",
+      body: "Internal platform notice.",
+    });
+    const after = platformStore.getState();
+    const createdMessages = after.messages.filter(
+      item => item.subject === "Platform notice"
+    );
+
+    expect(message.toUserId).toBe("usr_student_demo");
+    expect(createdMessages).toHaveLength(2);
+    expect(createdMessages.map(item => item.toUserId).sort()).toEqual([
+      "usr_student_demo",
+      "usr_teacher_demo",
+    ]);
+    expect(after.communicationLogs.length - before.communicationLogs.length).toBe(2);
+    expect(after.notifications.filter(item => item.title === "Platform notice")).toHaveLength(2);
+    expect(after.auditLogs.filter(item => item.action === "message.sent" && item.actorId === "usr_admin_demo")).toHaveLength(2);
   });
 
   it("maps placement results to the matching course and level", () => {
@@ -1325,6 +1437,24 @@ describe("platformStore workflow guards", () => {
         .getState()
         .grades.some(item => item.itemId === quiz!.id && item.studentId === "stu_demo")
     ).toBe(false);
+  });
+
+  it("stores pending media metadata on quiz attempts", () => {
+    const quiz = platformStore
+      .getState()
+      .quizzes.find(item => item.id === "quiz_qt_madd");
+    expect(quiz).toBeTruthy();
+
+    const attempt = platformStore.submitQuizAttempt(
+      quiz!.id,
+      { qbi_qt_madd_oral: "Pending media attached" },
+      "stu_demo",
+      "usr_student_demo",
+      [pendingMedia("audio")]
+    );
+
+    expect(attempt.pendingMedia).toHaveLength(1);
+    expect(attempt.pendingMedia?.[0].storageStatus).toBe("pending_storage");
   });
 
   it("reviews quiz attempts and updates grade, notification, and audit evidence", () => {
@@ -2666,6 +2796,7 @@ describe("platformStore workflow guards", () => {
         studentId: "stu_demo",
         teacherId: plan!.teacherId,
         title: "Surah Al-Baqarah review",
+        pendingMedia: [pendingMedia("audio")],
       },
       "usr_student_demo"
     );
@@ -2675,6 +2806,12 @@ describe("platformStore workflow guards", () => {
       studentId: "stu_demo",
       teacherId: plan!.teacherId,
       status: "pending",
+      pendingMedia: [
+        expect.objectContaining({
+          name: "recitation.mp3",
+          storageStatus: "pending_storage",
+        }),
+      ],
     });
     expect(after.recitationSubmissions[0].id).toBe(submission.id);
     expect(
@@ -2691,6 +2828,25 @@ describe("platformStore workflow guards", () => {
           item.entityId === submission.id
       )
     ).toBe(true);
+  });
+
+  it("allows Quran recitation submissions while storage is still pending", () => {
+    const plan = platformStore
+      .getState()
+      .quranPlans.find(item => item.studentId === "stu_demo");
+    expect(plan).toBeTruthy();
+
+    const submission = platformStore.submitRecitation(
+      {
+        studentId: "stu_demo",
+        teacherId: plan!.teacherId,
+        title: "Surah Al-Baqarah review",
+      },
+      "usr_student_demo"
+    );
+
+    expect(submission.status).toBe("pending");
+    expect(submission.pendingMedia).toEqual([]);
   });
 
   it("updates Quran progress with clamped scores and audit evidence", () => {
@@ -3371,6 +3527,144 @@ describe("platformStore frontend utility helpers", () => {
       action: "material.unpublished",
       entityType: "LessonResource",
       entityId: "res_ar_pdf",
+    });
+  });
+
+  it("updates safe student profile and preference fields with audit evidence", () => {
+    const state = platformStore.getState();
+    const beforeUser = state.users.find(item => item.id === "usr_student_demo");
+
+    const result = applyPlatformWorkflowAction(state, {
+      type: "profile.update",
+      userId: "usr_student_demo",
+      name: "Student Profile QA",
+      phone: "+20 100 000 7777",
+      preferredLanguage: "Arabic",
+      timezone: "Africa/Cairo",
+      country: "Egypt",
+      guardianName: "Guardian QA",
+      guardianPhone: "+20 100 000 8888",
+      notificationPreferences: {
+        messages: false,
+        schedule: true,
+      },
+      actorId: "usr_student_demo",
+    });
+
+    const user = state.users.find(item => item.id === "usr_student_demo");
+    const student = state.students.find(item => item.userId === "usr_student_demo");
+
+    expect(result.action).toBe("profile.updated");
+    expect(user).toMatchObject({
+      name: "Student Profile QA",
+      phone: "+20 100 000 7777",
+      preferredLanguage: "Arabic",
+      timezone: "Africa/Cairo",
+      activeRole: beforeUser?.activeRole,
+      branchId: beforeUser?.branchId,
+      departmentId: beforeUser?.departmentId,
+    });
+    expect(user?.notificationPreferences).toMatchObject({
+      messages: false,
+      schedule: true,
+      academic: true,
+    });
+    expect(student).toMatchObject({
+      country: "Egypt",
+      preferredLanguage: "Arabic",
+      guardianName: "Guardian QA",
+      guardianPhone: "+20 100 000 8888",
+    });
+    expect(state.auditLogs.map(item => item.action)).toEqual(expect.arrayContaining(["profile.updated", "preferences.updated"]));
+  });
+
+  it("updates teacher title and availability without changing role scope", () => {
+    const state = platformStore.getState();
+    const beforeUser = state.users.find(item => item.id === "usr_teacher_demo");
+
+    applyPlatformWorkflowAction(state, {
+      type: "profile.update",
+      userId: "usr_teacher_demo",
+      name: "Teacher Profile QA",
+      title: "Senior Arabic Teacher",
+      availabilityStatus: "limited",
+      actorId: "usr_teacher_demo",
+    });
+
+    const user = state.users.find(item => item.id === "usr_teacher_demo");
+    const staffProfile = state.staffProfiles.find(item => item.userId === "usr_teacher_demo" && item.role === "teacher");
+    const teacherProfile = state.teachers.find(item => item.userId === "usr_teacher_demo");
+
+    expect(user).toMatchObject({
+      name: "Teacher Profile QA",
+      activeRole: beforeUser?.activeRole,
+      branchId: beforeUser?.branchId,
+      departmentId: beforeUser?.departmentId,
+    });
+    expect(staffProfile).toMatchObject({
+      title: "Senior Arabic Teacher",
+      availabilityStatus: "limited",
+      branchIds: ["br_online"],
+      departmentIds: ["dep_arabic"],
+    });
+    expect(teacherProfile).toMatchObject({ availabilityStatus: "limited" });
+    expect(state.auditLogs[0]).toMatchObject({
+      action: "profile.updated",
+      actorId: "usr_teacher_demo",
+    });
+  });
+
+  it("ignores protected role and scope fields in self profile updates", () => {
+    const state = platformStore.getState();
+
+    applyPlatformWorkflowAction(state, {
+      type: "profile.update",
+      userId: "usr_teacher_demo",
+      name: "Teacher Safe Edit",
+      activeRole: "superadmin",
+      roles: ["superadmin"],
+      branchId: "br_global",
+      departmentId: "dep_admin",
+    } as any);
+
+    const user = state.users.find(item => item.id === "usr_teacher_demo");
+
+    expect(user).toMatchObject({
+      name: "Teacher Safe Edit",
+      activeRole: "teacher",
+      roles: ["teacher"],
+      branchId: "br_online",
+      departmentId: "dep_arabic",
+    });
+  });
+
+  it("rejects incomplete minor guardian updates without partial profile mutation", () => {
+    const state = platformStore.getState();
+    state.students = state.students.map(item =>
+      item.id === "stu_demo"
+        ? {
+            ...item,
+            ageGroup: "Under 18",
+            guardianName: "Current Guardian",
+            guardianPhone: "+20 100 000 1111",
+          }
+        : item
+    );
+
+    expect(() =>
+      applyPlatformWorkflowAction(state, {
+        type: "profile.update",
+        userId: "usr_student_demo",
+        name: "Should Not Persist",
+        guardianName: "",
+        guardianPhone: "",
+      })
+    ).toThrow("Guardian name and phone are required for minor students.");
+
+    expect(state.users.find(item => item.id === "usr_student_demo")?.name).toBe("Student Demo");
+    expect(state.students.find(item => item.id === "stu_demo")).toMatchObject({
+      guardianName: "Current Guardian",
+      guardianPhone: "+20 100 000 1111",
     });
   });
 });

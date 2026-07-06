@@ -36,7 +36,7 @@ describe("server platform state read scopes", () => {
     const scoped = scopePlatformStateForSession(seedPlatformState, sessionFor("student"));
 
     expect(ids(scoped.students)).toEqual(["stu_demo"]);
-    expect(ids(scoped.users)).toEqual(["usr_student_demo", "usr_teacher_demo"]);
+    expect(ids(scoped.users)).toEqual(["usr_registrar_online_demo", "usr_student_demo", "usr_teacher_demo"]);
     expect(ids(scoped.courseRuns)).toEqual(["run_ar_l3_2026", "run_qt_1_2026"]);
     expect(ids(scoped.classGroups)).toEqual(["class_ar_l3_a", "class_qt_1_b"]);
     expect(ids(scoped.branches)).toEqual(["br_online"]);
@@ -55,7 +55,8 @@ describe("server platform state read scopes", () => {
     expect(ids(scoped.teachers)).toEqual(["tch_demo"]);
     expect(scoped.courseRuns.every((item) => item.teacherId === "usr_teacher_demo")).toBe(true);
     expect(ids(scoped.students)).toEqual(["stu_cairo_demo", "stu_demo"]);
-    expect(scoped.users.every((item) => item.id === "usr_teacher_demo" || item.activeRole === "student")).toBe(true);
+    expect(ids(scoped.users)).toEqual(expect.arrayContaining(["usr_admin_demo", "usr_hod_demo", "usr_student_demo", "usr_teacher_demo"]));
+    expect(scoped.students.every((item) => ["usr_student_demo", "usr_student_cairo_demo"].includes(item.userId))).toBe(true);
     expect(scoped.staffProfiles).toHaveLength(1);
     expect(scoped.staffProfiles[0]).toMatchObject({ userId: "usr_teacher_demo", role: "teacher" });
     expect(scoped.leads).toEqual([]);

@@ -225,12 +225,8 @@ function CertificateVerification() {
                 </div>
                 <div className="public-verification-actions">
                   <button type="button" onClick={() => window.print()}>
-                    <ShieldCheck size={15} />
-                    Print verification
-                  </button>
-                  <button type="button" disabled>
                     <Download size={15} />
-                    PDF download pending
+                    Print or save PDF
                   </button>
                 </div>
               </>

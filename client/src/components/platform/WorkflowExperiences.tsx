@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import {
   Activity,
+  ArrowLeft,
   ArrowRight,
   Award,
   BookMarked,
@@ -16,14 +17,18 @@ import {
   FileText,
   GraduationCap,
   Headphones,
+  Image,
   ListChecks,
   Maximize2,
   MessageSquare,
   Minimize2,
   NotebookPen,
+  MoreVertical,
   Pause,
+  Paperclip,
   Play,
   Radio,
+  Search,
   Send,
   Settings,
   ShieldCheck,
@@ -48,13 +53,17 @@ import type {
   Certificate,
   Lesson,
   LessonResource,
+  Message,
+  MessageAttachment,
   Payment,
+  PendingMediaAttachment,
   QuranProgressRecord,
   QuizQuestionPreview,
   RecitationSubmission,
   ReportPreset,
   ReportType,
 } from "@/lib/domain/types";
+import { getMessageRecipientScope } from "@/lib/domain/messageScope";
 import { checkSupabaseBrowserConnection } from "@/lib/supabase/client";
 import { withRuntimeIntegrationStatus } from "@/lib/integrations/registry";
 import {
@@ -110,6 +119,132 @@ const reportTypesByRole: Record<Role, ReportType[]> = {
   superadmin: ["enrollments", "attendance", "finance", "audit"],
 };
 type ReportRow = ReturnType<typeof platformStore.exportReportRows>[number];
+
+const pendingMediaAcceptByKind: Record<PendingMediaAttachment["kind"], string> = {
+  document: ".pdf,.doc,.docx,.txt,.rtf,application/pdf,text/plain",
+  image: "image/*",
+  audio: "audio/*",
+  video: "video/*",
+};
+
+function formatBytes(size: number) {
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
+  return `${size} B`;
+}
+
+function pendingMediaKindFromFile(file: File, fallback: PendingMediaAttachment["kind"]) {
+  if (file.type.startsWith("audio/")) return "audio";
+  if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("image/")) return "image";
+  return fallback;
+}
+
+function PendingMediaSummary({ items }: { items?: PendingMediaAttachment[] }) {
+  if (!items?.length) return null;
+  return (
+    <div className="platform-pending-media-list" aria-label="Pending media attachments">
+      {items.map(item => (
+        <span key={item.id}>
+          <Paperclip size={13} />
+          {item.previewLabel}
+          <small>Storage pending</small>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function PendingMediaField({
+  value,
+  onChange,
+  kind,
+  label,
+  description,
+}: {
+  value: PendingMediaAttachment[];
+  onChange: (items: PendingMediaAttachment[]) => void;
+  kind: PendingMediaAttachment["kind"];
+  label: string;
+  description: string;
+}) {
+  const inputId = useId();
+  const [error, setError] = useState("");
+  const accept = pendingMediaAcceptByKind[kind];
+
+  const addFiles = (files: FileList | null) => {
+    setError("");
+    if (!files?.length) return;
+    const next: PendingMediaAttachment[] = [];
+    Array.from(files)
+      .slice(0, 3 - value.length)
+      .forEach((file, index) => {
+        if (file.size <= 0 || file.size > 25 * 1024 * 1024) {
+          setError("Each attachment must be 25 MB or smaller.");
+          return;
+        }
+        const mediaKind = pendingMediaKindFromFile(file, kind);
+        if (kind === "audio" && mediaKind !== "audio") {
+          setError("Choose an audio file.");
+          return;
+        }
+        if (kind === "video" && mediaKind !== "video") {
+          setError("Choose a video file.");
+          return;
+        }
+        next.push({
+          id: `pending_${Date.now().toString(36)}_${index}_${file.name.replace(/[^a-z0-9]+/gi, "_").slice(0, 24)}`,
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+          kind: mediaKind,
+          previewLabel: `${file.name} · ${formatBytes(file.size)}`,
+          storageStatus: "pending_storage",
+          createdAt: new Date().toISOString(),
+        });
+      });
+    if (next.length) onChange([...value, ...next].slice(0, 3));
+  };
+
+  return (
+    <div className="platform-pending-media-field">
+      <div>
+        <strong>{label}</strong>
+        <span>{description}</span>
+      </div>
+      <label htmlFor={inputId}>
+        <Paperclip size={15} />
+        Choose file
+      </label>
+      <input
+        id={inputId}
+        type="file"
+        accept={accept}
+        multiple
+        onChange={event => {
+          addFiles(event.target.files);
+          event.currentTarget.value = "";
+        }}
+      />
+      {error ? <p>{error}</p> : null}
+      <div className="platform-pending-media-list">
+        {value.map(item => (
+          <span key={item.id}>
+            <Paperclip size={13} />
+            {item.previewLabel}
+            <button
+              type="button"
+              aria-label={`Remove ${item.name}`}
+              onClick={() => onChange(value.filter(entry => entry.id !== item.id))}
+            >
+              Remove
+            </button>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 type DisplayReportRow = {
   eyebrow: string;
   title: string;
@@ -453,10 +588,7 @@ function CertificatePreview({
       <div className="platform-certificate-preview-actions">
         <button type="button" disabled={!issued} onClick={() => window.print()}>
           <Download size={15} />
-          {issued ? "Print certificate" : "Issued only"}
-        </button>
-        <button type="button" disabled>
-          PDF renderer pending
+          {issued ? "Print or save PDF" : "Issued only"}
         </button>
       </div>
     </section>
@@ -1973,6 +2105,8 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
     "Completed response with examples."
   );
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
+  const [assignmentPendingMedia, setAssignmentPendingMedia] = useState<PendingMediaAttachment[]>([]);
+  const [quizPendingMedia, setQuizPendingMedia] = useState<Record<string, PendingMediaAttachment[]>>({});
   const [assignmentDraft, setAssignmentDraft] = useState({
     title: "Weekly applied writing task",
     dueAt: getFutureDateInput(5),
@@ -2182,7 +2316,9 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
   const quizFallbackAnswer = quizAnswers.__fallback ?? "";
   const quizHasAnswer = quizHasSafeQuestionPreview
     ? quizQuestionPreviews.some(
-        question => (quizAnswers[question.id] ?? "").trim().length > 0
+        question =>
+          (quizAnswers[question.id] ?? "").trim().length > 0 ||
+          (quizPendingMedia[question.id]?.length ?? 0) > 0
       )
     : quizFallbackAnswer.trim().length > 0;
   const pendingSubmissions = state.assignmentSubmissions.filter(submission => {
@@ -2278,7 +2414,12 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
 
   useEffect(() => {
     setQuizAnswers({});
+    setQuizPendingMedia({});
   }, [quiz?.id]);
+
+  useEffect(() => {
+    setAssignmentPendingMedia([]);
+  }, [assignment?.id]);
 
   useEffect(() => {
     setSelectedPendingSubmissionId(current =>
@@ -2317,11 +2458,12 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
   };
 
   const submitAssignment = async () => {
-    if (!assignment || !submissionText.trim()) return;
+    if (!assignment || (!submissionText.trim() && assignmentPendingMedia.length === 0)) return;
     const result = await runWorkflowAction("Assignment submission", {
       type: "assignment.submit",
       assignmentId: assignment.id,
       response: submissionText.trim(),
+      pendingMedia: assignmentPendingMedia,
     });
     if (result)
       toast.success("Assignment submitted", { description: result.entityId });
@@ -2334,15 +2476,20 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
           quizQuestionPreviews
             .map(question => [
               question.id,
-              (quizAnswers[question.id] ?? "").trim(),
+              (quizAnswers[question.id] ?? "").trim() ||
+                (quizPendingMedia[question.id]?.length
+                  ? "Pending media attached"
+                  : ""),
             ])
             .filter(([, answer]) => answer.length > 0)
         )
       : { q1: quizFallbackAnswer.trim() };
+    const pendingMedia = Object.values(quizPendingMedia).flat();
     const result = await runWorkflowAction("Quiz attempt", {
       type: "quiz.submit",
       quizId: quiz.id,
       answers,
+      pendingMedia,
     });
     const attempt = result?.result as typeof latestAttempt | undefined;
     if (result) {
@@ -2386,32 +2533,38 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
       );
     }
     if (question.type === "oral_record" || question.type === "file_upload") {
+      const mediaKind = question.type === "oral_record" ? "audio" : "document";
+      const mediaItems = quizPendingMedia[question.id] ?? [];
       return (
-        <div className="platform-quiz-storage-state">
-          <strong>
-            {question.type === "oral_record"
-              ? "Audio response"
-              : "File response"}
-          </strong>
-          <span>
-            Storage upload is not connected in this slice. Attach a pending
-            response so the attempt can move into teacher review.
-          </span>
-          <button
-            type="button"
-            className={value ? "selected" : ""}
-            onClick={() =>
-              setQuizQuestionAnswer(
-                question.id,
-                question.type === "oral_record"
-                  ? "Pending audio response attached"
-                  : "Pending file response attached"
-              )
+        <div className="platform-quiz-media-answer">
+          <PendingMediaField
+            kind={mediaKind}
+            label={
+              question.type === "oral_record" ? "Audio response" : "File response"
             }
-          >
-            <CheckCircle2 size={14} />
-            {value ? "Pending response attached" : "Use pending media response"}
-          </button>
+            description="Attach metadata for teacher review. File bytes stay on this device until protected storage is connected."
+            value={mediaItems}
+            onChange={items => {
+              setQuizPendingMedia(current => ({
+                ...current,
+                [question.id]: items,
+              }));
+              if (items.length && !value.trim()) {
+                setQuizQuestionAnswer(question.id, "Pending media attached");
+              }
+              if (!items.length && value === "Pending media attached") {
+                setQuizQuestionAnswer(question.id, "");
+              }
+            }}
+          />
+          <textarea
+            aria-label={`${question.prompt} response note`}
+            value={value === "Pending media attached" ? "" : value}
+            onChange={event =>
+              setQuizQuestionAnswer(question.id, event.target.value)
+            }
+            placeholder="Add a short note for your teacher"
+          />
         </div>
       );
     }
@@ -2597,6 +2750,7 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
                           ? "Your teacher will grade this submission and return feedback here."
                           : "Submit your answer when you are ready for teacher review.")}
                     </p>
+                    <PendingMediaSummary items={latestSubmission?.pendingMedia} />
                   </div>
                   <dl>
                     <div>
@@ -2624,6 +2778,27 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
               ) : null}
               {role === "student" ? (
                 <>
+                  {assignment.submissionType !== "text" ? (
+                    <PendingMediaField
+                      kind={
+                        assignment.submissionType === "audio"
+                          ? "audio"
+                          : assignment.submissionType === "video"
+                            ? "video"
+                            : "document"
+                      }
+                      label={
+                        assignment.submissionType === "audio"
+                          ? "Audio submission"
+                          : assignment.submissionType === "video"
+                            ? "Video submission"
+                            : "File submission"
+                      }
+                      description="Select the file for this submission. Nile Learn saves metadata now and keeps storage pending."
+                      value={assignmentPendingMedia}
+                      onChange={setAssignmentPendingMedia}
+                    />
+                  ) : null}
                   <textarea
                     aria-label="Assignment response"
                     value={submissionText}
@@ -2633,7 +2808,7 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
                     className="platform-primary-button"
                     style={{ background: roleMeta[role].color }}
                     disabled={
-                      !submissionText.trim() ||
+                      (!submissionText.trim() && assignmentPendingMedia.length === 0) ||
                       savingAction === "Assignment submission"
                     }
                     onClick={submitAssignment}
@@ -2722,6 +2897,7 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
                           ? "Your attempt is saved. Teacher review feedback will appear here when returned."
                           : "Answer the questions and submit an attempt for review.")}
                     </p>
+                    <PendingMediaSummary items={latestAttempt?.pendingMedia} />
                   </div>
                   <dl>
                     <div>
@@ -2795,6 +2971,9 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
                 </div>
               )}
               <button
+                type="button"
+                className="platform-primary-button"
+                style={{ background: roleMeta[role].color }}
                 disabled={
                   role !== "student" ||
                   !quizHasAnswer ||
@@ -3271,6 +3450,7 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
                     selectedPendingSubmission.assignmentId}
                 </p>
                 <blockquote>{selectedPendingSubmission.response}</blockquote>
+                <PendingMediaSummary items={selectedPendingSubmission.pendingMedia} />
                 <div className="platform-inline-form">
                   <label>
                     Score
@@ -3396,6 +3576,7 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
                     }
                   )}
                 </div>
+                <PendingMediaSummary items={selectedQuizAttempt.pendingMedia} />
                 <div className="platform-inline-form">
                   <label>
                     Score
@@ -4227,6 +4408,7 @@ function StudentQuranWorkflow({ role, state, refresh }: WorkflowProps) {
   const [saving, setSaving] = useState(false);
   const [workflowError, setWorkflowError] = useState("");
   const [workflowMessage, setWorkflowMessage] = useState("");
+  const [pendingMedia, setPendingMedia] = useState<PendingMediaAttachment[]>([]);
   const canSubmit = Boolean(plan && title.trim() && !saving);
 
   const submitRecitation = async () => {
@@ -4239,6 +4421,7 @@ function StudentQuranWorkflow({ role, state, refresh }: WorkflowProps) {
       studentId: scope.studentId,
       teacherId: plan.teacherId,
       title: title.trim(),
+      pendingMedia,
     });
     setSaving(false);
     if (!result.ok || !result.data) {
@@ -4249,6 +4432,7 @@ function StudentQuranWorkflow({ role, state, refresh }: WorkflowProps) {
     }
     platformStore.setState(result.data.state);
     refresh();
+    setPendingMedia([]);
     setWorkflowMessage(
       `Submitted to your Quran teacher · ${result.data.persistence}`
     );
@@ -4304,6 +4488,13 @@ function StudentQuranWorkflow({ role, state, refresh }: WorkflowProps) {
                 onChange={event => setTitle(event.target.value)}
               />
             </label>
+            <PendingMediaField
+              kind="audio"
+              label="Audio recitation"
+              description="Select your recitation audio. Nile Learn saves the metadata now and keeps playback pending."
+              value={pendingMedia}
+              onChange={setPendingMedia}
+            />
             <button
               className="platform-primary-button"
               style={{ background: roleMeta[role].color }}
@@ -4340,6 +4531,7 @@ function StudentQuranWorkflow({ role, state, refresh }: WorkflowProps) {
                       {formatDateTime(submission.submittedAt)}
                       {submission.feedback ? ` · ${submission.feedback}` : ""}
                     </small>
+                    <PendingMediaSummary items={submission.pendingMedia} />
                   </div>
                   <span className={`platform-status ${submission.status}`}>
                     {submission.status}
@@ -4374,132 +4566,13 @@ function StudentQuranWorkflow({ role, state, refresh }: WorkflowProps) {
 
 function StudentMessageWorkflow({ role, state, refresh }: WorkflowProps) {
   const scope = getStudentScope(state);
-  const teacherIds = Array.from(
-    new Set(scope.courses.map(({ run }) => run.teacherId).filter(Boolean))
-  );
-  const recipients = state.users.filter(
-    user =>
-      teacherIds.includes(user.id) ||
-      user.activeRole === "registrar" ||
-      user.activeRole === "branchadmin"
-  );
-  const [toUserId, setToUserId] = useState(
-    recipients[0]?.id ?? getDemoUser("teacher").id
-  );
-  const [subject, setSubject] = useState("Question about my lesson");
-  const [body, setBody] = useState(
-    "Please review my question before the next class."
-  );
-  const messages = state.messages.filter(
-    message =>
-      message.fromUserId === scope.userId || message.toUserId === scope.userId
-  );
-
   return (
-    <div className="platform-workflow-layout">
-      <div className="platform-workflow-main">
-        <section className="platform-workflow-card">
-          <div className="platform-workflow-title">
-            <span>
-              <MessageSquare size={16} /> Student messages
-            </span>
-            <strong>Teacher and support inbox</strong>
-          </div>
-          <div className="platform-inline-form grid">
-            <label>
-              Recipient
-              <select
-                value={toUserId}
-                onChange={event => setToUserId(event.target.value)}
-              >
-                {recipients.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} · {roleMeta[user.activeRole].label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Subject
-              <input
-                value={subject}
-                onChange={event => setSubject(event.target.value)}
-              />
-            </label>
-          </div>
-          <textarea
-            value={body}
-            onChange={event => setBody(event.target.value)}
-          />
-          <button
-            className="platform-primary-button"
-            style={{ background: roleMeta[role].color }}
-            disabled={!subject.trim() || !body.trim() || !toUserId}
-            onClick={() => {
-              platformStore.sendMessage({
-                fromUserId: scope.userId,
-                toUserId,
-                subject,
-                body,
-              });
-              refresh();
-              toast.success("Message sent");
-            }}
-          >
-            <Send size={15} />
-            Send message
-          </button>
-        </section>
-        <section className="platform-workflow-card">
-          <div className="platform-workflow-title">
-            <span>
-              <MessageSquare size={16} /> Conversation history
-            </span>
-            <strong>{messages.length} messages</strong>
-          </div>
-          <div className="platform-row-list">
-            {messages.length ? (
-              messages.map(message => {
-                const from = state.users.find(
-                  user => user.id === message.fromUserId
-                );
-                const to = state.users.find(
-                  user => user.id === message.toUserId
-                );
-                return (
-                  <article key={message.id}>
-                    <div>
-                      <strong>{message.subject}</strong>
-                      <small>
-                        {from?.name ?? "Student"} to {to?.name ?? "Team"} ·{" "}
-                        {formatDateTime(message.createdAt)}
-                      </small>
-                    </div>
-                    <span>{message.read ? "read" : "unread"}</span>
-                  </article>
-                );
-              })
-            ) : (
-              <div className="platform-empty-state">
-                <strong>No messages yet</strong>
-                <span>
-                  Send your teacher or support team a message when you need
-                  help.
-                </span>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
-      <aside className="platform-workflow-side">
-        <MiniMetric label="Inbox" value={String(messages.length)} />
-        <MiniMetric label="Teachers" value={String(teacherIds.length)} />
-        <MiniMetric
-          label="Unread"
-          value={String(messages.filter(message => !message.read).length)}
-        />
-      </aside>
-    </div>
+    <InboxChatWorkflow
+      role={role}
+      state={state}
+      refresh={refresh}
+      actorId={scope.userId}
+    />
   );
 }
 
@@ -6949,6 +7022,7 @@ function QuranWorkflow({ role, state, refresh }: WorkflowProps) {
                         {user?.name ?? "Learner"} ·{" "}
                         {formatDateTime(item.submittedAt)}
                       </small>
+                      <PendingMediaSummary items={item.pendingMedia} />
                     </div>
                     <div className="platform-row-actions">
                       <span className={`platform-status ${item.status}`}>
@@ -7026,6 +7100,7 @@ function QuranWorkflow({ role, state, refresh }: WorkflowProps) {
             label="Recitation waveform placeholder"
             status={selectedSubmission?.status}
           />
+          <PendingMediaSummary items={selectedSubmission?.pendingMedia} />
           <div className="platform-tag-grid" aria-label="Tajweed mistake tags">
             {mistakeOptions.map(mistake => (
               <button
@@ -7099,6 +7174,7 @@ function QuranWorkflow({ role, state, refresh }: WorkflowProps) {
             Review evidence is saved now. Audio upload and playback will use the
             future protected storage provider.
           </p>
+          <PendingMediaSummary items={selectedSubmission?.pendingMedia} />
         </section>
       </aside>
     </div>
@@ -7107,90 +7183,419 @@ function QuranWorkflow({ role, state, refresh }: WorkflowProps) {
 
 function MessageWorkflow({ role, state, refresh }: WorkflowProps) {
   const actorUser = getRoleActorUser(state, role);
-  const actorId = actorUser.id;
-  const teacherRunIds = new Set(
-    state.courseRuns.filter(run => run.teacherId === actorId).map(run => run.id)
+  return (
+    <InboxChatWorkflow
+      role={role}
+      state={state}
+      refresh={refresh}
+      actorId={actorUser.id}
+    />
   );
-  const teacherStudentIds = new Set(
-    state.classGroups
-      .filter(group => teacherRunIds.has(group.courseRunId))
-      .flatMap(group => group.studentIds)
+}
+
+type ConversationSummary = {
+  id: string;
+  participantId: string;
+  participantName: string;
+  participantRole: Role;
+  latestMessage?: Message;
+  messages: Message[];
+  unread: number;
+};
+
+function InboxChatWorkflow({
+  role,
+  state,
+  refresh,
+  actorId,
+}: WorkflowProps & { actorId: string }) {
+  const roleAccent = roleMeta[role].color;
+  const recipientScope = useMemo(
+    () => getMessageRecipientScope(state, role, actorId),
+    [actorId, role, state]
   );
-  const branchUser = state.users.find(user => user.id === actorId);
-  const branchRecipients = state.users.filter(
-    user => user.branchId === branchUser?.branchId && user.id !== actorId
+  const visibleUsers = useMemo(
+    () =>
+      state.users
+        .filter(user => recipientScope.visibleUserIds.has(user.id))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [recipientScope, state.users]
   );
-  const recipientOptions =
-    role === "teacher"
-      ? state.users.filter(user =>
-          state.students.some(
-            student =>
-              student.userId === user.id && teacherStudentIds.has(student.id)
-          )
-        )
-      : role === "registrar"
-        ? state.users.filter(user =>
-            [
-              "student",
-              "branchadmin",
-              "headofdepartment",
-              "superadmin",
-            ].includes(user.activeRole)
-          )
-        : role === "branchadmin"
-          ? branchRecipients
-          : role === "headofdepartment"
-            ? state.users.filter(user =>
-                ["teacher", "student", "superadmin"].includes(user.activeRole)
-              )
-            : state.users.filter(user => user.id !== actorId);
-  const [toUserId, setToUserId] = useState(
-    recipientOptions[0]?.id ?? "usr_student_demo"
+  const sendableUsers = visibleUsers.filter(user =>
+    recipientScope.sendableUserIds.has(user.id)
   );
-  const [subject, setSubject] = useState("Class update");
-  const [body, setBody] = useState("Your next Nile Learn update is ready.");
-  const recipientIds = new Set([
-    actorId,
-    ...recipientOptions.map(user => user.id),
-  ]);
-  const scopedMessages =
-    role === "superadmin"
-      ? state.messages
-      : state.messages.filter(
-          message =>
-            recipientIds.has(message.fromUserId) ||
-            recipientIds.has(message.toUserId)
-        );
+  const [query, setQuery] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState(
+    sendableUsers[0]?.id ?? visibleUsers[0]?.id ?? ""
+  );
+  const [subject, setSubject] = useState(
+    role === "student" ? "Question about my lesson" : "Class update"
+  );
+  const [body, setBody] = useState(
+    role === "student"
+      ? "Please review my question before the next class."
+      : "Your next Nile Learn update is ready."
+  );
+  const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const searchInputId = useId();
+  const broadcastRecipientValue = "__broadcast_all__";
+
+  const scopedMessages = useMemo(
+    () =>
+      state.messages
+        .filter(message => {
+          if (message.fromUserId === actorId || message.toUserId === actorId)
+            return true;
+          return (
+            role === "superadmin" &&
+            recipientScope.visibleUserIds.has(message.fromUserId) &&
+            recipientScope.visibleUserIds.has(message.toUserId)
+          );
+        })
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ),
+    [actorId, recipientScope, role, state.messages]
+  );
+
+  const conversations = useMemo(() => {
+    const map = new Map<string, ConversationSummary>();
+    scopedMessages.forEach(message => {
+      const participantId =
+        message.fromUserId === actorId ? message.toUserId : message.fromUserId;
+      const participant = state.users.find(user => user.id === participantId);
+      if (!participant) return;
+      const existing =
+        map.get(participantId) ??
+        ({
+          id: participantId,
+          participantId,
+          participantName: participant.name,
+          participantRole: participant.activeRole,
+          messages: [],
+          unread: 0,
+        } satisfies ConversationSummary);
+      existing.messages.push(message);
+      existing.latestMessage =
+        !existing.latestMessage ||
+        new Date(message.createdAt) >
+          new Date(existing.latestMessage.createdAt)
+          ? message
+          : existing.latestMessage;
+      if (!message.read && message.toUserId === actorId) existing.unread += 1;
+      map.set(participantId, existing);
+    });
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        new Date(b.latestMessage?.createdAt ?? 0).getTime() -
+        new Date(a.latestMessage?.createdAt ?? 0).getTime()
+    );
+  }, [actorId, scopedMessages, state.users]);
 
   useEffect(() => {
     if (
-      recipientOptions.length &&
-      !recipientOptions.some(user => user.id === toUserId)
-    ) {
-      setToUserId(recipientOptions[0].id);
+      selectedUserId &&
+      (selectedUserId === broadcastRecipientValue ||
+        visibleUsers.some(user => user.id === selectedUserId))
+    )
+      return;
+    setSelectedUserId(sendableUsers[0]?.id ?? visibleUsers[0]?.id ?? "");
+  }, [selectedUserId, sendableUsers, visibleUsers]);
+
+  const isBroadcast =
+    role === "superadmin" && selectedUserId === broadcastRecipientValue;
+  const selectedUser = state.users.find(user => user.id === selectedUserId);
+  const selectedConversation = conversations.find(
+    conversation => conversation.participantId === selectedUserId
+  );
+  const selectedMessages = [...(selectedConversation?.messages ?? [])].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+  const filteredConversations = conversations.filter(conversation =>
+    `${conversation.participantName} ${conversation.latestMessage?.subject ?? ""} ${conversation.latestMessage?.body ?? ""}`
+      .toLowerCase()
+      .includes(query.toLowerCase())
+  );
+  const directoryMatches = visibleUsers.filter(user =>
+    `${user.name} ${user.email} ${roleMeta[user.activeRole].label}`
+      .toLowerCase()
+      .includes(query.toLowerCase())
+  );
+  const canSend =
+    (isBroadcast
+      ? sendableUsers.length > 0
+      : Boolean(selectedUserId) &&
+        recipientScope.sendableUserIds.has(selectedUserId)) &&
+    Boolean(subject.trim()) &&
+    Boolean(body.trim());
+  const sendButtonLabel =
+    role === "branchadmin"
+      ? "Send branch message"
+      : role === "headofdepartment"
+        ? "Send academic message"
+        : "Send message";
+
+  const addAttachment = (kind: MessageAttachment["kind"]) => {
+    const nextIndex = attachments.length + 1;
+    const attachment: MessageAttachment =
+      kind === "image"
+        ? {
+            name: `class-board-${nextIndex}.png`,
+            type: "image/png",
+            size: 420000,
+            kind,
+            previewLabel: "Image preview",
+          }
+        : {
+            name: `lesson-note-${nextIndex}.pdf`,
+            type: "application/pdf",
+            size: 280000,
+            kind,
+            previewLabel: "Document preview",
+          };
+    setAttachments(current => [...current, attachment].slice(0, 6));
+  };
+
+  const sendMessage = async () => {
+    if (!canSend) return;
+    setSending(true);
+    setSendError("");
+    const recipientUserIds = isBroadcast
+      ? sendableUsers.map(user => user.id)
+      : [selectedUserId];
+    const result = await runPlatformWorkflowActionRequest({
+      type: "message.send",
+      toUserId: recipientUserIds[0],
+      recipientUserIds: isBroadcast ? recipientUserIds : undefined,
+      subject: subject.trim(),
+      body: body.trim(),
+      attachments,
+      channel: "in_app",
+    });
+    setSending(false);
+    if (!result.ok || !result.data) {
+      const message = result.error ?? "Message could not be sent.";
+      setSendError(message);
+      toast.error("Message failed", { description: message });
+      return;
     }
-  }, [recipientOptions, toUserId]);
+    platformStore.setState(result.data.state);
+    refresh();
+    setBody("");
+    setAttachments([]);
+    toast.success("Message sent", {
+      description: isBroadcast
+        ? `${recipientUserIds.length} recipients`
+        : selectedUser?.name,
+    });
+  };
 
   return (
-    <div className="platform-workflow-layout">
-      <div className="platform-workflow-main">
-        <section className="platform-workflow-card">
-          <div className="platform-workflow-title">
-            <span>
-              <MessageSquare size={16} /> Messages
-            </span>
-            <strong>Compose message</strong>
+    <section
+      className="platform-workflow-card platform-inbox-chat"
+      style={{ ["--message-role-color" as string]: roleAccent }}
+    >
+      <div className="platform-inbox-pane">
+        <div className="platform-inbox-heading">
+          <div>
+            <span>Inbox</span>
+            <strong>Messages</strong>
           </div>
+          <button
+            type="button"
+            aria-label="Start message"
+            onClick={() => {
+              setSelectedUserId(sendableUsers[0]?.id ?? "");
+              setSubject(
+                role === "student" ? "Question about my lesson" : "Class update"
+              );
+            }}
+          >
+            <MessageSquare size={16} />
+          </button>
+        </div>
+        <label className="platform-sr-only" htmlFor={searchInputId}>
+          Search conversations or users
+        </label>
+        <label className="platform-inbox-search">
+          <Search size={15} />
+          <input
+            id={searchInputId}
+            aria-label="Search conversations or users"
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            placeholder="Search conversations or users"
+          />
+        </label>
+        <div className="platform-inbox-tabs" aria-label="Message filters">
+          <span>Conversations {conversations.length}</span>
+          <span>Directory {visibleUsers.length}</span>
+        </div>
+        <div className="platform-inbox-list" aria-label="Conversations">
+          {filteredConversations.length ? (
+            filteredConversations.map(conversation => (
+              <button
+                type="button"
+                key={conversation.id}
+                className={
+                  conversation.participantId === selectedUserId
+                    ? "selected"
+                    : undefined
+                }
+                onClick={() => setSelectedUserId(conversation.participantId)}
+              >
+                <span className="platform-inbox-avatar">
+                  {conversation.participantName.slice(0, 2).toUpperCase()}
+                </span>
+                <span>
+                  <strong>{conversation.participantName}</strong>
+                  <small>
+                    {conversation.latestMessage?.body ?? "No messages yet"}
+                  </small>
+                </span>
+                <em>{conversation.unread ? `${conversation.unread} new` : "read"}</em>
+              </button>
+            ))
+          ) : (
+            <div className="platform-inbox-empty">
+              <MessageSquare size={18} />
+              <strong>No conversations</strong>
+              <small>Select a recipient from the directory.</small>
+            </div>
+          )}
+          {directoryMatches
+            .filter(
+              user =>
+                !filteredConversations.some(
+                  conversation => conversation.participantId === user.id
+                )
+            )
+            .slice(0, 8)
+            .map(user => {
+              const sendable = recipientScope.sendableUserIds.has(user.id);
+              return (
+                <button
+                  type="button"
+                  key={user.id}
+                  className={user.id === selectedUserId ? "selected" : undefined}
+                  onClick={() => setSelectedUserId(user.id)}
+                >
+                  <span className="platform-inbox-avatar">
+                    {user.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span>
+                    <strong>{user.name}</strong>
+                    <small>
+                      {roleMeta[user.activeRole].label}
+                      {sendable ? " · available" : " · view only"}
+                    </small>
+                  </span>
+                  <em>{sendable ? "send" : "locked"}</em>
+                </button>
+              );
+            })}
+        </div>
+      </div>
+      <div className="platform-chat-pane">
+        <div className="platform-chat-header">
+          <button
+            type="button"
+            className="platform-chat-back"
+            aria-label="Back to messages"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <span className="platform-inbox-avatar large">
+            {(isBroadcast ? "All" : selectedUser?.name ?? "NL")
+              .slice(0, 2)
+              .toUpperCase()}
+          </span>
+          <div>
+            <strong>
+              {isBroadcast
+                ? "All active users"
+                : selectedUser?.name ?? "Select a recipient"}
+            </strong>
+            <small>
+              {isBroadcast
+                ? `${sendableUsers.length} scoped recipients`
+                : selectedUser
+                ? `${roleMeta[selectedUser.activeRole].label} · ${
+                    recipientScope.sendableUserIds.has(selectedUser.id)
+                      ? "Available to message"
+                      : "Directory only"
+                  }`
+                : "Choose someone from the inbox"}
+            </small>
+          </div>
+          <button type="button" aria-label="Conversation actions">
+            <MoreVertical size={17} />
+          </button>
+        </div>
+        <div className="platform-chat-thread" aria-live="polite">
+          {selectedMessages.length ? (
+            selectedMessages.map(message => {
+              const mine = message.fromUserId === actorId;
+              return (
+                <article
+                  key={message.id}
+                  className={mine ? "mine" : undefined}
+                >
+                  <span>{mine ? "You" : selectedUser?.name}</span>
+                  <strong>{message.subject}</strong>
+                  <p>{message.body}</p>
+                  {message.attachments?.length ? (
+                    <div className="platform-chat-attachments">
+                      {message.attachments.map(attachment => (
+                        <small key={`${message.id}-${attachment.name}`}>
+                          {attachment.kind === "image" ? (
+                            <Image size={13} />
+                          ) : (
+                            <FileText size={13} />
+                          )}
+                          {attachment.name}
+                        </small>
+                      ))}
+                    </div>
+                  ) : null}
+                  <time>{formatDateTime(message.createdAt)}</time>
+                </article>
+              );
+            })
+          ) : (
+            <div className="platform-chat-empty">
+              <Send size={34} />
+              <strong>Start the conversation</strong>
+              <small>Send a scoped in-app message to begin chatting.</small>
+            </div>
+          )}
+        </div>
+        <div className="platform-chat-composer">
           <div className="platform-inline-form grid">
             <label>
               Recipient
               <select
-                value={toUserId}
-                onChange={event => setToUserId(event.target.value)}
+                value={selectedUserId}
+                onChange={event => setSelectedUserId(event.target.value)}
               >
-                {recipientOptions.map(user => (
-                  <option key={user.id} value={user.id}>
+                {role === "superadmin" ? (
+                  <option value={broadcastRecipientValue}>
+                    All active users · broadcast
+                  </option>
+                ) : null}
+                {visibleUsers.map(user => (
+                  <option
+                    key={user.id}
+                    value={user.id}
+                    disabled={!recipientScope.sendableUserIds.has(user.id)}
+                  >
                     {user.name} · {roleMeta[user.activeRole].label}
+                    {recipientScope.sendableUserIds.has(user.id)
+                      ? ""
+                      : " · view only"}
                   </option>
                 ))}
               </select>
@@ -7203,39 +7608,68 @@ function MessageWorkflow({ role, state, refresh }: WorkflowProps) {
               />
             </label>
           </div>
-          <textarea
-            value={body}
-            onChange={event => setBody(event.target.value)}
-          />
-          <button
-            className="platform-primary-button"
-            style={{ background: roleMeta[role].color }}
-            disabled={!subject.trim() || !body.trim() || !toUserId}
-            onClick={() => {
-              platformStore.sendMessage({
-                fromUserId: actorId,
-                toUserId,
-                subject,
-                body,
-              });
-              refresh();
-              toast.success("Message sent");
-            }}
-          >
-            <Send size={15} />
-            Send message
-          </button>
-        </section>
-        <MessageList state={state} messages={scopedMessages} />
+          <label className="platform-chat-message-label">
+            Message
+            <textarea
+              value={body}
+              onChange={event => setBody(event.target.value)}
+              placeholder="Type a message..."
+            />
+          </label>
+          {attachments.length ? (
+            <div className="platform-chat-attachment-tray">
+              {attachments.map(attachment => (
+                <button
+                  type="button"
+                  key={attachment.name}
+                  onClick={() =>
+                    setAttachments(current =>
+                      current.filter(item => item.name !== attachment.name)
+                    )
+                  }
+                >
+                  {attachment.kind === "image" ? (
+                    <Image size={14} />
+                  ) : (
+                    <FileText size={14} />
+                  )}
+                  {attachment.previewLabel}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {sendError ? (
+            <p className="platform-chat-error">{sendError}</p>
+          ) : null}
+          <div className="platform-chat-actions">
+            <button
+              type="button"
+              onClick={() => addAttachment("document")}
+              aria-label="Attach document"
+            >
+              <Paperclip size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => addAttachment("image")}
+              aria-label="Attach image"
+            >
+              <Image size={16} />
+            </button>
+            <button
+              type="button"
+              className="platform-primary-button"
+              style={{ background: roleAccent }}
+              disabled={!canSend || sending}
+              onClick={sendMessage}
+            >
+              <Send size={15} />
+              {sending ? "Sending..." : sendButtonLabel}
+            </button>
+          </div>
+        </div>
       </div>
-      <aside className="platform-workflow-side">
-        <MiniMetric label="Conversations" value={String(scopedMessages.length)} />
-        <MiniMetric
-          label="Templates"
-          value={String(state.messageTemplates.length)}
-        />
-      </aside>
-    </div>
+    </section>
   );
 }
 

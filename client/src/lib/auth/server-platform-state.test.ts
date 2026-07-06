@@ -175,6 +175,48 @@ describe("server platform action scope gates", () => {
     });
   });
 
+  it("limits profile updates to the authenticated user and keeps role scope server-owned", async () => {
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "profile.update",
+          userId: "usr_student_demo",
+          name: "Cross Account Edit",
+        },
+        sessionFor("teacher"),
+      ),
+    ).rejects.toThrow("Users can only update their own profile.");
+
+    const result = await applyPlatformWorkflowAction(
+      {
+        type: "profile.update",
+        name: "Teacher Server Profile",
+        preferredLanguage: "Arabic",
+        notificationPreferences: { messages: false },
+        activeRole: "superadmin",
+        roles: ["superadmin"],
+        branchId: "br_global",
+        departmentId: "dep_admin",
+      } as any,
+      sessionFor("teacher"),
+    );
+    const user = result.state.users.find((item) => item.id === "usr_teacher_demo");
+
+    expect(user).toMatchObject({
+      name: "Teacher Server Profile",
+      activeRole: "teacher",
+      roles: ["teacher"],
+      branchId: "br_online",
+      departmentId: "dep_arabic",
+      preferredLanguage: "Arabic",
+    });
+    expect(user?.notificationPreferences).toMatchObject({ messages: false });
+    expect(result.state.auditLogs.map((item) => item.action)).toEqual(expect.arrayContaining(["profile.updated", "preferences.updated"]));
+    expect(result.state.auditLogs[0]).toMatchObject({
+      actorId: "usr_teacher_demo",
+    });
+  });
+
   it("blocks unassigned teachers from class attendance actions", async () => {
     const spareTeacher = sessionFor("teacher", {
       userId: "usr_teacher_spare",
@@ -286,6 +328,81 @@ describe("server platform action scope gates", () => {
     ).rejects.toThrow("Registrar can only create applications inside admissions branches.");
   });
 
+  it("enforces role-scoped messaging recipients while preserving server actor ownership", async () => {
+    const teacherResult = await applyPlatformWorkflowAction(
+      {
+        type: "message.send",
+        fromUserId: "usr_admin_demo",
+        toUserId: "usr_student_demo",
+        subject: "Scoped class note",
+        body: "Teacher can message an assigned student.",
+        attachments: [
+          {
+            name: "class-note.pdf",
+            type: "application/pdf",
+            size: 182000,
+            kind: "document",
+            previewLabel: "PDF - 178 KB",
+          },
+        ],
+      },
+      sessionFor("teacher"),
+    );
+    const sentMessage = teacherResult.state.messages[0];
+
+    expect(sentMessage).toMatchObject({
+      fromUserId: "usr_teacher_demo",
+      toUserId: "usr_student_demo",
+      subject: "Scoped class note",
+      attachments: [
+        {
+          name: "class-note.pdf",
+          kind: "document",
+          previewLabel: "PDF - 178 KB",
+        },
+      ],
+    });
+    expect(teacherResult.state.communicationLogs[0]).toMatchObject({
+      actorId: "usr_teacher_demo",
+      relatedUserId: "usr_student_demo",
+      attachments: sentMessage.attachments,
+    });
+    expect(teacherResult.state.auditLogs[0]).toMatchObject({
+      action: "message.sent",
+      actorId: "usr_teacher_demo",
+      entityId: sentMessage.id,
+    });
+
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "message.send",
+          toUserId: "usr_student_alex_demo",
+          subject: "Blocked class note",
+          body: "Teacher cannot message unrelated students.",
+        },
+        sessionFor("teacher"),
+      ),
+    ).rejects.toThrow("Message recipient is outside this role scope.");
+
+    const adminResult = await applyPlatformWorkflowAction(
+      {
+        type: "message.send",
+        toUserId: "usr_student_alex_demo",
+        recipientUserIds: ["usr_student_alex_demo", "usr_teacher_demo"],
+        subject: "Global announcement",
+        body: "Super admin can message any active account.",
+      },
+      sessionFor("superadmin"),
+    );
+
+    const broadcastMessages = adminResult.state.messages.filter((item) => item.subject === "Global announcement");
+
+    expect(broadcastMessages).toHaveLength(2);
+    expect(broadcastMessages.map((item) => item.toUserId).sort()).toEqual(["usr_student_alex_demo", "usr_teacher_demo"]);
+    expect(broadcastMessages.every((item) => item.fromUserId === "usr_admin_demo")).toBe(true);
+  });
+
   it("blocks HOD finance report presets outside academic report scope", async () => {
     await expect(
       applyPlatformWorkflowAction(
@@ -301,5 +418,107 @@ describe("server platform action scope gates", () => {
         sessionFor("headofdepartment"),
       ),
     ).rejects.toThrow("Role headofdepartment cannot save finance report views.");
+  });
+
+  it("saves scoped portal settings for branch, registrar, and HOD roles", async () => {
+    const branchResult = await applyPlatformWorkflowAction(
+      {
+        type: "portal.settings.save",
+        role: "branchadmin",
+        scopeId: "br_cairo",
+        label: "Cairo branch desk",
+        language: "English",
+        timezone: "Africa/Cairo",
+        notifications: true,
+        attendanceCutoffMinutes: 20,
+      },
+      sessionFor("branchadmin"),
+    );
+    expect(branchResult.state.portalSettings.find((item) => item.role === "branchadmin" && item.scopeId === "br_cairo")).toMatchObject({
+      label: "Cairo branch desk",
+      updatedBy: "usr_branch_demo",
+    });
+
+    const registrarResult = await applyPlatformWorkflowAction(
+      {
+        type: "portal.settings.save",
+        role: "registrar",
+        scopeId: "br_cairo",
+        label: "Admissions desk",
+        language: "English",
+        timezone: "Africa/Cairo",
+        notifications: true,
+        reviewCadenceDays: 2,
+        paymentReminderDays: 5,
+      },
+      sessionFor("registrar"),
+    );
+    expect(registrarResult.state.portalSettings.find((item) => item.role === "registrar" && item.scopeId === "br_cairo")).toMatchObject({
+      paymentReminderDays: 5,
+      updatedBy: "usr_registrar_demo",
+    });
+
+    const hodResult = await applyPlatformWorkflowAction(
+      {
+        type: "portal.settings.save",
+        role: "headofdepartment",
+        scopeId: "dep_arabic",
+        label: "Arabic review desk",
+        language: "English",
+        timezone: "Africa/Cairo",
+        notifications: true,
+        reviewCadenceDays: 7,
+      },
+      sessionFor("headofdepartment"),
+    );
+    expect(hodResult.state.portalSettings.find((item) => item.role === "headofdepartment" && item.scopeId === "dep_arabic")).toMatchObject({
+      reviewCadenceDays: 7,
+      updatedBy: "usr_hod_demo",
+    });
+  });
+
+  it("blocks scoped settings outside the active user's branch or department", async () => {
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "portal.settings.save",
+          role: "branchadmin",
+          scopeId: "br_alex",
+          label: "Other branch",
+          language: "English",
+          timezone: "Africa/Cairo",
+          notifications: true,
+        },
+        sessionFor("branchadmin"),
+      ),
+    ).rejects.toThrow("Portal settings are limited to your branch.");
+
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "portal.settings.save",
+          role: "headofdepartment",
+          scopeId: "dep_quran",
+          label: "Other department",
+          language: "English",
+          timezone: "Africa/Cairo",
+          notifications: true,
+        },
+        sessionFor("headofdepartment"),
+      ),
+    ).rejects.toThrow("Portal settings are limited to your department.");
+
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "settings.save",
+          organization: "Nile Center",
+          defaultLanguage: "English",
+          academicTerm: "Summer 2026",
+          retentionDays: 365,
+        },
+        sessionFor("headofdepartment"),
+      ),
+    ).rejects.toThrow("Role headofdepartment cannot run settings.save.");
   });
 });

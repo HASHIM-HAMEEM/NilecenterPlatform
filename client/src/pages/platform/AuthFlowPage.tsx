@@ -1,24 +1,56 @@
-import { useEffect } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { ArrowLeft, CheckCircle2, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { clearStoredSession, setStoredRole } from "@/lib/auth/session";
+import { confirmPasswordReset, requestPasswordReset } from "@/lib/backend/api";
 import type { Role } from "@/lib/platformData";
 
+const roleOptions: { label: string; value: Role }[] = [
+  { label: "Student", value: "student" },
+  { label: "Teacher", value: "teacher" },
+  { label: "Registrar", value: "registrar" },
+  { label: "HOD", value: "headofdepartment" },
+  { label: "Branch Admin", value: "branchadmin" },
+  { label: "Super Admin", value: "superadmin" },
+];
+
 export default function AuthFlowPage({ mode }: { mode: "forgot-password" | "reset-password" | "select-role" | "logout" }) {
+  const currentSearch = typeof window === "undefined" ? "" : window.location.search;
+  const query = useMemo(() => new URLSearchParams(currentSearch), [currentSearch]);
+  const queryEmail = query.get("email") ?? "";
+  const token = query.get("token") ?? "";
+  const [email, setEmail] = useState(query.get("email") ?? "");
+  const [role, setRole] = useState<Role>("student");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [demoResetPath, setDemoResetPath] = useState("");
+
   useEffect(() => {
     if (mode === "logout") clearStoredSession();
   }, [mode]);
 
+  useEffect(() => {
+    if (mode !== "reset-password") return;
+    setEmail(queryEmail);
+    setPassword("");
+    setConfirmPassword("");
+    setMessage("");
+    setError("");
+  }, [mode, queryEmail, token]);
+
   const copy = {
     "forgot-password": {
       title: "Reset your password",
-      description: "Enter your account email and Nile Learn will send the next step when email delivery is connected.",
+      description: "Enter your account email. Nile Learn will show the safe next step for demo accounts.",
       action: "Send reset link",
       icon: Mail,
     },
     "reset-password": {
       title: "Choose a new password",
-      description: "This secure reset screen is wired for the future auth provider and does not store credentials locally.",
+      description: "Use the reset link from the request screen to update a demo password.",
       action: "Update password",
       icon: ShieldCheck,
     },
@@ -59,6 +91,56 @@ export default function AuthFlowPage({ mode }: { mode: "forgot-password" | "rese
   }[mode];
   const Icon = copy.icon;
 
+  const requestReset = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    setDemoResetPath("");
+    if (!email.trim()) {
+      setError("Enter the account email.");
+      return;
+    }
+    setSubmitting(true);
+    const response = await requestPasswordReset({ email, role });
+    setSubmitting(false);
+    if (!response.ok || !response.data) {
+      setError(response.error ?? "Reset request failed.");
+      return;
+    }
+    setMessage("If this account exists, reset instructions are ready.");
+    setDemoResetPath(response.data.demoResetPath ?? "");
+  };
+
+  const confirmReset = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    if (!token) {
+      setError("Open this page from a valid reset link.");
+      return;
+    }
+    if (!email.trim()) {
+      setError("Enter the account email.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Use at least 8 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setSubmitting(true);
+    const response = await confirmPasswordReset({ token, email, password });
+    setSubmitting(false);
+    if (!response.ok) {
+      setError(response.error ?? "Password reset failed.");
+      return;
+    }
+    setMessage("Password updated for this demo account. You can sign in now.");
+  };
+
   return (
     <div className="auth-flow-page">
       <div className="auth-flow-card">
@@ -94,23 +176,81 @@ export default function AuthFlowPage({ mode }: { mode: "forgot-password" | "rese
               </Link>
             ))}
           </div>
-        ) : mode === "logout" ? null : (
-          <form>
+        ) : mode === "logout" ? null : mode === "forgot-password" ? (
+          <form onSubmit={requestReset}>
             <label className="auth-flow-field">
-              {mode === "reset-password" ? "New password" : "Account email"}
+              Account email
               <input
-                type={mode === "reset-password" ? "password" : "email"}
-                autoComplete={mode === "reset-password" ? "new-password" : "email"}
-                placeholder={mode === "reset-password" ? "New password" : "name@example.com"}
+                type="email"
+                autoComplete="email"
+                placeholder="name@example.com"
+                value={email}
+                onChange={event => setEmail(event.target.value)}
               />
             </label>
-            {mode === "reset-password" ? (
-              <label className="auth-flow-field">
-                Confirm password
-                <input type="password" autoComplete="new-password" placeholder="Confirm password" />
-              </label>
+            <label className="auth-flow-field">
+              Workspace
+              <select value={role} onChange={event => setRole(event.target.value as Role)}>
+                {roleOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {error ? <p className="auth-flow-status error">{error}</p> : null}
+            {message ? <p className="auth-flow-status success">{message}</p> : null}
+            {demoResetPath ? (
+              <Link href={demoResetPath} className="auth-submit-link secondary">
+                Open demo reset link
+              </Link>
             ) : null}
-            <button type="button">{copy.action}</button>
+            <button type="submit" disabled={submitting}>
+              {submitting ? "Sending" : copy.action}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={confirmReset}>
+            <label className="auth-flow-field">
+              Account email
+              <input
+                type="email"
+                autoComplete="email"
+                placeholder="name@example.com"
+                value={email}
+                onChange={event => setEmail(event.target.value)}
+              />
+            </label>
+            <label className="auth-flow-field">
+              New password
+              <input
+                type="password"
+                autoComplete="new-password"
+                placeholder="New password"
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+              />
+            </label>
+            <label className="auth-flow-field">
+              Confirm password
+              <input
+                type="password"
+                autoComplete="new-password"
+                placeholder="Confirm password"
+                value={confirmPassword}
+                onChange={event => setConfirmPassword(event.target.value)}
+              />
+            </label>
+            {error ? <p className="auth-flow-status error">{error}</p> : null}
+            {message ? <p className="auth-flow-status success">{message}</p> : null}
+            {message ? (
+              <Link href="/auth/login" className="auth-submit-link secondary">
+                Return to login
+              </Link>
+            ) : null}
+            <button type="submit" disabled={submitting}>
+              {submitting ? "Updating" : copy.action}
+            </button>
           </form>
         )}
         {mode === "logout" ? (

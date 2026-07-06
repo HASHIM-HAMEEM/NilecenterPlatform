@@ -21,6 +21,39 @@ const AdminUsersPage = lazy(() => import("./pages/platform/AdminUsersPage"));
 const AdminUserDetailPage = lazy(
   () => import("./pages/platform/AdminUserDetailPage")
 );
+const AdminSchedulePage = lazy(
+  () => import("./pages/platform/AdminSchedulePage")
+);
+const AdminReportsPage = lazy(
+  () => import("./pages/platform/AdminReportsPage")
+);
+const AdminCoursesPage = lazy(
+  () => import("./pages/platform/AdminCoursesPage")
+);
+const TeacherAssessmentPage = lazy(
+  () => import("./pages/platform/TeacherAssessmentPage")
+);
+const TeacherClassesPage = lazy(
+  () => import("./pages/platform/TeacherClassesPage")
+);
+const TeacherClassDetailPage = lazy(
+  () => import("./pages/platform/TeacherClassDetailPage")
+);
+const TeacherClassWorkspacePage = lazy(
+  () => import("./pages/platform/TeacherClassWorkspacePage")
+);
+const MoodleSourcePage = lazy(
+  () => import("./pages/platform/MoodleSourcePage")
+);
+const PortalReportsPage = lazy(
+  () => import("./pages/platform/PortalReportsPage")
+);
+const PortalSettingsPage = lazy(
+  () => import("./pages/platform/PortalSettingsPage")
+);
+const ProfileWorkspace = lazy(
+  () => import("./pages/platform/ProfileWorkspace")
+);
 const FeaturePage = lazy(() => import("./components/platform/FeaturePage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -60,11 +93,6 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
     pageId: "quiz-detail",
   },
   { path: "/app/student/courses", role: "student", pageId: "courses" },
-  {
-    path: "/app/student/moodle-source",
-    role: "student",
-    pageId: "moodle-source",
-  },
   { path: "/app/student/assignments", role: "student", pageId: "assignments" },
   { path: "/app/student/quizzes", role: "student", pageId: "quizzes" },
   { path: "/app/student/grades", role: "student", pageId: "grades" },
@@ -78,7 +106,6 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
   },
   { path: "/app/student/reports", role: "student", pageId: "reports" },
   { path: "/app/student/support", role: "student", pageId: "support" },
-  { path: "/app/student/profile", role: "student", pageId: "profile" },
   {
     path: "/app/student/quran-progress",
     role: "student",
@@ -86,40 +113,9 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
   },
 
   {
-    path: "/app/teacher/classes/:classId/sessions",
-    role: "teacher",
-    pageId: "sessions",
-  },
-  {
-    path: "/app/teacher/classes/:classId/attendance",
-    role: "teacher",
-    pageId: "attendance",
-  },
-  {
-    path: "/app/teacher/classes/:classId/students",
-    role: "teacher",
-    pageId: "students",
-  },
-  {
-    path: "/app/teacher/classes/:classId/materials",
-    role: "teacher",
-    pageId: "materials",
-  },
-  {
-    path: "/app/teacher/classes/:classId",
-    role: "teacher",
-    pageId: "class-detail",
-  },
-  {
     path: "/app/teacher/assignments/:assignmentId",
     role: "teacher",
     pageId: "assignment-detail",
-  },
-  { path: "/app/teacher/classes", role: "teacher", pageId: "classes" },
-  {
-    path: "/app/teacher/moodle-source",
-    role: "teacher",
-    pageId: "moodle-source",
   },
   { path: "/app/teacher/assignments", role: "teacher", pageId: "assignments" },
   { path: "/app/teacher/grading", role: "teacher", pageId: "grading" },
@@ -131,8 +127,6 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
   },
   { path: "/app/teacher/calendar", role: "teacher", pageId: "calendar" },
   { path: "/app/teacher/messages", role: "teacher", pageId: "messages" },
-  { path: "/app/teacher/reports", role: "teacher", pageId: "reports" },
-  { path: "/app/teacher/profile", role: "teacher", pageId: "profile" },
   {
     path: "/app/teacher/quran-review",
     role: "teacher",
@@ -180,8 +174,6 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
   { path: "/app/registrar/schedule", role: "registrar", pageId: "schedule" },
   { path: "/app/registrar/payments", role: "registrar", pageId: "payments" },
   { path: "/app/registrar/messages", role: "registrar", pageId: "messages" },
-  { path: "/app/registrar/reports", role: "registrar", pageId: "reports" },
-  { path: "/app/registrar/settings", role: "registrar", pageId: "settings" },
 
   {
     path: "/app/hod/departments",
@@ -190,11 +182,6 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
   },
   { path: "/app/hod/programs", role: "headofdepartment", pageId: "programs" },
   { path: "/app/hod/courses", role: "headofdepartment", pageId: "courses" },
-  {
-    path: "/app/hod/moodle-source",
-    role: "headofdepartment",
-    pageId: "moodle-source",
-  },
   { path: "/app/hod/levels", role: "headofdepartment", pageId: "levels" },
   {
     path: "/app/hod/curriculum",
@@ -226,7 +213,6 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
   { path: "/app/branch/payments", role: "branchadmin", pageId: "payments" },
   { path: "/app/branch/reports", role: "branchadmin", pageId: "reports" },
   { path: "/app/branch/messages", role: "branchadmin", pageId: "messages" },
-  { path: "/app/branch/settings", role: "branchadmin", pageId: "settings" },
 
   {
     path: "/app/admin/users/:userId",
@@ -240,17 +226,13 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
   { path: "/app/admin/departments", role: "superadmin", pageId: "departments" },
   { path: "/app/admin/programs", role: "superadmin", pageId: "programs" },
   { path: "/app/admin/courses", role: "superadmin", pageId: "courses" },
+  { path: "/app/admin/messages", role: "superadmin", pageId: "messages" },
   {
     path: "/app/admin/certificates",
     role: "superadmin",
     pageId: "certificates",
   },
   { path: "/app/admin/schedule", role: "superadmin", pageId: "schedule" },
-  {
-    path: "/app/admin/moodle-source",
-    role: "superadmin",
-    pageId: "moodle-source",
-  },
   { path: "/app/admin/settings", role: "superadmin", pageId: "settings" },
   {
     path: "/app/admin/integrations",
@@ -399,6 +381,280 @@ function Router() {
         <Route path="/app/admin/users">
           <ProtectedRoute role="superadmin" pageId="users">
             <AdminUsersPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/schedule/conflicts">
+          <ProtectedRoute role="superadmin" pageId="schedule">
+            <AdminSchedulePage view="conflicts" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/schedule/sessions">
+          <ProtectedRoute role="superadmin" pageId="schedule">
+            <AdminSchedulePage view="sessions" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/schedule/rooms">
+          <ProtectedRoute role="superadmin" pageId="schedule">
+            <AdminSchedulePage view="rooms" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/schedule/activity">
+          <ProtectedRoute role="superadmin" pageId="schedule">
+            <AdminSchedulePage view="activity" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/schedule/calendar">
+          <ProtectedRoute role="superadmin" pageId="schedule">
+            <AdminSchedulePage view="calendar" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/schedule">
+          <ProtectedRoute role="superadmin" pageId="schedule">
+            <AdminSchedulePage view="calendar" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/reports/attendance">
+          <ProtectedRoute role="superadmin" pageId="reports">
+            <AdminReportsPage view="attendance" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/reports">
+          <ProtectedRoute role="superadmin" pageId="reports">
+            <AdminReportsPage view="overview" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/courses/programs">
+          <ProtectedRoute role="superadmin" pageId="courses">
+            <AdminCoursesPage view="programs" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/courses/levels">
+          <ProtectedRoute role="superadmin" pageId="courses">
+            <AdminCoursesPage view="levels" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/courses/curriculum">
+          <ProtectedRoute role="superadmin" pageId="courses">
+            <AdminCoursesPage view="curriculum" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/courses/teachers">
+          <ProtectedRoute role="superadmin" pageId="courses">
+            <AdminCoursesPage view="teachers" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/courses/resources">
+          <ProtectedRoute role="superadmin" pageId="courses">
+            <AdminCoursesPage view="resources" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/courses">
+          <ProtectedRoute role="superadmin" pageId="courses">
+            <AdminCoursesPage view="catalog" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/quizzes/new">
+          <ProtectedRoute role="teacher" pageId="quizzes">
+            <TeacherAssessmentPage view="new-quiz" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/quizzes/review">
+          <ProtectedRoute role="teacher" pageId="quizzes">
+            <TeacherAssessmentPage view="review" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/quizzes">
+          <ProtectedRoute role="teacher" pageId="quizzes">
+            <TeacherAssessmentPage view="quizzes" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/question-bank/new">
+          <ProtectedRoute role="teacher" pageId="question-bank">
+            <TeacherAssessmentPage view="new-question" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/question-bank">
+          <ProtectedRoute role="teacher" pageId="question-bank">
+            <TeacherAssessmentPage view="question-bank" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/classes">
+          <ProtectedRoute role="teacher" pageId="classes">
+            <TeacherClassesPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/classes/:classId">
+          {params => (
+            <ProtectedRoute role="teacher" pageId="class-detail">
+              <TeacherClassDetailPage classId={params.classId} />
+            </ProtectedRoute>
+          )}
+        </Route>
+
+        <Route path="/app/teacher/classes/:classId/sessions">
+          {params => (
+            <ProtectedRoute role="teacher" pageId="sessions">
+              <TeacherClassWorkspacePage classId={params.classId} view="sessions" />
+            </ProtectedRoute>
+          )}
+        </Route>
+
+        <Route path="/app/teacher/classes/:classId/attendance">
+          {params => (
+            <ProtectedRoute role="teacher" pageId="attendance">
+              <TeacherClassWorkspacePage classId={params.classId} view="attendance" />
+            </ProtectedRoute>
+          )}
+        </Route>
+
+        <Route path="/app/teacher/classes/:classId/students">
+          {params => (
+            <ProtectedRoute role="teacher" pageId="students">
+              <TeacherClassWorkspacePage classId={params.classId} view="students" />
+            </ProtectedRoute>
+          )}
+        </Route>
+
+        <Route path="/app/teacher/classes/:classId/materials">
+          {params => (
+            <ProtectedRoute role="teacher" pageId="materials">
+              <TeacherClassWorkspacePage classId={params.classId} view="materials" />
+            </ProtectedRoute>
+          )}
+        </Route>
+
+        <Route path="/app/student/moodle-source">
+          <ProtectedRoute role="student" pageId="moodle-source">
+            <MoodleSourcePage role="student" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/moodle-source">
+          <ProtectedRoute role="teacher" pageId="moodle-source">
+            <MoodleSourcePage role="teacher" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/hod/moodle-source">
+          <ProtectedRoute role="headofdepartment" pageId="moodle-source">
+            <MoodleSourcePage role="headofdepartment" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/moodle-source">
+          <ProtectedRoute role="superadmin" pageId="moodle-source">
+            <MoodleSourcePage role="superadmin" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/student/profile">
+          <ProtectedRoute role="student" pageId="profile">
+            <ProfileWorkspace role="student" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/profile">
+          <ProtectedRoute role="teacher" pageId="profile">
+            <ProfileWorkspace role="teacher" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/registrar/profile">
+          <ProtectedRoute role="registrar" pageId="profile">
+            <ProfileWorkspace role="registrar" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/hod/profile">
+          <ProtectedRoute role="headofdepartment" pageId="profile">
+            <ProfileWorkspace role="headofdepartment" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/branch/profile">
+          <ProtectedRoute role="branchadmin" pageId="profile">
+            <ProfileWorkspace role="branchadmin" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/profile">
+          <ProtectedRoute role="superadmin" pageId="profile">
+            <ProfileWorkspace role="superadmin" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/reports/attendance">
+          <ProtectedRoute role="teacher" pageId="reports">
+            <PortalReportsPage role="teacher" view="attendance" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/reports/grades">
+          <ProtectedRoute role="teacher" pageId="reports">
+            <PortalReportsPage role="teacher" view="grades" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/reports">
+          <ProtectedRoute role="teacher" pageId="reports">
+            <PortalReportsPage role="teacher" view="overview" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/registrar/reports/admissions">
+          <ProtectedRoute role="registrar" pageId="reports">
+            <PortalReportsPage role="registrar" view="admissions" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/registrar/reports/payments">
+          <ProtectedRoute role="registrar" pageId="reports">
+            <PortalReportsPage role="registrar" view="payments" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/registrar/reports">
+          <ProtectedRoute role="registrar" pageId="reports">
+            <PortalReportsPage role="registrar" view="overview" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/registrar/settings">
+          <ProtectedRoute role="registrar" pageId="settings">
+            <PortalSettingsPage role="registrar" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/hod/settings">
+          <ProtectedRoute role="headofdepartment" pageId="settings">
+            <PortalSettingsPage role="headofdepartment" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/branch/settings">
+          <ProtectedRoute role="branchadmin" pageId="settings">
+            <PortalSettingsPage role="branchadmin" />
           </ProtectedRoute>
         </Route>
 

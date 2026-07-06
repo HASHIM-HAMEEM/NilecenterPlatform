@@ -9,13 +9,17 @@ import type {
   IntegrationConfig,
   IntegrationStatus,
   Lead,
+  MessageAttachment,
+  PendingMediaAttachment,
   PlatformState,
   StaffAvailabilityStatus,
   StaffPermissionScope,
   StaffRole,
   StudentEntrySource,
   StudentStatus,
+  UserNotificationPreferences,
 } from "../client/src/lib/domain/types.js";
+import { canSendMessageToUser } from "../client/src/lib/domain/messageScope.js";
 import { roleOrder, rolePermissions, type Permission, type Role } from "../client/src/lib/platformData.js";
 import type { ServerSession } from "./auth.js";
 import { getPlatformStateRepository, normalizePlatformState, type PlatformStatePayload } from "./platformRepository.js";
@@ -130,42 +134,7 @@ function hodOwnsCertificate(state: PlatformState, session: ServerSession, certif
 }
 
 function canMessageRecipient(state: PlatformState, session: ServerSession, toUserId: string) {
-  if (session.activeRole === "superadmin") return true;
-  if (toUserId === session.userId) return true;
-  const recipient = state.users.find((item) => item.id === toUserId);
-  if (!recipient) return false;
-  const sender = userForSession(state, session);
-
-  if (session.activeRole === "student") {
-    const student = state.students.find((item) => item.userId === session.userId);
-    const runIds = new Set(state.enrollments.filter((item) => item.studentId === student?.id).map((item) => item.courseRunId));
-    const teacherUserIds = new Set(state.courseRuns.filter((item) => runIds.has(item.id)).map((item) => item.teacherId));
-    return teacherUserIds.has(toUserId) || recipient.roles.some((role) => role === "registrar" || role === "branchadmin");
-  }
-
-  if (session.activeRole === "teacher") {
-    const studentIds = studentIdsForTeacher(state, session.userId);
-    const recipientStudent = state.students.find((item) => item.userId === toUserId);
-    return Boolean(recipientStudent && studentIds.has(recipientStudent.id));
-  }
-
-  if (session.activeRole === "branchadmin") {
-    const studentIds = studentIdsForBranch(state, sender?.branchId);
-    const recipientStudent = state.students.find((item) => item.userId === toUserId);
-    return recipient.branchId === sender?.branchId || Boolean(recipientStudent && studentIds.has(recipientStudent.id));
-  }
-
-  if (session.activeRole === "headofdepartment") {
-    const departmentIds = new Set(state.departments.filter((item) => item.ownerUserId === session.userId || item.id === sender?.departmentId).map((item) => item.id));
-    const programIds = new Set(state.programs.filter((item) => departmentIds.has(item.departmentId)).map((item) => item.id));
-    const courseIds = new Set(state.courses.filter((item) => programIds.has(item.programId)).map((item) => item.id));
-    const runIds = new Set(state.courseRuns.filter((item) => courseIds.has(item.courseId)).map((item) => item.id));
-    const studentIds = new Set(state.enrollments.filter((item) => runIds.has(item.courseRunId)).map((item) => item.studentId));
-    const recipientStudent = state.students.find((item) => item.userId === toUserId);
-    return Boolean((recipient.departmentId && departmentIds.has(recipient.departmentId)) || (recipientStudent && studentIds.has(recipientStudent.id)));
-  }
-
-  return session.activeRole === "registrar" && recipient.roles.some((role) => role === "student" || role === "teacher" || role === "branchadmin");
+  return canSendMessageToUser(state, session.activeRole, session.userId, toUserId);
 }
 
 function assertStudentScopedAction(state: PlatformState, action: PlatformWorkflowAction, session: ServerSession) {
@@ -214,6 +183,7 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "message.send",
       "notification.read",
       "report.preset.save",
+      "profile.update",
     ],
     teacher: [
       "assignment.create",
@@ -230,6 +200,7 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "recitation.review",
       "notification.read",
       "report.preset.save",
+      "profile.update",
     ],
     registrar: [
       "lead.create",
@@ -247,6 +218,8 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "record.save",
       "notification.read",
       "report.preset.save",
+      "portal.settings.save",
+      "profile.update",
     ],
     headofdepartment: [
       "assignment.create",
@@ -266,6 +239,8 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "record.save",
       "notification.read",
       "report.preset.save",
+      "portal.settings.save",
+      "profile.update",
     ],
     branchadmin: [
       "attendance.save",
@@ -277,6 +252,8 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "room.status.update",
       "notification.read",
       "report.preset.save",
+      "portal.settings.save",
+      "profile.update",
     ],
     superadmin: [
       "staff.user.create",
@@ -306,6 +283,7 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "record.save",
       "notification.read",
       "report.preset.save",
+      "profile.update",
     ],
   };
   return byRole[session.activeRole].includes(action.type);
@@ -333,6 +311,30 @@ function assertScopedAction(state: PlatformState, action: PlatformWorkflowAction
     if (!allowedReportTypesForRole(session.activeRole).has(action.reportType)) {
       throw new Error(`Role ${session.activeRole} cannot save ${action.reportType} report views.`);
     }
+  }
+
+  if (action.type === "portal.settings.save") {
+    if (action.role !== session.activeRole) throw new Error("Settings role must match the active session role.");
+    const user = userForSession(state, session);
+    if (session.activeRole === "registrar" || session.activeRole === "branchadmin") {
+      if (!user?.branchId || action.scopeId !== user.branchId) {
+        throw new Error("Portal settings are limited to your branch.");
+      }
+    }
+    if (session.activeRole === "headofdepartment") {
+      const departmentIds = new Set(
+        state.departments
+          .filter((item) => item.ownerUserId === session.userId || item.id === user?.departmentId)
+          .map((item) => item.id),
+      );
+      if (!departmentIds.has(action.scopeId)) {
+        throw new Error("Portal settings are limited to your department.");
+      }
+    }
+  }
+
+  if (action.type === "profile.update" && (action.userId ?? session.userId) !== session.userId) {
+    throw new Error("Users can only update their own profile.");
   }
 
   assertStudentScopedAction(state, action, session);
@@ -568,8 +570,13 @@ function assertScopedAction(state: PlatformState, action: PlatformWorkflowAction
     }
   }
 
-  if (action.type === "message.send" && !canMessageRecipient(state, session, action.toUserId)) {
-    throw new Error("Message recipient is outside this role scope.");
+  if (action.type === "message.send") {
+    const recipientUserIds = action.recipientUserIds?.length
+      ? action.recipientUserIds
+      : [action.toUserId];
+    if (recipientUserIds.some((userId) => !canMessageRecipient(state, session, userId))) {
+      throw new Error("Message recipient is outside this role scope.");
+    }
   }
 }
 
@@ -587,6 +594,8 @@ function applyServerActor(action: PlatformWorkflowAction, session: ServerSession
       return { ...action, studentId, actorId };
     case "message.send":
       return { ...action, fromUserId: actorId, actorId };
+    case "profile.update":
+      return { ...action, userId: action.userId ?? actorId, actorId };
     case "calendar.create":
       return {
         ...action,
@@ -661,6 +670,90 @@ function stringRecordValue(value: unknown) {
   );
 }
 
+function notificationPreferencesValue(value: unknown): Partial<UserNotificationPreferences> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const preferences = Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(
+      (entry): entry is [keyof UserNotificationPreferences, boolean] =>
+        ["messages", "schedule", "academic", "billing", "system"].includes(entry[0]) && typeof entry[1] === "boolean",
+    ),
+  );
+  return Object.keys(preferences).length ? preferences : undefined;
+}
+
+function messageAttachmentsValue(value: unknown): MessageAttachment[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const attachments = value
+    .slice(0, 6)
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const name = typeof record.name === "string" ? record.name.trim() : "";
+      const type = typeof record.type === "string" ? record.type.trim() : "";
+      const size = typeof record.size === "number" && Number.isFinite(record.size) ? record.size : Number(record.size);
+      const kind: MessageAttachment["kind"] | "" =
+        record.kind === "image" ? "image" : record.kind === "document" ? "document" : "";
+      const previewLabel = typeof record.previewLabel === "string" ? record.previewLabel.trim() : name;
+      if (!name || !type || !kind || !Number.isFinite(size) || size < 0) return null;
+      return {
+        name: name.slice(0, 120),
+        type: type.slice(0, 80),
+        size,
+        kind,
+        previewLabel: previewLabel.slice(0, 140),
+      };
+    })
+    .filter((item): item is MessageAttachment => Boolean(item));
+  return attachments.length ? attachments : undefined;
+}
+
+function pendingMediaValue(value: unknown): PendingMediaAttachment[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const attachments = value
+    .slice(0, 3)
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const record = item as Record<string, unknown>;
+      const id = typeof record.id === "string" ? record.id.trim() : "";
+      const name = typeof record.name === "string" ? record.name.trim() : "";
+      const type = typeof record.type === "string" ? record.type.trim() : "";
+      const size = typeof record.size === "number" && Number.isFinite(record.size) ? record.size : Number(record.size);
+      const kind =
+        record.kind === "document" || record.kind === "image" || record.kind === "audio" || record.kind === "video"
+          ? record.kind
+          : "";
+      const previewLabel = typeof record.previewLabel === "string" ? record.previewLabel.trim() : name;
+      const createdAt = typeof record.createdAt === "string" ? record.createdAt : now();
+      if (!id || !name || !type || !kind || !previewLabel || !Number.isFinite(size) || size <= 0 || size > 25 * 1024 * 1024) {
+        return null;
+      }
+      return {
+        id: id.slice(0, 80),
+        name: name.slice(0, 120),
+        type: type.slice(0, 120),
+        size,
+        kind,
+        previewLabel: previewLabel.slice(0, 160),
+        storageStatus: "pending_storage" as const,
+        createdAt,
+      };
+    })
+    .filter((item): item is PendingMediaAttachment => Boolean(item));
+  return attachments.length ? attachments : undefined;
+}
+
+function recipientUserIdsValue(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+  const userIds = Array.from(
+    new Set(
+      value
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean),
+    ),
+  ).slice(0, 500);
+  return userIds.length ? userIds : undefined;
+}
+
 function attendanceRecordValue(value: unknown) {
   if (!value || typeof value !== "object") return null;
   const entries = Object.entries(value as Record<string, unknown>);
@@ -690,6 +783,7 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       type,
       assignmentId: input.assignmentId,
       response: input.response,
+      pendingMedia: pendingMediaValue(input.pendingMedia),
       studentId: typeof input.studentId === "string" ? input.studentId : undefined,
       actorId: typeof input.actorId === "string" ? input.actorId : undefined,
     };
@@ -701,6 +795,7 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       type,
       quizId: input.quizId,
       answers,
+      pendingMedia: pendingMediaValue(input.pendingMedia),
       studentId: typeof input.studentId === "string" ? input.studentId : undefined,
       actorId: typeof input.actorId === "string" ? input.actorId : undefined,
     };
@@ -921,6 +1016,25 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     };
   }
 
+  if (type === "profile.update") {
+    const availabilityStatus = optionalStringValue(input, "availabilityStatus");
+    if (availabilityStatus && !staffAvailabilityStatuses.has(availabilityStatus as StaffAvailabilityStatus)) return null;
+    return {
+      type,
+      userId: optionalStringValue(input, "userId"),
+      name: typeof input.name === "string" ? input.name : undefined,
+      phone: typeof input.phone === "string" ? input.phone : undefined,
+      preferredLanguage: typeof input.preferredLanguage === "string" ? input.preferredLanguage : undefined,
+      timezone: typeof input.timezone === "string" ? input.timezone : undefined,
+      notificationPreferences: notificationPreferencesValue(input.notificationPreferences),
+      country: typeof input.country === "string" ? input.country : undefined,
+      guardianName: typeof input.guardianName === "string" ? input.guardianName : undefined,
+      guardianPhone: typeof input.guardianPhone === "string" ? input.guardianPhone : undefined,
+      title: typeof input.title === "string" ? input.title : undefined,
+      availabilityStatus: availabilityStatus as Extract<PlatformWorkflowAction, { type: "profile.update" }>["availabilityStatus"],
+    };
+  }
+
   if (type === "user.update") {
     const userId = stringValue(input, "userId");
     const activeRole = optionalStringValue(input, "activeRole");
@@ -1034,6 +1148,30 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     };
   }
 
+  if (type === "portal.settings.save") {
+    const role = stringValue(input, "role");
+    const scopeId = stringValue(input, "scopeId").trim();
+    const label = stringValue(input, "label").trim();
+    const language = stringValue(input, "language").trim();
+    const timezone = stringValue(input, "timezone").trim();
+    const reviewCadenceDays = input.reviewCadenceDays === undefined ? undefined : numberValue(input, "reviewCadenceDays");
+    const paymentReminderDays = input.paymentReminderDays === undefined ? undefined : numberValue(input, "paymentReminderDays");
+    const attendanceCutoffMinutes = input.attendanceCutoffMinutes === undefined ? undefined : numberValue(input, "attendanceCutoffMinutes");
+    if (!["registrar", "headofdepartment", "branchadmin"].includes(role) || !scopeId || !label || !language || !timezone) return null;
+    return {
+      type,
+      role: role as Extract<PlatformWorkflowAction, { type: "portal.settings.save" }>["role"],
+      scopeId,
+      label,
+      language,
+      timezone,
+      notifications: Boolean(input.notifications),
+      reviewCadenceDays,
+      paymentReminderDays,
+      attendanceCutoffMinutes,
+    };
+  }
+
   if (type === "assignment.create") {
     const courseRunId = stringValue(input, "courseRunId");
     const title = stringValue(input, "title");
@@ -1133,14 +1271,16 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
 
   if (type === "message.send") {
     const toUserId = stringValue(input, "toUserId");
-    const subject = stringValue(input, "subject");
-    const body = stringValue(input, "body");
+    const subject = stringValue(input, "subject").trim();
+    const body = stringValue(input, "body").trim();
     if (!toUserId || !subject || !body) return null;
     return {
       type,
       toUserId,
+      recipientUserIds: recipientUserIdsValue(input.recipientUserIds),
       subject,
       body,
+      attachments: messageAttachmentsValue(input.attachments),
       channel: communicationChannels.has(input.channel as CommunicationLog["channel"])
         ? (input.channel as CommunicationLog["channel"])
         : undefined,
@@ -1242,7 +1382,7 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const studentId = stringValue(input, "studentId");
     const teacherId = stringValue(input, "teacherId");
     const title = stringValue(input, "title");
-    return studentId && teacherId && title ? { type, studentId, teacherId, title } : null;
+    return studentId && teacherId && title ? { type, studentId, teacherId, title, pendingMedia: pendingMediaValue(input.pendingMedia) } : null;
   }
 
   if (type === "notification.read") {

@@ -16,19 +16,23 @@ import type {
   LessonResource,
   Module,
   Message,
+  MessageAttachment,
   Notification,
   Payment,
+  PendingMediaAttachment,
   PlacementTestBooking,
   PlacementTestResult,
   PlatformState,
   ReportPreset,
   ReportType,
+  ScopedPortalSettings,
   StaffAvailabilityStatus,
   StaffPermissionScope,
   StaffProfile,
   StaffRole,
   StudentEntrySource,
   StudentStatus,
+  UserNotificationPreferences,
   QuestionBankItem,
   QuizAttempt,
   QuranProgressRecord,
@@ -41,8 +45,8 @@ import { roleOrder, rolePermissions, type Permission, type Role } from "../platf
 export type PlatformLearningAction =
   | { type: "lesson.start"; lessonId: string; studentId?: string; actorId?: string }
   | { type: "lesson.complete"; lessonId: string; studentId?: string; actorId?: string }
-  | { type: "assignment.submit"; assignmentId: string; response: string; studentId?: string; actorId?: string }
-  | { type: "quiz.submit"; quizId: string; answers: Record<string, string>; studentId?: string; actorId?: string };
+  | { type: "assignment.submit"; assignmentId: string; response: string; pendingMedia?: PendingMediaAttachment[]; studentId?: string; actorId?: string }
+  | { type: "quiz.submit"; quizId: string; answers: Record<string, string>; pendingMedia?: PendingMediaAttachment[]; studentId?: string; actorId?: string };
 
 export type CreateLeadActionInput = Pick<Lead, "fullName" | "email" | "phone" | "subject" | "notes"> & {
   country?: string;
@@ -117,12 +121,16 @@ export type CreateQuestionActionInput = {
 export type SendMessageActionInput = {
   fromUserId?: string;
   toUserId: string;
+  recipientUserIds?: string[];
   subject: string;
   body: string;
   channel?: CommunicationLog["channel"];
+  attachments?: MessageAttachment[];
 };
 
-export type SubmitRecitationActionInput = Pick<RecitationSubmission, "studentId" | "teacherId" | "title">;
+export type SubmitRecitationActionInput = Pick<RecitationSubmission, "studentId" | "teacherId" | "title"> & {
+  pendingMedia?: PendingMediaAttachment[];
+};
 
 export type AssignTeacherActionInput = {
   userId: string;
@@ -196,6 +204,21 @@ export type SavePlatformSettingsActionInput = {
   actorId?: string;
 };
 
+export type SavePortalSettingsActionInput = Pick<
+  ScopedPortalSettings,
+  | "role"
+  | "scopeId"
+  | "label"
+  | "language"
+  | "timezone"
+  | "notifications"
+  | "reviewCadenceDays"
+  | "paymentReminderDays"
+  | "attendanceCutoffMinutes"
+> & {
+  actorId?: string;
+};
+
 function validateAccountStatus(status: EntityStatus | undefined, fallback: EntityStatus = "active") {
   const nextStatus = status ?? fallback;
   if (!accountStatuses.includes(nextStatus)) {
@@ -205,6 +228,32 @@ function validateAccountStatus(status: EntityStatus | undefined, fallback: Entit
 }
 
 const assignableCourseRunStatuses: EntityStatus[] = ["active", "pending"];
+const pendingMediaKinds = new Set<PendingMediaAttachment["kind"]>(["document", "image", "audio", "video"]);
+const maxPendingMediaSize = 25 * 1024 * 1024;
+
+function cleanPendingMedia(input?: PendingMediaAttachment[]) {
+  return (input ?? []).slice(0, 3).map((item) => {
+    const name = item.name.trim().slice(0, 120);
+    const type = item.type.trim().slice(0, 120) || "application/octet-stream";
+    const previewLabel = item.previewLabel.trim().slice(0, 160) || name;
+    const size = Math.round(Number(item.size));
+    if (!name) throw new Error("Attachment name is required.");
+    if (!Number.isFinite(size) || size <= 0 || size > maxPendingMediaSize) {
+      throw new Error("Attachment must be 25 MB or smaller.");
+    }
+    if (!pendingMediaKinds.has(item.kind)) throw new Error("Choose a valid attachment type.");
+    return {
+      id: item.id.trim().slice(0, 80) || `pending_${Date.now().toString(36)}`,
+      name,
+      type,
+      size,
+      kind: item.kind,
+      previewLabel,
+      storageStatus: "pending_storage" as const,
+      createdAt: item.createdAt || new Date().toISOString(),
+    };
+  });
+}
 
 export type CreateUserActionInput = {
   name: string;
@@ -275,6 +324,21 @@ export type UpdateStudentStatusActionInput = {
   actorId?: string;
 };
 
+export type UpdateProfileActionInput = {
+  userId?: string;
+  name?: string;
+  phone?: string;
+  preferredLanguage?: string;
+  timezone?: string;
+  notificationPreferences?: Partial<UserNotificationPreferences>;
+  country?: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  title?: string;
+  availabilityStatus?: StaffAvailabilityStatus;
+  actorId?: string;
+};
+
 export type PlatformWorkflowAction =
   | PlatformLearningAction
   | ({ type: "lead.create"; actorId?: string } & CreateLeadActionInput)
@@ -283,6 +347,7 @@ export type PlatformWorkflowAction =
   | ({ type: "staff.user.create" } & CreateStaffUserActionInput)
   | ({ type: "student.create" } & CreateStudentActionInput)
   | ({ type: "student.status.update" } & UpdateStudentStatusActionInput)
+  | ({ type: "profile.update" } & UpdateProfileActionInput)
   | ({ type: "user.update" } & UpdateUserActionInput)
   | ({ type: "permission.update" } & UpdatePermissionActionInput)
   | ({ type: "branch.update" } & UpdateBranchActionInput)
@@ -292,6 +357,7 @@ export type PlatformWorkflowAction =
   | ({ type: "integration.local_check" } & CheckIntegrationActionInput)
   | ({ type: "system.health_check" } & CheckSystemHealthActionInput)
   | ({ type: "settings.save" } & SavePlatformSettingsActionInput)
+  | ({ type: "portal.settings.save" } & SavePortalSettingsActionInput)
   | ({ type: "placement.create"; actorId?: string } & CreatePlacementActionInput)
   | ({ type: "curriculum.module.create"; actorId?: string } & CreateCurriculumModuleActionInput)
   | ({ type: "course.status.update"; actorId?: string } & UpdateCourseStatusActionInput)
@@ -515,14 +581,15 @@ export function applyCompleteLesson(
 
 export function applySubmitAssignment(
   state: PlatformState,
-  input: { assignmentId: string; response: string; studentId?: string; actorId?: string },
+  input: { assignmentId: string; response: string; pendingMedia?: PendingMediaAttachment[]; studentId?: string; actorId?: string },
   ctxInput?: Partial<MutationContext>,
 ) {
   const ctx = context(ctxInput);
   const studentId = input.studentId ?? "stu_demo";
   const actorId = input.actorId ?? "usr_student_demo";
   const assignment = requireAssignment(state, input.assignmentId);
-  if (!input.response.trim()) throw new Error("Assignment response is required.");
+  const pendingMedia = cleanPendingMedia(input.pendingMedia);
+  if (!input.response.trim() && pendingMedia.length === 0) throw new Error("Assignment response or attachment is required.");
   const existing = state.assignmentSubmissions.find(
     (item) => item.assignmentId === assignment.id && item.studentId === studentId && item.status !== "completed",
   );
@@ -533,6 +600,7 @@ export function applySubmitAssignment(
     submittedAt: ctx.now(),
     status: "pending" as EntityStatus,
     response: input.response,
+    pendingMedia,
   };
 
   state.assignmentSubmissions = existing
@@ -551,7 +619,7 @@ export function applySubmitAssignment(
     existing ? "assignment.resubmitted" : "assignment.submitted",
     "AssignmentSubmission",
     submission.id,
-    `Submitted ${assignment.title}.`,
+    `Submitted ${assignment.title}${pendingMedia.length ? ` with ${pendingMedia.length} pending attachment(s)` : ""}.`,
     actorId,
   );
   return submission;
@@ -559,7 +627,7 @@ export function applySubmitAssignment(
 
 export function applySubmitQuizAttempt(
   state: PlatformState,
-  input: { quizId: string; answers: Record<string, string>; studentId?: string; actorId?: string },
+  input: { quizId: string; answers: Record<string, string>; pendingMedia?: PendingMediaAttachment[]; studentId?: string; actorId?: string },
   ctxInput?: Partial<MutationContext>,
 ) {
   const ctx = context(ctxInput);
@@ -576,6 +644,7 @@ export function applySubmitQuizAttempt(
     .map(([questionId, answer]) => [questionId, answer.trim()] as [string, string])
     .filter(([, answer]) => answer.length > 0);
   const submittedAnswers: Record<string, string> = Object.fromEntries(submittedAnswerEntries);
+  const pendingMedia = cleanPendingMedia(input.pendingMedia);
   const attachedQuestions = quiz.questionIds.flatMap((questionId) => {
     const question = state.questionBankItems.find((item) => item.id === questionId);
     return question && question.courseRunId === quiz.courseRunId && question.status === "active" ? [question] : [];
@@ -585,8 +654,9 @@ export function applySubmitQuizAttempt(
     const attachedIds = new Set(attachedQuestions.map((question) => question.id));
     const unknownAnswerId = Object.keys(submittedAnswers).find((questionId) => !attachedIds.has(questionId));
     if (unknownAnswerId) throw new Error("Quiz answers must match attached questions.");
-    if (Object.keys(submittedAnswers).length === 0) throw new Error("Quiz answer is required.");
-  } else if (Object.keys(submittedAnswers).length === 0) {
+    const mediaQuestionPresent = attachedQuestions.some((question) => question.type === "oral_record" || question.type === "file_upload");
+    if (Object.keys(submittedAnswers).length === 0 && (!mediaQuestionPresent || pendingMedia.length === 0)) throw new Error("Quiz answer is required.");
+  } else if (Object.keys(submittedAnswers).length === 0 && pendingMedia.length === 0) {
     throw new Error("Quiz answer is required.");
   }
 
@@ -613,6 +683,7 @@ export function applySubmitQuizAttempt(
     score,
     maxScore: 100,
     answers: submittedAnswers,
+    pendingMedia,
   };
 
   state.quizAttempts = [attempt, ...state.quizAttempts];
@@ -636,7 +707,7 @@ export function applySubmitQuizAttempt(
     "QuizAttempt",
     attempt.id,
     requiresManualReview
-      ? `Submitted ${quiz.title} for teacher review.`
+      ? `Submitted ${quiz.title} for teacher review${pendingMedia.length ? ` with ${pendingMedia.length} pending attachment(s)` : ""}.`
       : `Submitted ${quiz.title} with ${score}/100.`,
     actorId,
   );
@@ -1537,36 +1608,44 @@ function applySendMessage(
   ctx: MutationContext,
 ) {
   const fromUserId = input.fromUserId ?? input.actorId ?? "usr_student_demo";
-  const message: Message = {
-    id: ctx.createId("msg"),
-    fromUserId,
-    toUserId: input.toUserId,
-    subject: input.subject,
-    body: input.body,
-    read: false,
-    createdAt: ctx.now(),
-  };
-  state.messages = [message, ...state.messages];
-  const log: CommunicationLog = {
-    id: ctx.createId("comm"),
-    actorId: fromUserId,
-    channel: input.channel ?? "in_app",
-    subject: input.subject,
-    body: input.body,
-    relatedUserId: input.toUserId,
-    status: "completed",
-    createdAt: ctx.now(),
-  };
-  state.communicationLogs = [log, ...state.communicationLogs];
-  const recipient = state.users.find((user) => user.id === input.toUserId);
-  notify(state, ctx, {
-    userId: input.toUserId,
-    title: input.subject,
-    body: input.body,
-    href: messageRouteForUser(recipient),
+  const recipientUserIds = Array.from(
+    new Set([input.toUserId, ...(input.recipientUserIds ?? [])])
+  ).filter(Boolean);
+  const messages = recipientUserIds.map((toUserId) => {
+    const message: Message = {
+      id: ctx.createId("msg"),
+      fromUserId,
+      toUserId,
+      subject: input.subject,
+      body: input.body,
+      attachments: input.attachments?.length ? input.attachments : undefined,
+      read: false,
+      createdAt: ctx.now(),
+    };
+    const log: CommunicationLog = {
+      id: ctx.createId("comm"),
+      actorId: fromUserId,
+      channel: input.channel ?? "in_app",
+      subject: input.subject,
+      body: input.body,
+      attachments: input.attachments?.length ? input.attachments : undefined,
+      relatedUserId: toUserId,
+      status: "completed",
+      createdAt: ctx.now(),
+    };
+    const recipient = state.users.find((user) => user.id === toUserId);
+    state.communicationLogs = [log, ...state.communicationLogs];
+    notify(state, ctx, {
+      userId: toUserId,
+      title: input.subject,
+      body: input.body,
+      href: messageRouteForUser(recipient),
+    });
+    appendAudit(state, ctx, "message.sent", "Message", message.id, `Sent message: ${message.subject}.`, fromUserId);
+    return message;
   });
-  appendAudit(state, ctx, "message.sent", "Message", message.id, `Sent message: ${message.subject}.`, fromUserId);
-  return message;
+  state.messages = [...messages, ...state.messages];
+  return messages[0];
 }
 
 function applyApproveCertificate(
@@ -2360,6 +2439,32 @@ function isMinorAgeGroup(ageGroup: string) {
   return Boolean(normalized && !/adult|18\+|university|parent not required/.test(normalized));
 }
 
+const defaultNotificationPreferences: UserNotificationPreferences = {
+  messages: true,
+  schedule: true,
+  academic: true,
+  billing: false,
+  system: false,
+};
+
+function cleanProfileText(value: string | undefined, maxLength = 120) {
+  return value === undefined ? undefined : value.trim().slice(0, maxLength);
+}
+
+function normalizeNotificationPreferences(
+  input: Partial<UserNotificationPreferences> | undefined,
+  current?: UserNotificationPreferences,
+) {
+  if (!input) return current;
+  return {
+    ...defaultNotificationPreferences,
+    ...current,
+    ...Object.fromEntries(
+      Object.entries(input).filter((entry): entry is [keyof UserNotificationPreferences, boolean] => typeof entry[1] === "boolean"),
+    ),
+  };
+}
+
 function normalizeStudentStatus(status?: StudentStatus) {
   const nextStatus = status ?? "active";
   if (!studentLifecycleStatuses.includes(nextStatus)) throw new Error("Choose a valid student status.");
@@ -2555,6 +2660,180 @@ function validateUserScopeUpdate(state: PlatformState, input: UpdateUserActionIn
     throw new Error("Selected department is not available in the chosen branch.");
   }
   return { branch, department };
+}
+
+function applyUpdateProfile(
+  state: PlatformState,
+  input: UpdateProfileActionInput,
+  ctx: MutationContext,
+) {
+  const userId = input.userId ?? input.actorId;
+  const user = state.users.find((item) => item.id === userId);
+  if (!user) throw new Error("Profile account was not found.");
+
+  const profileChanges: string[] = [];
+  const preferenceChanges: string[] = [];
+  let nextUser = { ...user };
+
+  if (input.name !== undefined) {
+    const name = cleanProfileText(input.name);
+    if (!name || name.length < 2) throw new Error("Full name is required.");
+    if (name !== user.name) {
+      nextUser = { ...nextUser, name };
+      profileChanges.push("name");
+    }
+  }
+  if (input.phone !== undefined) {
+    const phone = cleanProfileText(input.phone, 40);
+    if (phone !== (user.phone ?? "")) {
+      nextUser = { ...nextUser, phone: phone || undefined };
+      profileChanges.push("phone");
+    }
+  }
+  if (input.preferredLanguage !== undefined) {
+    const preferredLanguage = cleanProfileText(input.preferredLanguage, 40);
+    if (!preferredLanguage) throw new Error("Preferred language is required.");
+    if (preferredLanguage !== user.preferredLanguage) {
+      nextUser = { ...nextUser, preferredLanguage };
+      preferenceChanges.push("language");
+    }
+  }
+  if (input.timezone !== undefined) {
+    const timezone = cleanProfileText(input.timezone, 80);
+    if (!timezone) throw new Error("Timezone is required.");
+    if (timezone !== user.timezone) {
+      nextUser = { ...nextUser, timezone };
+      preferenceChanges.push("timezone");
+    }
+  }
+  const notificationPreferences = normalizeNotificationPreferences(input.notificationPreferences, user.notificationPreferences);
+  if (
+    notificationPreferences &&
+    JSON.stringify(notificationPreferences) !== JSON.stringify(user.notificationPreferences)
+  ) {
+    nextUser = { ...nextUser, notificationPreferences };
+    preferenceChanges.push("notifications");
+  }
+
+  const student = state.students.find((item) => item.userId === user.id);
+  let updatedStudent = student;
+  if (student) {
+    let nextStudent = { ...student };
+    if (input.country !== undefined) {
+      const country = cleanProfileText(input.country, 80);
+      if (!country) throw new Error("Country is required.");
+      if (country !== student.country) {
+        nextStudent = { ...nextStudent, country };
+        profileChanges.push("country");
+      }
+    }
+    if (input.preferredLanguage !== undefined) {
+      nextStudent = { ...nextStudent, preferredLanguage: nextUser.preferredLanguage ?? student.preferredLanguage };
+    }
+    if (input.timezone !== undefined) {
+      nextStudent = { ...nextStudent, timezone: nextUser.timezone ?? student.timezone };
+    }
+    if (input.guardianName !== undefined) {
+      const guardianName = cleanProfileText(input.guardianName, 120);
+      if (guardianName !== (student.guardianName ?? "")) {
+        nextStudent = { ...nextStudent, guardianName: guardianName || undefined };
+        profileChanges.push("guardian name");
+      }
+    }
+    if (input.guardianPhone !== undefined) {
+      const guardianPhone = cleanProfileText(input.guardianPhone, 40);
+      if (guardianPhone !== (student.guardianPhone ?? "")) {
+        nextStudent = { ...nextStudent, guardianPhone: guardianPhone || undefined };
+        profileChanges.push("guardian phone");
+      }
+    }
+    if (isMinorAgeGroup(nextStudent.ageGroup ?? "") && (!nextStudent.guardianName || !nextStudent.guardianPhone)) {
+      throw new Error("Guardian name and phone are required for minor students.");
+    }
+    updatedStudent = nextStudent;
+  }
+
+  const staffProfile =
+    state.staffProfiles.find((item) => item.userId === user.id && item.role === user.activeRole) ??
+    state.staffProfiles.find((item) => item.userId === user.id);
+  let updatedStaffProfile = staffProfile;
+  if (staffProfile) {
+    let nextStaffProfile = { ...staffProfile };
+    if (input.title !== undefined) {
+      const title = cleanProfileText(input.title, 80);
+      if (!title) throw new Error("Profile title is required.");
+      if (title !== staffProfile.title) {
+        nextStaffProfile = { ...nextStaffProfile, title, updatedAt: ctx.now() };
+        profileChanges.push("title");
+      }
+    }
+    if (input.availabilityStatus !== undefined) {
+      if (staffProfile.role !== "teacher") throw new Error("Availability can only be changed for teacher profiles.");
+      if (!staffAvailabilityStatuses.has(input.availabilityStatus)) throw new Error("Choose a valid availability status.");
+      if (input.availabilityStatus !== staffProfile.availabilityStatus) {
+        nextStaffProfile = {
+          ...nextStaffProfile,
+          availabilityStatus: input.availabilityStatus,
+          updatedAt: ctx.now(),
+        };
+        profileChanges.push("availability");
+      }
+    }
+    updatedStaffProfile = nextStaffProfile;
+  }
+
+  const teacherProfile = state.teachers.find((item) => item.userId === user.id);
+  let updatedTeacherProfile = teacherProfile;
+  if (teacherProfile && input.availabilityStatus !== undefined) {
+    if (!staffAvailabilityStatuses.has(input.availabilityStatus)) throw new Error("Choose a valid availability status.");
+    updatedTeacherProfile = {
+      ...teacherProfile,
+      availabilityStatus: input.availabilityStatus,
+    };
+  }
+
+  const actorId = input.actorId ?? user.id;
+  state.users = state.users.map((item) => (item.id === user.id ? nextUser : item));
+  if (student && updatedStudent) {
+    state.students = state.students.map((item) => (item.id === student.id ? updatedStudent : item));
+  }
+  if (staffProfile && updatedStaffProfile) {
+    state.staffProfiles = state.staffProfiles.map((item) => (item.id === staffProfile.id ? updatedStaffProfile : item));
+  }
+  if (teacherProfile && updatedTeacherProfile) {
+    state.teachers = state.teachers.map((item) => (item.id === teacherProfile.id ? updatedTeacherProfile : item));
+  }
+
+  if (profileChanges.length) {
+    appendAudit(
+      state,
+      ctx,
+      "profile.updated",
+      student ? "StudentProfile" : staffProfile ? "StaffProfile" : "User",
+      student?.id ?? staffProfile?.id ?? user.id,
+      `Updated profile fields: ${Array.from(new Set(profileChanges)).join(", ")}.`,
+      actorId,
+    );
+  }
+  if (preferenceChanges.length) {
+    appendAudit(
+      state,
+      ctx,
+      "preferences.updated",
+      "User",
+      user.id,
+      `Updated preferences: ${Array.from(new Set(preferenceChanges)).join(", ")}.`,
+      actorId,
+    );
+  }
+
+  return {
+    user: nextUser,
+    student: updatedStudent,
+    staffProfile: updatedStaffProfile,
+    teacherProfile: updatedTeacherProfile,
+    changed: Array.from(new Set([...profileChanges, ...preferenceChanges])),
+  };
 }
 
 function applyUpdateUserAccount(
@@ -2887,6 +3166,74 @@ function applySavePlatformSettings(
     "PlatformSettings",
     "global",
     `${organization} · ${defaultLanguage} · ${academicTerm} · ${retentionDays} day retention.`,
+    input.actorId ?? "usr_admin_demo",
+  );
+
+  return {
+    settings,
+    savedAt,
+  };
+}
+
+function applySavePortalSettings(
+  state: PlatformState,
+  input: SavePortalSettingsActionInput,
+  ctx: MutationContext,
+) {
+  if (!["registrar", "headofdepartment", "branchadmin"].includes(input.role)) {
+    throw new Error("Choose a valid portal settings role.");
+  }
+  const scopeId = input.scopeId.trim();
+  const label = input.label.trim();
+  const language = input.language.trim();
+  const timezone = input.timezone.trim();
+  const reviewCadenceDays = input.reviewCadenceDays === undefined ? undefined : Math.round(Number(input.reviewCadenceDays));
+  const paymentReminderDays = input.paymentReminderDays === undefined ? undefined : Math.round(Number(input.paymentReminderDays));
+  const attendanceCutoffMinutes =
+    input.attendanceCutoffMinutes === undefined ? undefined : Math.round(Number(input.attendanceCutoffMinutes));
+
+  if (!scopeId) throw new Error("Scope is required.");
+  if (!label) throw new Error("Workspace label is required.");
+  if (!language) throw new Error("Language is required.");
+  if (!timezone) throw new Error("Timezone is required.");
+  if (reviewCadenceDays !== undefined && (!Number.isFinite(reviewCadenceDays) || reviewCadenceDays < 1 || reviewCadenceDays > 90)) {
+    throw new Error("Review cadence must be between 1 and 90 days.");
+  }
+  if (paymentReminderDays !== undefined && (!Number.isFinite(paymentReminderDays) || paymentReminderDays < 1 || paymentReminderDays > 30)) {
+    throw new Error("Payment reminders must be between 1 and 30 days.");
+  }
+  if (attendanceCutoffMinutes !== undefined && (!Number.isFinite(attendanceCutoffMinutes) || attendanceCutoffMinutes < 0 || attendanceCutoffMinutes > 120)) {
+    throw new Error("Attendance cutoff must be between 0 and 120 minutes.");
+  }
+
+  const savedAt = ctx.now();
+  const settings: ScopedPortalSettings = {
+    role: input.role,
+    scopeId,
+    label,
+    language,
+    timezone,
+    notifications: Boolean(input.notifications),
+    reviewCadenceDays,
+    paymentReminderDays,
+    attendanceCutoffMinutes,
+    updatedAt: savedAt,
+    updatedBy: input.actorId ?? "usr_admin_demo",
+  };
+  state.portalSettings = [
+    settings,
+    ...state.portalSettings.filter(
+      (item) => item.role !== settings.role || item.scopeId !== settings.scopeId,
+    ),
+  ];
+
+  appendAudit(
+    state,
+    ctx,
+    "portal_settings.saved",
+    "PortalSettings",
+    `${settings.role}:${settings.scopeId}`,
+    `Saved ${settings.label} settings.`,
     input.actorId ?? "usr_admin_demo",
   );
 
@@ -3421,13 +3768,16 @@ function applySubmitRecitation(
   input: SubmitRecitationActionInput & { actorId?: string },
   ctx: MutationContext,
 ) {
+  const pendingMedia = cleanPendingMedia(input.pendingMedia);
+  if (!input.title.trim()) throw new Error("Recitation title is required.");
   const submission: RecitationSubmission = {
     id: ctx.createId("rec"),
     studentId: input.studentId,
     teacherId: input.teacherId,
-    title: input.title,
+    title: input.title.trim(),
     submittedAt: ctx.now(),
     status: "pending",
+    pendingMedia,
   };
   state.recitationSubmissions = [submission, ...state.recitationSubmissions];
   notify(state, ctx, {
@@ -3442,7 +3792,9 @@ function applySubmitRecitation(
     "recitation.submitted",
     "RecitationSubmission",
     submission.id,
-    `Submitted ${submission.title}.`,
+    pendingMedia.length
+      ? `Submitted ${submission.title} with ${pendingMedia.length} pending audio file(s).`
+      : `Submitted ${submission.title} for teacher review.`,
     input.actorId ?? "usr_student_demo",
   );
   return submission;
@@ -3592,6 +3944,18 @@ export function applyPlatformWorkflowAction(
         result,
       };
     }
+    case "profile.update": {
+      const result = applyUpdateProfile(state, action, ctx);
+      return {
+        action: "profile.updated",
+        entityType: "User",
+        entityId: result.user.id,
+        summary: result.changed.length
+          ? `Updated profile for ${result.user.name}.`
+          : `Reviewed profile for ${result.user.name}; no changes were needed.`,
+        result,
+      };
+    }
     case "user.update": {
       const result = applyUpdateUserAccount(state, action, ctx);
       return {
@@ -3679,6 +4043,16 @@ export function applyPlatformWorkflowAction(
         entityType: "PlatformSettings",
         entityId: "global",
         summary: `Saved platform settings for ${result.settings.organization}.`,
+        result,
+      };
+    }
+    case "portal.settings.save": {
+      const result = applySavePortalSettings(state, action, ctx);
+      return {
+        action: "portal_settings.saved",
+        entityType: "PortalSettings",
+        entityId: `${result.settings.role}:${result.settings.scopeId}`,
+        summary: `Saved ${result.settings.label} settings.`,
         result,
       };
     }

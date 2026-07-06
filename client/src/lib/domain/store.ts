@@ -19,8 +19,10 @@ import type {
   EntityStatus,
   Lead,
   Message,
+  MessageAttachment,
   Notification,
   Payment,
+  PendingMediaAttachment,
   PlacementTestBooking,
   PlacementTestResult,
   PlatformState,
@@ -103,15 +105,19 @@ type CreateQuestionInput = {
 type SendMessageInput = {
   fromUserId: string;
   toUserId: string;
+  recipientUserIds?: string[];
   subject: string;
   body: string;
   channel?: CommunicationLog["channel"];
+  attachments?: MessageAttachment[];
 };
 
 type SubmitRecitationInput = Pick<
   RecitationSubmission,
   "studentId" | "teacherId" | "title"
->;
+> & {
+  pendingMedia?: PendingMediaAttachment[];
+};
 
 function now() {
   return new Date().toISOString();
@@ -152,6 +158,18 @@ function mergeById<T extends { id: string }>(seedItems: T[], storedItems?: T[]) 
   return Array.from(merged.values());
 }
 
+function mergePortalSettings(
+  seedItems: PlatformState["portalSettings"],
+  storedItems?: PlatformState["portalSettings"],
+) {
+  const keyFor = (item: PlatformState["portalSettings"][number]) => `${item.role}:${item.scopeId}`;
+  const merged = new Map((storedItems ?? []).map((item) => [keyFor(item), item]));
+  seedItems.forEach((item) => {
+    if (!merged.has(keyFor(item))) merged.set(keyFor(item), item);
+  });
+  return Array.from(merged.values());
+}
+
 function normalizeStoredState(value: unknown): PlatformState {
   if (!value || typeof value !== "object") return cloneSeed();
   const seed = cloneSeed();
@@ -164,6 +182,7 @@ function normalizeStoredState(value: unknown): PlatformState {
     courseRuns: mergeById(seed.courseRuns, stored.courseRuns),
     classGroups: mergeById(seed.classGroups, stored.classGroups),
     events: mergeById(seed.events, stored.events),
+    portalSettings: mergePortalSettings(seed.portalSettings, stored.portalSettings),
   };
 }
 
@@ -319,18 +338,20 @@ class PlatformStore {
     assignmentId: string,
     response: string,
     studentId = "stu_demo",
-    actorId = "usr_student_demo"
+    actorId = "usr_student_demo",
+    pendingMedia: PendingMediaAttachment[] = []
   ) {
-    return this.applyAction({ type: "assignment.submit", assignmentId, response, studentId, actorId }).result as ReturnType<typeof applySubmitAssignment>;
+    return this.applyAction({ type: "assignment.submit", assignmentId, response, pendingMedia, studentId, actorId }).result as ReturnType<typeof applySubmitAssignment>;
   }
 
   submitQuizAttempt(
     quizId: string,
     answers: Record<string, string>,
     studentId = "stu_demo",
-    actorId = "usr_student_demo"
+    actorId = "usr_student_demo",
+    pendingMedia: PendingMediaAttachment[] = []
   ) {
-    return this.applyAction({ type: "quiz.submit", quizId, answers, studentId, actorId }).result as ReturnType<typeof applySubmitQuizAttempt>;
+    return this.applyAction({ type: "quiz.submit", quizId, answers, pendingMedia, studentId, actorId }).result as ReturnType<typeof applySubmitQuizAttempt>;
   }
 
   createAssignment(input: CreateAssignmentInput, actorId = "usr_teacher_demo") {

@@ -34,6 +34,9 @@ const demoEmailAliases: Record<ServerRole, string> = {
   branchadmin: "b@nl.test",
   superadmin: "a@nl.test",
 };
+const DEMO_RESET_TTL_MS = 1000 * 60 * 20;
+const demoResetTokens = new Map<string, { email: string; role: ServerRole; expiresAt: number }>();
+const demoPasswordOverrides = new Map<string, string>();
 
 type SessionCookieRequest = {
   headers: {
@@ -59,7 +62,21 @@ function demoAuthEnabled() {
   return process.env.NODE_ENV !== "production";
 }
 
-function demoPasswordAccepted(password: string) {
+function demoEmailCandidates(role: ServerRole) {
+  return [demoUsers[role].email, demoEmailAliases[role]].map((value) => value.toLowerCase());
+}
+
+function findDemoRoleByEmail(email: string, requestedRole?: ServerRole) {
+  const emailValue = clean(email).toLowerCase();
+  const roles = requestedRole ? [requestedRole] : (Object.keys(demoUsers) as ServerRole[]);
+  return roles.find((role) => demoEmailCandidates(role).includes(emailValue));
+}
+
+function demoPasswordAccepted(password: string, role?: ServerRole) {
+  if (role) {
+    const override = demoPasswordOverrides.get(demoUsers[role].email);
+    if (override && clean(password) === override) return true;
+  }
   const configuredPassword = clean(process.env.NILE_DEMO_PASSWORD);
   if (configuredPassword) return clean(password) === configuredPassword;
   return clean(password).length >= 4;
@@ -187,7 +204,7 @@ function signInWithDemo(email: string, password: string, requestedRole: ServerRo
   if (!demoAuthEnabled()) return null;
   const user = demoUsers[requestedRole];
   const emailValue = clean(email).toLowerCase();
-  if (![user.email, demoEmailAliases[requestedRole]].includes(emailValue) || !demoPasswordAccepted(password)) return null;
+  if (!demoEmailCandidates(requestedRole).includes(emailValue) || !demoPasswordAccepted(password, requestedRole)) return null;
 
   return createSession({
     userId: user.id,
@@ -197,6 +214,64 @@ function signInWithDemo(email: string, password: string, requestedRole: ServerRo
     activeRole: requestedRole,
     provider: "demo",
   });
+}
+
+export function requestDemoPasswordReset(email: string, requestedRole?: ServerRole) {
+  const role = demoAuthEnabled() ? findDemoRoleByEmail(email, requestedRole) : undefined;
+  const expiresAt = Date.now() + DEMO_RESET_TTL_MS;
+  if (!role) {
+    return { ok: true as const };
+  }
+  const token = crypto.randomUUID();
+  demoResetTokens.set(token, { email: demoUsers[role].email, role, expiresAt });
+  const params = new URLSearchParams({ token, email: demoUsers[role].email });
+  return {
+    ok: true as const,
+    expiresAt: new Date(expiresAt).toISOString(),
+    demoResetPath: `/auth/reset-password?${params.toString()}`,
+  };
+}
+
+export function confirmDemoPasswordReset(input: { token: string; email: string; password: string }) {
+  if (!demoAuthEnabled()) throw new Error("Password reset is not available.");
+  const token = clean(input.token);
+  const email = clean(input.email).toLowerCase();
+  const password = clean(input.password);
+  const reset = demoResetTokens.get(token);
+  if (!reset || reset.expiresAt <= Date.now() || reset.email.toLowerCase() !== email) {
+    throw new Error("Reset link is invalid or expired.");
+  }
+  if (password.length < 8) {
+    throw new Error("Use at least 8 characters.");
+  }
+  demoPasswordOverrides.set(reset.email, password);
+  demoResetTokens.delete(token);
+  return { ok: true as const, role: reset.role };
+}
+
+export function changeDemoPasswordForSession(
+  session: ServerSession,
+  input: { currentPassword: string; newPassword: string },
+) {
+  if (session.provider !== "demo") {
+    throw new Error("Password changes are managed by your sign-in provider.");
+  }
+  if (!demoAuthEnabled()) throw new Error("Password change is not available.");
+  const currentPassword = clean(input.currentPassword);
+  const newPassword = clean(input.newPassword);
+  if (!demoPasswordAccepted(currentPassword, session.activeRole)) {
+    throw new Error("Current password is incorrect.");
+  }
+  if (newPassword.length < 8) {
+    throw new Error("Use at least 8 characters.");
+  }
+  demoPasswordOverrides.set(demoUsers[session.activeRole].email, newPassword);
+  return { ok: true as const, role: session.activeRole };
+}
+
+export function resetDemoPasswordResetState() {
+  demoResetTokens.clear();
+  demoPasswordOverrides.clear();
 }
 
 export async function signIn(email: string, password: string, requestedRole: ServerRole) {

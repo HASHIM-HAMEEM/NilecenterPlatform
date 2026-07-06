@@ -73,6 +73,18 @@ function mergeById<T extends { id: string }>(seedItems: T[], storedItems?: T[]) 
   return Array.from(merged.values());
 }
 
+function mergePortalSettings(
+  seedItems: PlatformState["portalSettings"],
+  storedItems?: PlatformState["portalSettings"],
+) {
+  const keyFor = (item: PlatformState["portalSettings"][number]) => `${item.role}:${item.scopeId}`;
+  const merged = new Map((storedItems ?? []).map((item) => [keyFor(item), item]));
+  seedItems.forEach((item) => {
+    if (!merged.has(keyFor(item))) merged.set(keyFor(item), item);
+  });
+  return Array.from(merged.values());
+}
+
 export function normalizePlatformState(value: unknown): PlatformState {
   if (!value || typeof value !== "object") return cloneSeed();
   const seed = cloneSeed();
@@ -85,6 +97,7 @@ export function normalizePlatformState(value: unknown): PlatformState {
     courseRuns: mergeById(seed.courseRuns, stored.courseRuns),
     classGroups: mergeById(seed.classGroups, stored.classGroups),
     events: mergeById(seed.events, stored.events),
+    portalSettings: mergePortalSettings(seed.portalSettings, stored.portalSettings),
     reportPresets: mergeById(seed.reportPresets, stored.reportPresets),
   };
 }

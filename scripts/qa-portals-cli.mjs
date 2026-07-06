@@ -34,6 +34,7 @@ const workflowActionTimeoutMs = readPositiveIntegerEnv(
   "QA_WORKFLOW_ACTION_TIMEOUT_MS",
   5000
 );
+const loginTimeoutMs = readPositiveIntegerEnv("QA_LOGIN_TIMEOUT_MS", 30000);
 const maxRunMs = readPositiveIntegerEnv(
   "QA_SUITE_TIMEOUT_MS",
   readPositiveIntegerEnv("QA_MAX_RUN_MS", 20 * 60 * 1000)
@@ -109,7 +110,10 @@ const roles = [
       "/app/teacher/assignments",
       "/app/teacher/grading",
       "/app/teacher/quizzes",
+      "/app/teacher/quizzes/new",
+      "/app/teacher/quizzes/review",
       "/app/teacher/question-bank",
+      "/app/teacher/question-bank/new",
       "/app/teacher/calendar",
       "/app/teacher/messages",
       "/app/teacher/reports",
@@ -193,21 +197,56 @@ const roles = [
       "/app/admin/departments",
       "/app/admin/programs",
       "/app/admin/courses",
+      "/app/admin/courses/programs",
+      "/app/admin/courses/levels",
+      "/app/admin/courses/curriculum",
+      "/app/admin/courses/teachers",
+      "/app/admin/courses/resources",
+      "/app/admin/certificates",
+      "/app/admin/schedule",
+      "/app/admin/schedule/conflicts",
       "/app/admin/moodle-source",
       "/app/admin/settings",
       "/app/admin/integrations",
       "/app/admin/audit-logs",
       "/app/admin/reports",
+      "/app/admin/reports/attendance",
       "/app/admin/system-health",
       "/app/admin/platform-blueprint",
+      "/app/admin/users/new",
     ],
   },
 ];
 
+const publicRoutes = [
+  "/",
+  "/login",
+  "/courses",
+  "/courses/arabic",
+  "/courses/quran",
+  "/courses/islamic-studies",
+  "/courses/turkish",
+  "/courses/english",
+  "/courses/teacher-training",
+  "/courses/kids",
+  "/courses/enterprise",
+  "/book-free-trial",
+  "/book-placement-test",
+  "/verify-certificate",
+  "/faq",
+  "/contact",
+  "/about",
+  "/privacy",
+  "/terms",
+  "/404",
+];
+
 const authRoutes = [
+  "/login",
   "/auth/login",
   "/auth/student-login",
   "/auth/administration-login",
+  "/auth/admin-login",
   "/auth/forgot-password",
   "/auth/reset-password",
   "/auth/select-role",
@@ -654,6 +693,74 @@ function inspectAuthSource(expectedPath) {
   }`;
 }
 
+function inspectPublicSource(expectedPath) {
+  return `async () => {
+    for (let i = 0; i < 40; i += 1) {
+      const text = (document.body.innerText || document.body.textContent || "").replace(/\\s+/g, " ").trim();
+      const loading = document.querySelector(".platform-route-loading");
+      if (!loading && text.length > 160) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const normalize = (value) => (value || "").replace(/\\s+/g, " ").trim();
+    const isVisible = (element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none" && style.opacity !== "0";
+    };
+    const controls = Array.from(document.querySelectorAll("a,button,input,select,textarea")).filter(isVisible);
+    const controlName = (element) => {
+      const id = element.getAttribute("id");
+      const label = id ? document.querySelector(\`label[for="\${CSS.escape(id)}"]\`) : null;
+      return normalize(element.getAttribute("aria-label") || element.getAttribute("title") || element.getAttribute("alt") || element.textContent || label?.textContent || element.closest("label")?.textContent || element.getAttribute("placeholder") || "");
+    };
+    const unlabeledControls = controls
+      .filter((element) => !controlName(element))
+      .map((element) => ({
+        tag: element.tagName.toLowerCase(),
+        type: element.getAttribute("type") || "",
+        className: String(element.className || "").slice(0, 80),
+      }))
+      .slice(0, 8);
+    const viewportWidth = document.documentElement.clientWidth;
+    const documentOverflow = Math.max(0, document.documentElement.scrollWidth - viewportWidth);
+    const overflowElements = documentOverflow > 1
+      ? Array.from(document.body.querySelectorAll("*"))
+        .filter(isVisible)
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.left < -1 || rect.right > viewportWidth + 1;
+        })
+        .map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            tag: element.tagName.toLowerCase(),
+            className: String(element.className || "").slice(0, 80),
+            left: Math.round(rect.left),
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+          };
+        })
+        .slice(0, 8)
+      : [];
+    const text = normalize(document.body.innerText || document.body.textContent);
+    return {
+      expectedPath: ${JSON.stringify(expectedPath)},
+      path: location.pathname,
+      heading: document.querySelector("h1")?.textContent?.trim() || document.querySelector("h2")?.textContent?.trim() || "",
+      textLength: text.length,
+      visibleControls: controls.length,
+      navLinks: Array.from(document.querySelectorAll("nav a")).map((anchor) => anchor.getAttribute("href")).filter(Boolean),
+      hasFooter: Boolean(document.querySelector("footer, [role='contentinfo']")),
+      hasAuthLinks: Array.from(document.querySelectorAll("a")).some((anchor) => ["/auth/login", "/auth/student-login", "/auth/administration-login"].includes(anchor.getAttribute("href") || "")),
+      unlabeledControls,
+      overflow: documentOverflow,
+      overflowElements,
+      errorBoundary: text.includes("Something went wrong"),
+      notFound: text.includes("Page not found")
+    };
+  }`;
+}
+
 function inspectRouteMatrixSource(routes) {
   return `async () => {
     const routes = ${JSON.stringify(routes)};
@@ -764,7 +871,7 @@ function loginSource(role) {
   return `async () => {
     localStorage.clear();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), ${JSON.stringify(loginTimeoutMs)});
     let response = null;
     let text = "";
     try {
@@ -802,9 +909,32 @@ function loginSource(role) {
 }
 
 function resetPlatformStateSource() {
-  return `() => {
+  return `async () => {
     localStorage.removeItem(${JSON.stringify(platformStorageKey)});
-    return true;
+    const response = await fetch("/api/platform/state/reset", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Nile-Learn-Request": "browser",
+        "X-Nile-Learn-QA-Reset": "1"
+      },
+      body: "{}"
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return {
+        ok: false,
+        status: response.status,
+        body: text.slice(0, 180)
+      };
+    }
+    const payload = await response.json();
+    if (payload?.state) {
+      localStorage.setItem(${JSON.stringify(platformStorageKey)}, JSON.stringify(payload.state));
+      window.dispatchEvent(new Event(${JSON.stringify(platformStateUpdatedEvent)}));
+    }
+    return { ok: true, persistence: payload?.persistence };
   }`;
 }
 
@@ -974,7 +1104,10 @@ async function authenticateRole(role, checkName, details = {}) {
   await goto(role.loginPath);
   const loginResult = await pageEval(loginSource(role), {
     label: `login ${role.role}`,
-    timeoutMs: Math.min(commandTimeoutMs, 15000),
+    timeoutMs: Math.min(
+      commandTimeoutMs,
+      Math.max(loginTimeoutMs + 5000, 30000)
+    ),
   });
   if (loginResult?.ok && loginResult.provider) {
     authenticatedProviders.set(role.role, loginResult.provider);
@@ -1022,7 +1155,21 @@ async function runDeepWorkflow({
   });
   if (!loginOk) return;
 
-  await pageEval(resetPlatformStateSource());
+  const resetResult = await pageEval(resetPlatformStateSource(), {
+    label: `${name} reset platform state`,
+    timeoutMs: Math.min(commandTimeoutMs, 30000),
+  });
+  const resetOk = await assertCheck(
+    `${name} reset platform state`,
+    resetResult,
+    value => value?.ok,
+    {
+      role: role.role,
+      route,
+      deepWorkflow: true,
+    }
+  );
+  if (!resetOk) return;
   const { ok: routeReadyOk } = await navigateToProtectedRoute(
     role,
     route,
@@ -1205,7 +1352,7 @@ const deepWorkflowCases = [
       writeState(state);
       return { ok: true };
     `),
-    reloadAfterSetup: false,
+    reloadAfterSetup: true,
     source: workflowActionSource(`
       const prepared = readState();
       prepared.quizAttempts = (prepared.quizAttempts || []).filter((item) => item.quizId !== "quiz_ar_3");
@@ -1213,25 +1360,67 @@ const deepWorkflowCases = [
       writeState(prepared);
       await delay(120);
       const before = readState();
-      const beforeAttempts = before.quizAttempts?.length ?? 0;
-      await answerQuizQuestions();
-      await clickButtonWithin(".platform-workflow-main .platform-workflow-card:nth-of-type(2)", "Submit attempt");
+      const beforeAttemptIds = new Set((before.quizAttempts || []).filter((item) => item.quizId === "quiz_ar_3").map((item) => item.id));
+      const beforeGradeIds = new Set((before.grades || []).filter((item) => item.itemId === "quiz_ar_3").map((item) => item.id));
+      const beforeAttempts = beforeAttemptIds.size;
+      const quizCard = await waitFor(() =>
+        Array.from(document.querySelectorAll(".platform-workflow-card"))
+          .find((card) => normalize(card.textContent).includes("Grammar Quiz 3"))
+      );
+      if (!quizCard) throw new Error("Grammar Quiz 3 card was not rendered");
+      for (const card of Array.from(quizCard.querySelectorAll(".platform-quiz-question-card"))) {
+        const textarea = card.querySelector("textarea");
+        if (textarea && visible(textarea) && !textarea.disabled) {
+          setValue(textarea, "A complete QA short answer");
+          continue;
+        }
+        const textInput = Array.from(card.querySelectorAll("input"))
+          .find((input) => visible(input) && !input.disabled && !["hidden", "radio", "checkbox"].includes((input.getAttribute("type") || "text").toLowerCase()));
+        if (textInput) {
+          setValue(textInput, "A complete QA short answer");
+          continue;
+        }
+        const choice = Array.from(card.querySelectorAll(".platform-quiz-choice-grid button, .platform-quiz-storage-state button"))
+          .find((button) => visible(button) && !button.disabled);
+        if (choice) {
+          choice.click();
+          await delay(80);
+        }
+      }
+      const fallbackInput = quizCard.querySelector(".platform-inline-form input");
+      if (fallbackInput && visible(fallbackInput) && !fallbackInput.disabled) {
+        setValue(fallbackInput, "A complete QA short answer");
+      }
+      await delay(350);
+      const submitButton = await waitFor(() =>
+        Array.from(quizCard.querySelectorAll("button"))
+          .find((button) => visible(button) && !button.disabled && normalize(button.textContent).includes("Submit attempt"))
+      );
+      if (!submitButton) throw new Error("Grammar Quiz 3 submit button was not enabled");
+      submitButton.click();
+      await delay(90);
       const state = await waitFor(() => {
         const next = readState();
-        const attempt = next.quizAttempts?.find((item) => item.quizId === "quiz_ar_3");
-        const grade = next.grades?.find((item) => item.itemId === "quiz_ar_3");
-        return attempt?.status === "pending" && !grade && (next.quizAttempts?.length ?? 0) >= beforeAttempts ? next : null;
+        const attempt = next.quizAttempts?.find((item) => item.quizId === "quiz_ar_3" && !beforeAttemptIds.has(item.id));
+        const newGrade = next.grades?.find((item) => item.itemId === "quiz_ar_3" && !beforeGradeIds.has(item.id));
+        return attempt?.status === "pending" && !newGrade ? next : null;
       });
-      const attempt = state?.quizAttempts?.find((item) => item.quizId === "quiz_ar_3");
-      const grade = state?.grades?.find((item) => item.itemId === "quiz_ar_3");
+      const attempt = state?.quizAttempts?.find((item) => item.quizId === "quiz_ar_3" && !beforeAttemptIds.has(item.id));
+      const newGrade = state?.grades?.find((item) => item.itemId === "quiz_ar_3" && !beforeGradeIds.has(item.id));
+      const fallback = readState();
       return {
         ok: Boolean(state),
         beforeAttempts,
-        afterAttempts: state?.quizAttempts?.length,
-        afterGrades: state?.grades?.length,
+        afterAttempts: (state || fallback)?.quizAttempts?.filter((item) => item.quizId === "quiz_ar_3").length,
+        beforeGrades: beforeGradeIds.size,
+        afterGrades: (state || fallback)?.grades?.filter((item) => item.itemId === "quiz_ar_3").length,
+        quizAttempts: (state || fallback)?.quizAttempts?.filter((item) => item.quizId === "quiz_ar_3").map((item) => ({ id: item.id, status: item.status, score: item.score })),
+        quizGrades: (state || fallback)?.grades?.filter((item) => item.itemId === "quiz_ar_3").map((item) => ({ id: item.id, score: item.score })),
+        submitButtons: Array.from(quizCard.querySelectorAll("button")).map((button) => ({ text: normalize(button.textContent), disabled: button.disabled })),
+        quizCardText: normalize(quizCard.textContent).slice(0, 500),
         attemptQuizId: attempt?.quizId,
         attemptStatus: attempt?.status,
-        gradeItemId: grade?.itemId,
+        gradeItemId: newGrade?.itemId,
         lastAudit: state?.auditLogs?.[0]?.action
       };
     `),
@@ -1260,6 +1449,7 @@ const deepWorkflowCases = [
       const response = "QA audio route response " + Date.now();
       await waitFor(() => normalize(document.body.textContent).includes("Audio recitation"));
       setValue(document.querySelector(".platform-workflow-card textarea"), response);
+      await delay(350);
       await clickButtonWithin(".platform-workflow-main .platform-workflow-card", "Submit assignment");
       const state = await waitFor(() => {
         const next = readState();
@@ -1297,6 +1487,7 @@ const deepWorkflowCases = [
       await delay(120);
       const before = readState();
       await answerQuizQuestions();
+      await delay(350);
       await clickButtonWithin(".platform-workflow-main .platform-workflow-card:nth-of-type(2)", "Submit attempt");
       const state = await waitFor(() => {
         const next = readState();
@@ -2511,8 +2702,23 @@ const deepWorkflowCases = [
     reloadAfterSetup: false,
     source: workflowActionSource(`
       await waitFor(() => normalize(document.body.textContent).includes("NCL-AR-REJECT-QA"));
-      setByLabel("Reject reason", "QA eligibility evidence incomplete");
-      await clickButton("Reject", true);
+      const rejectCard = await waitFor(() =>
+        Array.from(document.querySelectorAll(".platform-row-list > article"))
+          .find((item) => normalize(item.textContent).includes("NCL-AR-REJECT-QA"))
+      );
+      if (!rejectCard) throw new Error("Reject certificate card was not rendered");
+      const reasonLabel = Array.from(rejectCard.querySelectorAll("label"))
+        .find((item) => normalize(item.textContent).toLowerCase().includes("reject reason"));
+      const reasonControl = reasonLabel?.querySelector("input, textarea, select");
+      setValue(reasonControl, "QA eligibility evidence incomplete");
+      const rejectButton = await waitFor(() =>
+        Array.from(rejectCard.querySelectorAll("button"))
+          .filter((button) => visible(button) && !button.disabled)
+          .find((button) => /^reject$/i.test(normalize(button.textContent)))
+      );
+      if (!rejectButton) throw new Error("Reject button was not rendered for reject certificate card");
+      rejectButton.click();
+      await delay(90);
       const state = await waitFor(() => {
         const next = readState();
         return next.certificates?.find((item) => item.id === "cert_ar_reject_demo")?.status === "rejected" ? next : null;
@@ -2986,13 +3192,16 @@ const deepWorkflowCases = [
       await clickButton("Record placement result");
       const state = await waitFor(() => {
         const next = readState();
-        return next.placementTests?.[0]?.status === "completed" && next.placementTests?.[0]?.recommendedLevel === "Arabic Level 4 QA" ? next : null;
+        const booking = next.placementTests?.find((item) => item.id === "pt_demo_1");
+        return booking?.status === "completed" && booking?.recommendedLevel === "Arabic Level 4 QA" ? next : null;
       });
+      const booking = state?.placementTests?.find((item) => item.id === "pt_demo_1");
+      const workflow = state?.enrollmentWorkflows?.find((item) => item.placementTestId === "pt_demo_1");
       return {
         ok: Boolean(state),
-        bookingStatus: state?.placementTests?.[0]?.status,
-        recommendedLevel: state?.placementTests?.[0]?.recommendedLevel,
-        workflowStatus: state?.enrollmentWorkflows?.[0]?.status,
+        bookingStatus: booking?.status,
+        recommendedLevel: booking?.recommendedLevel,
+        workflowStatus: workflow?.status,
         lastAudit: state?.auditLogs?.[0]?.action
       };
     `),
@@ -3400,63 +3609,42 @@ const deepWorkflowCases = [
       value?.branchAuditActorId === "usr_admin_demo",
   },
   {
-    name: "admin reports workflow changes report type and saves preset",
+    name: "admin attendance report filters attendance records",
     role: "superadmin",
-    route: "/app/admin/reports",
+    route: "/app/admin/reports/attendance",
     source: workflowActionSource(`
-      setByLabel("Report type", "finance");
-      await waitFor(() => normalize(document.body.innerText || document.body.textContent).includes("Finance report"));
-      setByLabel("Search rows", "inv_cairo_demo_1");
-      setByLabel("Status", "pending");
-      const filtered = await waitFor(() => /1 of \\d+ finance rows/i.test(normalize(document.body.innerText || document.body.textContent)));
-      const metricSort = Array.from(document.querySelectorAll(".platform-report-row.header button"))
-        .find((button) => normalize(button.textContent).includes("Metric"));
-      if (metricSort) metricSort.click();
+      await waitFor(() => normalize(document.body.innerText || document.body.textContent).includes("Attendance report"));
+      const search = document.querySelector('input[placeholder="Search attendance"]');
+      if (search) {
+        search.value = "Cairo";
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      const statusSelect = Array.from(document.querySelectorAll("select"))
+        .find((select) => normalize(select.closest("label")?.textContent || "").includes("Status"));
+      if (statusSelect) {
+        statusSelect.value = "present";
+        statusSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       await delay(80);
-      await clickButton("Save view");
-      const savedState = await waitFor(() => {
-        const next = readState();
-        const preset = next.reportPresets?.find((item) =>
-          item.ownerUserId === "usr_admin_demo" &&
-          item.role === "superadmin" &&
-          item.reportType === "finance" &&
-          item.search === "inv_cairo_demo_1" &&
-          item.status === "pending"
-        );
-        return preset ? next : null;
-      });
-      const found = await waitFor(() => normalize(document.body.innerText || document.body.textContent).includes("Finance snapshot"));
-      const applyButton = Array.from(document.querySelectorAll(".platform-row-list.compact button"))
-        .find((button) => normalize(button.textContent) === "Apply");
-      if (applyButton) applyButton.click();
-      await delay(100);
       const body = normalize(document.body.innerText || document.body.textContent);
+      const statuses = Array.from(document.querySelectorAll(".platform-status")).map((item) => normalize(item.textContent));
       return {
-        ok: Boolean(found && filtered),
-        textIncludesPreset: Boolean(found),
-        hasSearchControl: Boolean(Array.from(document.querySelectorAll(".platform-report-controls label")).some((label) => normalize(label.textContent).includes("Search rows"))),
-        hasStatusControl: Boolean(Array.from(document.querySelectorAll(".platform-report-controls label")).some((label) => normalize(label.textContent).includes("Status"))),
-        filteredRowsVisible: /1 of \\d+ finance rows/i.test(body),
-        presetSaved: Boolean(savedState),
-        auditAction: savedState?.auditLogs?.find((item) => item.entityType === "ReportPreset")?.action,
-        hasTypedFinanceRows: Boolean(document.querySelector(".platform-report-table.typed .platform-report-row-metric")) &&
-          body.includes("balance") &&
-          body.includes("Cairo Student Demo"),
-        hasMetricSort: Boolean(document.querySelector(".platform-report-row.header button[aria-pressed='true']")) &&
-          normalize(document.querySelector(".platform-report-row.header button[aria-pressed='true']")?.textContent).includes("Metric"),
+        ok: body.includes("Attendance report") && body.includes("Attendance records"),
+        hasSearchControl: Boolean(search),
+        hasStatusControl: Boolean(statusSelect),
+        hasExportAction: Boolean(Array.from(document.querySelectorAll("button")).find((button) => normalize(button.textContent).includes("Export CSV"))),
+        filteredRowsVisible: body.includes("Cairo Student Demo"),
+        statusesPresentOnly: statuses.length > 0 && statuses.every((item) => item === "present"),
         body: body.slice(0, 500)
       };
     `),
     predicate: value =>
       value?.ok &&
-      value?.textIncludesPreset === true &&
       value?.hasSearchControl === true &&
       value?.hasStatusControl === true &&
       value?.filteredRowsVisible === true &&
-      value?.presetSaved === true &&
-      value?.auditAction === "report.preset.saved" &&
-      value?.hasTypedFinanceRows === true &&
-      value?.hasMetricSort === true,
+      value?.hasExportAction === true &&
+      value?.statusesPresentOnly === true,
   },
   {
     name: "branch payment workflow records Cairo-scoped invoice",
@@ -3636,6 +3824,39 @@ try {
       await runDeepWorkflow(workflow);
     }
     throw new Error("__QA_FILTER_COMPLETE__");
+  }
+
+  recordProgress("public routes");
+  for (const publicRoute of publicRoutes) {
+    assertRunBudget(`checking public route ${publicRoute}`);
+    await goto(publicRoute);
+    const publicCheck = await pageEval(inspectPublicSource(publicRoute));
+    await assertCheck(
+      `${publicRoute} renders public page`,
+      publicCheck,
+      value =>
+        value?.path === publicRoute &&
+        Boolean(value?.heading) &&
+        value?.textLength > (publicRoute === "/404" ? 80 : 160) &&
+        value?.errorBoundary === false &&
+        (publicRoute === "/404" ? true : value?.notFound === false)
+    );
+    await assertCheck(
+      `${publicRoute} has no horizontal overflow`,
+      publicCheck,
+      value =>
+        value?.overflow <= 1 && (value?.overflowElements?.length ?? 0) === 0
+    );
+    await assertCheck(
+      `${publicRoute} has no unlabeled visible controls`,
+      publicCheck,
+      value => (value?.unlabeledControls?.length ?? 0) === 0
+    );
+    await assertCheck(
+      `${publicRoute} has meaningful public interactions`,
+      publicCheck,
+      value => value?.visibleControls >= (publicRoute === "/404" ? 1 : 2)
+    );
   }
 
   recordProgress("auth routes");

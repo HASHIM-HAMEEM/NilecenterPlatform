@@ -71,6 +71,10 @@ const roleAwareTargets: Record<string, Partial<Record<Role, string>>> = {
   "/profile": {
     student: "/app/student/profile",
     teacher: "/app/teacher/profile",
+    registrar: "/app/registrar/profile",
+    headofdepartment: "/app/hod/profile",
+    branchadmin: "/app/branch/profile",
+    superadmin: "/app/admin/profile",
   },
   "/notifications": {
     student: "/app/student/messages",
