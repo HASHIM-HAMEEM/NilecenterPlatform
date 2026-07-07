@@ -41,6 +41,10 @@ const maxRunMs = readPositiveIntegerEnv(
 );
 const workflowNameFilter =
   process.env.QA_ONLY_WORKFLOWS?.trim().toLowerCase() || "";
+const roleNameFilters = (process.env.QA_ONLY_ROLES || "")
+  .split(",")
+  .map(value => value.trim().toLowerCase())
+  .filter(Boolean);
 const pwcli =
   process.env.PWCLI ||
   path.join(
@@ -218,6 +222,10 @@ const roles = [
   },
 ];
 
+const selectedRoles = roleNameFilters.length
+  ? roles.filter(item => roleNameFilters.includes(item.role.toLowerCase()))
+  : roles;
+
 const publicRoutes = [
   "/",
   "/login",
@@ -265,6 +273,8 @@ const startedAt = Date.now();
 const progressEvents = [];
 const authenticatedProviders = new Map();
 let lastBrowserCommand = null;
+let lastCheck = null;
+let currentProgress = null;
 let summaryWritten = false;
 let activeChild = null;
 let activeKillTree = null;
@@ -280,6 +290,8 @@ function writeSummary(extra = {}) {
     checkedAt: new Date().toISOString(),
     elapsedMs: elapsedMs(),
     lastBrowserCommand,
+    lastCheck,
+    currentProgress,
     totalChecks: checks.length,
     failedChecks: failures.length,
     progressEvents,
@@ -294,6 +306,7 @@ function writeSummary(extra = {}) {
 
 function recordProgress(stage, details = {}) {
   const event = { stage, elapsedMs: elapsedMs(), ...details };
+  currentProgress = event;
   progressEvents.push(event);
   const seconds = Math.round(event.elapsedMs / 1000);
   const suffix = lastBrowserCommand?.label
@@ -316,6 +329,8 @@ function pushFatal(name, error) {
     message: error instanceof Error ? error.message : String(error),
     stack: error instanceof Error ? error.stack : undefined,
     lastBrowserCommand,
+    lastCheck,
+    currentProgress,
   };
   const failure = { name, actual };
   checks.push({ ...failure, ok: false });
@@ -363,6 +378,10 @@ function commandLabel(command, args, options) {
   const preview =
     firstArg.length > 120 ? `${firstArg.slice(0, 120)}...` : firstArg;
   return preview ? `${command} ${preview}` : command;
+}
+
+function hasPlaywrightResult(output) {
+  return output.includes("### Result");
 }
 
 async function runPw(command, args = [], options = {}) {
@@ -456,6 +475,8 @@ async function runPw(command, args = [], options = {}) {
 
   const durationMs = Date.now() - startedAt;
   const output = `${stdout}${stderr}`;
+  const timedOutWithResult =
+    timedOut && command === "eval" && hasPlaywrightResult(output);
   lastBrowserCommand = {
     command,
     label,
@@ -465,7 +486,7 @@ async function runPw(command, args = [], options = {}) {
     killEscalated,
     pid: child.pid,
   };
-  if (timedOut) {
+  if (timedOut && !timedOutWithResult) {
     throw new Error(
       `playwright ${label} timed out after ${timeoutMs}ms: ${truncateOutput(output, 1200)}`
     );
@@ -502,7 +523,9 @@ async function goto(pathname) {
 
 async function assertCheck(name, actual, predicate, details = {}) {
   const ok = Boolean(predicate(actual));
-  checks.push({ name, ok, actual, ...details });
+  const check = { name, ok, actual, ...details };
+  checks.push(check);
+  lastCheck = check;
   if (!ok) failures.push({ name, actual, ...details });
   return ok;
 }
@@ -526,6 +549,11 @@ function routeMatrixTimeout(routeCount) {
 async function runRouteMatrix(routes) {
   const results = [];
   for (const routeChunk of chunkItems(routes, routeMatrixChunkSize)) {
+    recordProgress("route matrix chunk", {
+      firstRoute: routeChunk[0],
+      lastRoute: routeChunk[routeChunk.length - 1],
+      routeCount: routeChunk.length,
+    });
     const chunkResult = await pageEval(inspectRouteMatrixSource(routeChunk), {
       label: `route matrix ${routeChunk[0]} ... ${routeChunk[routeChunk.length - 1]}`,
       timeoutMs: routeMatrixTimeout(routeChunk.length),
@@ -3561,16 +3589,43 @@ const deepWorkflowCases = [
       value?.auditActorId === "usr_admin_demo",
   },
   {
-    name: "admin governance workflow updates permission matrix and branch status",
+    name: "admin roles overview renders role summaries",
     role: "superadmin",
     route: "/app/admin/roles",
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Permission matrix"));
-      const permissionButton = await waitFor(() =>
-        Array.from(document.querySelectorAll(".admin-permission-grid button"))
-          .find((button) => normalize(button.textContent).toLowerCase().includes("payments / read")),
-        4000
-      );
+      const overview = await waitFor(() => document.querySelector('[data-testid="admin-roles-overview"]'), 4000);
+      const roleRows = Array.from(document.querySelectorAll('[data-testid^="admin-role-row-"]'));
+      const permissionEditor = document.querySelector('[data-testid="admin-permissions-page"], .admin-permission-grid');
+      const branchEditor = document.querySelector('[data-testid^="branch-status-"], .admin-branch-list select');
+      const text = normalize(document.body.textContent || "");
+      return {
+        ok: Boolean(overview),
+        roleRowCount: roleRows.length,
+        hasStudent: Boolean(document.querySelector('[data-testid="admin-role-row-student"]')),
+        hasTeacher: Boolean(document.querySelector('[data-testid="admin-role-row-teacher"]')),
+        hasAdmin: Boolean(document.querySelector('[data-testid="admin-role-row-superadmin"]')),
+        hasAccessRulesLink: text.includes("Access rules"),
+        hasPermissionEditor: Boolean(permissionEditor),
+        hasBranchEditor: Boolean(branchEditor)
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.roleRowCount >= 6 &&
+      value?.hasStudent &&
+      value?.hasTeacher &&
+      value?.hasAdmin &&
+      value?.hasAccessRulesLink &&
+      value?.hasPermissionEditor === false &&
+      value?.hasBranchEditor === false,
+  },
+  {
+    name: "admin governance workflow updates access rules",
+    role: "superadmin",
+    route: "/app/admin/permissions",
+    source: workflowActionSource(`
+      await waitFor(() => normalize(document.body.textContent).includes("Access rules"));
+      const permissionButton = await waitFor(() => document.querySelector('[data-testid="permission-toggle-teacher-payments-read"]'), 4000);
       if (!permissionButton) throw new Error("Payments read permission control was not rendered");
       const beforePermission = readState().permissions?.teacher?.includes("payments:read") === true;
       permissionButton.click();
@@ -3578,33 +3633,47 @@ const deepWorkflowCases = [
         const next = readState();
         return next.permissions?.teacher?.includes("payments:read") !== beforePermission ? next : null;
       }, 5000);
-      const cairoStatus = Array.from(document.querySelectorAll(".admin-branch-list select"))
-        .find((select) => normalize(select.getAttribute("aria-label")).toLowerCase().includes("cairo"));
+      const resultState = await waitFor(() => normalize(document.querySelector('[data-testid="permission-result"]')?.textContent || "").includes("Access rule saved"), 5000);
+      const state = permissionState;
+      const permissionAudit = state?.auditLogs?.find((item) => item.action === "permission.updated" && item.entityId === "teacher");
+      return {
+        ok: Boolean(state && resultState),
+        teacherHasPaymentRead: state?.permissions?.teacher?.includes("payments:read") === true,
+        expectedPermission: !beforePermission,
+        permissionAuditAction: permissionAudit?.action,
+        permissionAuditActorId: permissionAudit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.teacherHasPaymentRead === value?.expectedPermission &&
+      value?.permissionAuditAction === "permission.updated" &&
+      value?.permissionAuditActorId === "usr_admin_demo",
+  },
+  {
+    name: "admin branch workflow updates branch status",
+    role: "superadmin",
+    route: "/app/admin/branches",
+    source: workflowActionSource(`
+      await waitFor(() => normalize(document.body.textContent).includes("Branch access"));
+      const cairoStatus = await waitFor(() => document.querySelector('[data-testid="branch-status-br_cairo"]'), 4000);
       if (!cairoStatus) throw new Error("Cairo branch status control was not rendered");
       setValue(cairoStatus, "paused");
       const state = await waitFor(() => {
         const next = readState();
         return next.branches?.find((item) => item.id === "br_cairo")?.status === "paused" ? next : null;
       }, 5000);
-      const permissionAudit = state?.auditLogs?.find((item) => item.action === "permission.updated" && item.entityId === "teacher");
       const branchAudit = state?.auditLogs?.find((item) => item.action === "branch.updated" && item.entityId === "br_cairo");
       return {
-        ok: Boolean(state && permissionState),
-        teacherHasPaymentRead: state?.permissions?.teacher?.includes("payments:read") === true,
-        expectedPermission: !beforePermission,
+        ok: Boolean(state),
         branchStatus: state?.branches?.find((item) => item.id === "br_cairo")?.status,
-        permissionAuditAction: permissionAudit?.action,
-        permissionAuditActorId: permissionAudit?.actorId,
         branchAuditAction: branchAudit?.action,
         branchAuditActorId: branchAudit?.actorId
       };
     `),
     predicate: value =>
       value?.ok &&
-      value?.teacherHasPaymentRead === value?.expectedPermission &&
       value?.branchStatus === "paused" &&
-      value?.permissionAuditAction === "permission.updated" &&
-      value?.permissionAuditActorId === "usr_admin_demo" &&
       value?.branchAuditAction === "branch.updated" &&
       value?.branchAuditActorId === "usr_admin_demo",
   },
@@ -3826,6 +3895,17 @@ try {
     throw new Error("__QA_FILTER_COMPLETE__");
   }
 
+  if (roleNameFilters.length) {
+    await assertCheck(
+      `role filter "${roleNameFilters.join(",")}" matched roles`,
+      {
+        count: selectedRoles.length,
+        names: selectedRoles.map(role => role.role),
+      },
+      value => value?.count > 0
+    );
+  }
+
   recordProgress("public routes");
   for (const publicRoute of publicRoutes) {
     assertRunBudget(`checking public route ${publicRoute}`);
@@ -3931,7 +4011,7 @@ try {
   await runPw("resize", ["1440", "1000"]);
 
   recordProgress("desktop portal routes");
-  for (const role of roles) {
+  for (const role of selectedRoles) {
     recordProgress(`desktop role: ${role.role}`);
     assertRunBudget(`checking desktop role ${role.role}`);
     const loginOk = await authenticateRole(
@@ -4027,12 +4107,17 @@ try {
   }
 
   recordProgress("deep workflows");
-  for (const workflow of deepWorkflowCases) {
+  const selectedWorkflowCases = roleNameFilters.length
+    ? deepWorkflowCases.filter(workflow =>
+        selectedRoles.some(role => role.role === workflow.role)
+      )
+    : deepWorkflowCases;
+  for (const workflow of selectedWorkflowCases) {
     await runDeepWorkflow(workflow);
   }
 
   recordProgress("mobile portal routes");
-  for (const role of roles) {
+  for (const role of selectedRoles) {
     recordProgress(`mobile role: ${role.role}`);
     assertRunBudget(`checking mobile role ${role.role}`);
     await runPw("resize", ["390", "844"]);

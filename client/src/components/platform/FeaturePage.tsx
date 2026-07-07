@@ -87,13 +87,11 @@ import type {
 } from "@/lib/moodle/types";
 import PlatformShell from "./PlatformShell";
 import {
-  PlatformPageHeader,
   PlatformWorkspaceHeader,
-  platformReveal,
-  StatCard,
   StatusBadge,
   DataTableCard,
 } from "./PlatformPrimitives";
+import { ListPage, getPageTypeForKind } from "./PageTypes";
 import StatefulWorkflowExperience, {
   isStatefulWorkflowPage,
 } from "./WorkflowExperiences";
@@ -110,8 +108,6 @@ const toneColor: Record<Stat["tone"], string> = {
 function formatConnectionStatus(status: string) {
   return status === "mock_mode" ? "Test mode" : status.replace("_", " ");
 }
-
-const pageReveal = platformReveal;
 
 type FeaturePageProps = {
   role: Role;
@@ -325,25 +321,29 @@ export default function FeaturePage({
   if (config.kind === "messages") {
     return (
       <PlatformShell role={role} title={config.title}>
-        <PlatformPageHeader
-          compact
+        <ListPage
+          config={config}
           title={config.title}
           description="Send and manage role-based conversations."
-        />
-        <StatefulWorkflowExperience
-          config={config}
-          role={role}
-          pageId={pageId}
-          params={params}
-        />
+          showMetrics={false}
+        >
+          <StatefulWorkflowExperience
+            config={config}
+            role={role}
+            pageId={pageId}
+            params={params}
+          />
+        </ListPage>
       </PlatformShell>
     );
   }
 
+  const PageType = getPageTypeForKind(config.kind);
+
   return (
     <PlatformShell role={role} title={config.title}>
-      <PlatformPageHeader
-        compact
+      <PageType
+        config={config}
         title={params ? decorateTitle(config.title, params) : config.title}
         description={config.description}
         actions={
@@ -365,15 +365,6 @@ export default function FeaturePage({
             </button>
           </>
         }
-      />
-
-      <MetricGrid stats={config.stats} />
-
-      <motion.div
-        initial="hidden"
-        animate="visible"
-        custom={0.14}
-        variants={pageReveal}
       >
         <KindExperience
           config={config}
@@ -381,29 +372,8 @@ export default function FeaturePage({
           pageId={pageId}
           params={params}
         />
-      </motion.div>
+      </PageType>
     </PlatformShell>
-  );
-}
-
-function MetricGrid({ stats }: { stats: Stat[] }) {
-  return (
-    <motion.div
-      className="platform-metric-grid"
-      initial="hidden"
-      animate="visible"
-    >
-      {stats.map((stat, index) => (
-        <StatCard
-          key={stat.label}
-          label={stat.label}
-          value={stat.value}
-          change={stat.change}
-          tone={stat.tone}
-          delay={0.05 + index * 0.045}
-        />
-      ))}
-    </motion.div>
   );
 }
 
@@ -2596,6 +2566,7 @@ function AdminAccessExperience({
                     <select
                       value={branch.status}
                       disabled={savingGovernance}
+                      data-testid={`branch-status-${branch.id}`}
                       onChange={event =>
                         updateBranchStatus(
                           branch.id,

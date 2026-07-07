@@ -21,6 +21,10 @@ const AdminUsersPage = lazy(() => import("./pages/platform/AdminUsersPage"));
 const AdminUserDetailPage = lazy(
   () => import("./pages/platform/AdminUserDetailPage")
 );
+const AdminRolesPage = lazy(() => import("./pages/platform/AdminRolesPage"));
+const AdminPermissionsPage = lazy(
+  () => import("./pages/platform/AdminPermissionsPage")
+);
 const AdminSchedulePage = lazy(
   () => import("./pages/platform/AdminSchedulePage")
 );
@@ -53,6 +57,9 @@ const PortalSettingsPage = lazy(
 );
 const ProfileWorkspace = lazy(
   () => import("./pages/platform/ProfileWorkspace")
+);
+const SimplePortalPage = lazy(
+  () => import("./pages/platform/SimplePortalPage")
 );
 const FeaturePage = lazy(() => import("./components/platform/FeaturePage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -221,8 +228,6 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
   },
   { path: "/app/admin/users", role: "superadmin", pageId: "users" },
   { path: "/app/admin/roles", role: "superadmin", pageId: "roles" },
-  { path: "/app/admin/permissions", role: "superadmin", pageId: "permissions" },
-  { path: "/app/admin/branches", role: "superadmin", pageId: "branches" },
   { path: "/app/admin/departments", role: "superadmin", pageId: "departments" },
   { path: "/app/admin/programs", role: "superadmin", pageId: "programs" },
   { path: "/app/admin/courses", role: "superadmin", pageId: "courses" },
@@ -245,6 +250,36 @@ const featureRoutes: { path: string; role: Role; pageId: string }[] = [
     path: "/app/admin/system-health",
     role: "superadmin",
     pageId: "system-health",
+  },
+];
+
+const simplePortalRoutes: { path: string; role: Role; pageId: string }[] = [
+  { path: "/app/student/courses", role: "student", pageId: "courses" },
+  { path: "/app/student/assignments", role: "student", pageId: "assignments" },
+  { path: "/app/student/quizzes", role: "student", pageId: "quizzes" },
+  { path: "/app/student/calendar", role: "student", pageId: "calendar" },
+
+  {
+    path: "/app/hod/departments",
+    role: "headofdepartment",
+    pageId: "departments",
+  },
+  { path: "/app/hod/programs", role: "headofdepartment", pageId: "programs" },
+  { path: "/app/hod/levels", role: "headofdepartment", pageId: "levels" },
+  { path: "/app/hod/teachers", role: "headofdepartment", pageId: "teachers" },
+  { path: "/app/hod/classes", role: "headofdepartment", pageId: "classes" },
+
+  { path: "/app/branch/students", role: "branchadmin", pageId: "students" },
+  { path: "/app/branch/teachers", role: "branchadmin", pageId: "teachers" },
+  { path: "/app/branch/classes", role: "branchadmin", pageId: "classes" },
+
+  { path: "/app/admin/departments", role: "superadmin", pageId: "departments" },
+  { path: "/app/admin/programs", role: "superadmin", pageId: "programs" },
+  { path: "/app/admin/branches", role: "superadmin", pageId: "branches" },
+  {
+    path: "/app/admin/certificates",
+    role: "superadmin",
+    pageId: "certificates",
   },
 ];
 
@@ -381,6 +416,18 @@ function Router() {
         <Route path="/app/admin/users">
           <ProtectedRoute role="superadmin" pageId="users">
             <AdminUsersPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/roles">
+          <ProtectedRoute role="superadmin" pageId="roles">
+            <AdminRolesPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/permissions">
+          <ProtectedRoute role="superadmin" pageId="permissions">
+            <AdminPermissionsPage />
           </ProtectedRoute>
         </Route>
 
@@ -657,6 +704,14 @@ function Router() {
             <PortalSettingsPage role="branchadmin" />
           </ProtectedRoute>
         </Route>
+
+        {simplePortalRoutes.map(route => (
+          <Route key={route.path} path={route.path}>
+            <ProtectedRoute role={route.role} pageId={route.pageId}>
+              <SimplePortalPage role={route.role} pageId={route.pageId} />
+            </ProtectedRoute>
+          </Route>
+        ))}
 
         {featureRoutes.map(route => (
           <Route key={route.path} path={route.path}>

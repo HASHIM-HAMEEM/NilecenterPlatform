@@ -132,7 +132,7 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
     <DataTableCard
       title="Report areas"
       subtitle="Choose one area to review"
-      className="admin-ia-table-card"
+      className="admin-ia-table-card admin-reports-overview-table"
     >
       <div className="admin-ia-table-wrap">
         <table>
@@ -159,7 +159,7 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
                       Open
                     </Link>
                   ) : (
-                    <StatusBadge tone="slate">Later</StatusBadge>
+                    <StatusBadge tone="slate">Not ready</StatusBadge>
                   )}
                 </td>
               </tr>
@@ -174,7 +174,7 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
     <DataTableCard
       title="Attendance records"
       subtitle={`${attendanceRows.length} matching record(s)`}
-      className="admin-ia-table-card"
+      className="admin-ia-table-card admin-reports-attendance-table"
     >
       <div className="admin-ia-table-wrap">
         <table>
@@ -238,8 +238,8 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
         title={view === "attendance" ? "Attendance report" : "Reports"}
         description={
           view === "attendance"
-            ? "Review attendance records only."
-            : "Choose one report area to review."
+            ? "Filter and export attendance records."
+            : "Choose one report area to open."
         }
         actions={
           view === "attendance" ? (

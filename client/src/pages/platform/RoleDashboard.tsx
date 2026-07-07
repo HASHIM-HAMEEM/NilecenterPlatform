@@ -1278,20 +1278,20 @@ function TeacherCommandDashboard() {
       </motion.div>
 
       <motion.div
-        className="platform-v2-role-main"
+        className="platform-v2-role-main teacher-dashboard-main"
         initial="hidden"
         animate="visible"
         custom={0.14}
         variants={dashboardReveal}
       >
-        <div className="platform-v2-role-stack">
-          <section className="platform-v2-panel platform-v2-work-summary">
+        <div className="platform-v2-role-stack teacher-dashboard-stack">
+          <section className="platform-v2-panel platform-v2-work-summary teacher-plan-panel">
             <PlatformWorkspaceHeader
               title="Today’s teaching plan"
               description={`${teacherUser?.name ?? "Teacher"} · ${staffProfile?.subjects.join(", ") || teacherProfile?.subjects.join(", ") || "assigned classes"}`}
             />
-            <div className="platform-v2-summary-body">
-              <div className="platform-v2-summary-copy">
+            <div className="platform-v2-summary-body teacher-plan-body">
+              <div className="platform-v2-summary-copy teacher-plan-copy">
                 <span>Next class</span>
                 <h2>
                   {nextClass?.title ??
@@ -1315,7 +1315,7 @@ function TeacherCommandDashboard() {
                   </Link>
                 </div>
               </div>
-              <div className="platform-v2-summary-facts">
+              <div className="platform-v2-summary-facts teacher-plan-facts">
                 <article>
                   <span>Schedule</span>
                   <strong>
@@ -1339,7 +1339,7 @@ function TeacherCommandDashboard() {
             </div>
           </section>
 
-          <section className="platform-v2-panel">
+          <section className="platform-v2-panel teacher-delivery-panel">
             <PlatformWorkspaceHeader
               title="Class delivery"
               description="The next sessions and the attendance state attached to them."
@@ -1391,7 +1391,7 @@ function TeacherCommandDashboard() {
           </section>
         </div>
 
-        <aside className="platform-v2-panel">
+        <aside className="platform-v2-panel teacher-attention-panel">
           <PlatformWorkspaceHeader
             title="Needs attention"
             description="Attendance, grading, and learner support queues."

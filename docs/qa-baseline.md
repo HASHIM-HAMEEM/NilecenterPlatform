@@ -2,9 +2,16 @@
 
 Nile Learn is currently in internal alpha stabilization. The protected portal QA baseline is:
 
-- Portal QA: 921 checks, 0 failures.
-- Validation command: `scripts/verify.sh`.
-- QA summary artifact: `output/playwright/portal-qa-summary.json`.
+- Portal QA: 1,163 checks, 0 failures.
+- Checked at: `2026-07-07T22:00:33.555Z`.
+- Validation command: `QA_OUTPUT_DIR=output/playwright/codex-admin-governance-fix-verify-final QA_PORT=3015 scripts/verify.sh`.
+- QA summary artifact: `output/playwright/codex-admin-governance-fix-verify-final/portal-qa-summary.json`.
+
+Admin governance is now separated across focused Simple UI routes:
+
+- `/app/admin/roles` for role overview and role summaries.
+- `/app/admin/permissions` for access rules and permission editing.
+- `/app/admin/branches` for branch management.
 
 This baseline must remain clean for future changes. If a task changes UI, workflows, routes, RBAC, domain actions, or server action gates, run validation and confirm the portal QA result before reporting completion.
 
@@ -25,4 +32,3 @@ Every implementation report must include:
 - exact commands run
 - validation result
 - whether portal QA remains clean
-

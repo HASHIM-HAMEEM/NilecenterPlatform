@@ -87,11 +87,82 @@ QA_SERVER_PID=""
 
 stop_portal_qa_server() {
   if [[ -n "${QA_SERVER_PID:-}" ]]; then
-    kill "$QA_SERVER_PID" >/dev/null 2>&1 || true
+    if kill -0 "$QA_SERVER_PID" >/dev/null 2>&1; then
+      kill "$QA_SERVER_PID" >/dev/null 2>&1 || true
+      wait "$QA_SERVER_PID" >/dev/null 2>&1 || true
+    fi
   fi
 }
 
+portal_qa_summary_path() {
+  node -e 'const path = require("node:path"); const dir = process.env.QA_OUTPUT_DIR || path.join(process.cwd(), "output", "playwright"); console.log(path.join(dir, "portal-qa-summary.json"));'
+}
+
+print_portal_qa_summary() {
+  local summary_path
+  summary_path="$(portal_qa_summary_path)"
+  if [[ ! -r "$summary_path" ]]; then
+    printf 'Portal QA summary was not written: %s\n' "$summary_path" >&2
+    return 0
+  fi
+  node -e '
+    const fs = require("node:fs");
+    const summary = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const simplify = (value) => {
+      if (!value) return value;
+      if (typeof value !== "object") return value;
+      const result = {};
+      for (const key of ["stage", "elapsedMs", "role", "route", "firstRoute", "lastRoute", "routeCount"]) {
+        if (value[key] !== undefined) result[key] = value[key];
+      }
+      return Object.keys(result).length ? result : value;
+    };
+    console.error("Portal QA summary:");
+    console.error(JSON.stringify({
+      outputPath: process.argv[1],
+      inProgress: summary.inProgress ?? false,
+      interrupted: summary.interrupted ?? false,
+      elapsedMs: summary.elapsedMs,
+      totalChecks: summary.totalChecks,
+      failedChecks: summary.failedChecks,
+      currentProgress: simplify(summary.currentProgress),
+      lastCheck: summary.lastCheck ? {
+        name: summary.lastCheck.name,
+        ok: summary.lastCheck.ok,
+        role: summary.lastCheck.role,
+        route: summary.lastCheck.route,
+      } : null,
+      lastBrowserCommand: summary.lastBrowserCommand,
+      failures: (summary.failures || []).slice(0, 5),
+    }, null, 2));
+  ' "$summary_path" >&2
+}
+
+run_portal_qa() {
+  set +e
+  run_package_script qa:portals
+  local status=$?
+  set -e
+  if [[ "$status" -ne 0 ]]; then
+    print_portal_qa_summary
+  fi
+  return "$status"
+}
+
+handle_verify_signal() {
+  local signal="$1"
+  printf '\nVerification interrupted by %s\n' "$signal" >&2
+  print_portal_qa_summary
+  stop_portal_qa_server
+  if [[ "$signal" == "SIGINT" ]]; then
+    exit 130
+  fi
+  exit 143
+}
+
 trap stop_portal_qa_server EXIT
+trap 'handle_verify_signal SIGINT' INT
+trap 'handle_verify_signal SIGTERM' TERM
 
 wait_for_url() {
   local url="$1"
@@ -151,7 +222,7 @@ if has_script "qa:portals"; then
     export QA_WORKFLOW_ACTION_TIMEOUT_MS="${QA_WORKFLOW_ACTION_TIMEOUT_MS:-12000}"
     export QA_LOGIN_TIMEOUT_MS="${QA_LOGIN_TIMEOUT_MS:-30000}"
     run_step "Portal QA server" start_portal_qa_server
-    run_step "Portal QA" run_package_script qa:portals
+    run_step "Portal QA" run_portal_qa
   else
     printf '\n==> Portal QA skipped (SKIP_PORTAL_QA=1)\n'
   fi

@@ -3436,6 +3436,134 @@
     white-space: nowrap;
   }
 
+  .teacher-dashboard-main {
+    grid-template-columns: minmax(0, 1fr) minmax(310px, 0.32fr);
+    gap: 18px;
+  }
+
+  .teacher-dashboard-stack {
+    gap: 18px;
+  }
+
+  .teacher-plan-panel {
+    border-radius: 14px;
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--role-color) 5%, white),
+        rgba(255, 253, 249, 0.96) 42%,
+        #fffefa
+      ),
+      var(--card);
+  }
+
+  .teacher-plan-panel .platform-workspace-header {
+    padding: 20px 20px 0;
+  }
+
+  .teacher-plan-panel .platform-workspace-header-copy h2,
+  .teacher-attention-panel .platform-workspace-header-copy h2,
+  .teacher-delivery-panel .platform-workspace-header-copy h2 {
+    font-size: 17px;
+    line-height: 1.2;
+  }
+
+  .teacher-plan-panel .platform-workspace-header-copy p,
+  .teacher-attention-panel .platform-workspace-header-copy p,
+  .teacher-delivery-panel .platform-workspace-header-copy p {
+    max-width: 46ch;
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+
+  .teacher-plan-body {
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 0.3fr);
+    gap: 22px;
+    align-items: stretch;
+    padding: 22px 20px 20px;
+  }
+
+  .teacher-plan-copy {
+    align-content: end;
+    min-height: 235px;
+    border-radius: 12px;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(255, 253, 249, 0.35),
+        rgba(255, 253, 249, 0.88)
+      );
+    padding: clamp(18px, 3vw, 28px);
+  }
+
+  .teacher-plan-copy > span {
+    color: color-mix(in srgb, var(--role-color) 55%, var(--muted-foreground));
+    font-size: 11px;
+  }
+
+  .teacher-plan-copy h2 {
+    max-width: 14ch;
+    font-size: clamp(30px, 4.2vw, 52px);
+    line-height: 0.98;
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-plan-copy p {
+    max-width: 44ch;
+    font-size: 14px;
+  }
+
+  .teacher-plan-facts {
+    gap: 10px;
+  }
+
+  .teacher-plan-facts article {
+    border-color: color-mix(in srgb, var(--role-color) 10%, var(--border));
+    border-radius: 12px;
+    background: rgba(255, 253, 249, 0.84);
+    padding: 14px;
+    display: grid;
+    align-content: center;
+  }
+
+  .teacher-plan-facts strong {
+    font-size: 21px;
+  }
+
+  .teacher-delivery-panel,
+  .teacher-attention-panel {
+    border-radius: 12px;
+  }
+
+  .teacher-delivery-panel .platform-v2-dashboard-list,
+  .teacher-attention-panel .platform-v2-attention-list {
+    padding: 14px 16px 16px;
+  }
+
+  .teacher-delivery-panel .platform-v2-dashboard-list a,
+  .teacher-delivery-panel .platform-v2-dashboard-list article,
+  .teacher-attention-panel .platform-v2-attention-list a {
+    min-height: 60px;
+    border-radius: 10px;
+    background: rgba(255, 253, 249, 0.82);
+  }
+
+  .teacher-attention-panel {
+    position: sticky;
+    top: 16px;
+  }
+
+  .teacher-attention-panel .platform-v2-attention-list a {
+    grid-template-columns: 34px minmax(0, 1fr) 18px;
+    padding: 11px;
+  }
+
+  .teacher-attention-panel .platform-v2-attention-list a > span {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
   .platform-v2-side-actions {
     padding: 0 18px 18px;
   }
@@ -3532,8 +3660,20 @@
       position: static;
     }
 
+    .teacher-attention-panel {
+      position: static;
+    }
+
     .platform-v2-summary-facts {
       grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .teacher-plan-body {
+      grid-template-columns: 1fr;
+    }
+
+    .teacher-plan-copy {
+      min-height: 180px;
     }
   }
 
@@ -3556,6 +3696,40 @@
 
     .platform-v2-summary-copy h2 {
       font-size: clamp(24px, 8vw, 32px);
+    }
+
+    .teacher-plan-panel .platform-workspace-header,
+    .teacher-delivery-panel .platform-workspace-header,
+    .teacher-attention-panel .platform-workspace-header {
+      padding: 14px 14px 0;
+    }
+
+    .teacher-plan-body {
+      gap: 14px;
+      padding: 14px;
+    }
+
+    .teacher-plan-copy {
+      min-height: auto;
+      padding: 16px;
+    }
+
+    .teacher-plan-copy h2 {
+      max-width: 100%;
+      font-size: clamp(26px, 9vw, 34px);
+      line-height: 1.04;
+    }
+
+    .teacher-plan-facts {
+      grid-template-columns: 1fr;
+    }
+
+    .teacher-attention-panel .platform-v2-attention-list a {
+      grid-template-columns: 34px minmax(0, 1fr);
+    }
+
+    .teacher-attention-panel .platform-v2-attention-list a > svg {
+      display: none;
     }
 
     .platform-v2-dashboard-list a > span,
@@ -5139,6 +5313,28 @@
   .admin-user-detail-tabs button.active {
     border-color: var(--foreground);
     color: var(--foreground);
+  }
+
+  .admin-user-detail-tab-heading {
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(255, 253, 249, 0.88);
+    padding: 12px 14px;
+    display: grid;
+    gap: 3px;
+  }
+
+  .admin-user-detail-tab-heading strong {
+    color: var(--foreground);
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .admin-user-detail-tab-heading span {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .admin-user-detail-grid {
@@ -11215,6 +11411,23 @@
     font-weight: 850;
   }
 
+  .platform-calendar-actions .platform-primary-button {
+    border-color: transparent;
+    background: var(--foreground);
+    color: white;
+  }
+
+  .platform-calendar-actions .platform-primary-button:hover {
+    background: color-mix(in srgb, var(--foreground) 92%, white);
+    color: white;
+  }
+
+  .platform-calendar-actions .platform-primary-button:disabled {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--foreground) 84%, white);
+    color: rgba(255, 255, 255, 0.72);
+  }
+
   .platform-calendar-actions button:disabled {
     cursor: not-allowed;
     opacity: 0.56;
@@ -16436,6 +16649,22 @@
       content: "Notes";
     }
 
+    .admin-reports-overview-table td:nth-child(1)::before {
+      content: "Area";
+    }
+
+    .admin-reports-overview-table td:nth-child(2)::before {
+      content: "Purpose";
+    }
+
+    .admin-reports-overview-table td:nth-child(3)::before {
+      content: "Rows";
+    }
+
+    .admin-reports-overview-table td:nth-child(4)::before {
+      content: "Action";
+    }
+
     .admin-schedule-calendar-table td:nth-child(1)::before {
       content: "Event";
     }
@@ -17952,11 +18181,710 @@
     gap: 7px;
   }
 
+  .simple-portal-page {
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+
+  .simple-portal-page .platform-v2-layout-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.32fr);
+  }
+
+  .simple-portal-page .platform-v2-layout-toolbar {
+    width: fit-content;
+    max-width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    justify-content: flex-start;
+  }
+
+  .simple-portal-toolbar {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(255, 253, 249, 0.96);
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    box-shadow: 0 8px 24px rgba(26, 26, 26, 0.04);
+  }
+
+  .simple-portal-toolbar label {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 850;
+  }
+
+  .simple-portal-toolbar label > span {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .simple-portal-toolbar input,
+  .simple-portal-toolbar select {
+    min-height: 36px;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    color: var(--foreground);
+    padding: 0 10px;
+    font: inherit;
+  }
+
+  .simple-portal-toolbar input {
+    width: min(44vw, 250px);
+  }
+
+  .simple-portal-toolbar select {
+    width: 170px;
+  }
+
+  .simple-portal-toolbar label > span input {
+    border: 0;
+    padding: 0;
+  }
+
+  .simple-portal-table td:first-child {
+    width: 30%;
+  }
+
+  .simple-portal-table td:nth-child(2) {
+    width: 32%;
+  }
+
+  .simple-portal-table small {
+    max-width: 42ch;
+  }
+
+  .simple-portal-row-action,
+  .simple-portal-side a {
+    min-height: 34px;
+    width: fit-content;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    color: var(--foreground);
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 850;
+    text-decoration: none;
+  }
+
+  .simple-portal-muted-action {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    font-weight: 850;
+  }
+
+  .simple-portal-side {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(255, 253, 249, 0.94);
+    padding: 16px;
+    display: grid;
+    align-content: start;
+    gap: 12px;
+  }
+
+  .simple-portal-side > span {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .simple-portal-side > strong {
+    color: var(--foreground);
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  .simple-portal-side p {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .admin-branches-page {
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+
+  .admin-branches-page .platform-v2-layout-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.3fr);
+  }
+
+  .admin-branches-page .platform-v2-layout-toolbar {
+    width: fit-content;
+    max-width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    justify-content: flex-start;
+  }
+
+  .admin-branches-main {
+    display: grid;
+    gap: 12px;
+  }
+
+  .admin-branches-table td:first-child {
+    width: 34%;
+  }
+
+  .admin-branches-table td:first-child,
+  .admin-branches-table td:nth-child(2) {
+    min-width: 190px;
+  }
+
+  .admin-branches-table td:first-child strong,
+  .admin-branches-table td:nth-child(2) strong {
+    display: block;
+  }
+
+  .admin-branches-table small {
+    color: var(--muted-foreground);
+    display: block;
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 3px;
+  }
+
+  .admin-branches-table select {
+    min-height: 36px;
+    min-width: 132px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    color: var(--foreground);
+    padding: 0 10px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .admin-branches-table select:disabled {
+    cursor: wait;
+    opacity: 0.7;
+  }
+
+  .admin-branches-result {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(255, 253, 249, 0.94);
+    padding: 10px 12px;
+    display: grid;
+    gap: 3px;
+  }
+
+  .admin-branches-result.success {
+    border-color: color-mix(in srgb, var(--home-green) 22%, var(--border));
+    background: color-mix(in srgb, var(--home-green) 8%, white);
+  }
+
+  .admin-branches-result.error {
+    border-color: color-mix(in srgb, var(--destructive) 24%, var(--border));
+    background: color-mix(in srgb, var(--destructive) 8%, white);
+  }
+
+  .admin-branches-result strong {
+    color: var(--foreground);
+    font-size: 13px;
+  }
+
+  .admin-branches-result span {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .admin-branches-side {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(255, 253, 249, 0.94);
+    padding: 16px;
+    display: grid;
+    align-content: start;
+    gap: 14px;
+  }
+
+  .admin-branches-side-head {
+    display: flex;
+    gap: 12px;
+  }
+
+  .admin-branches-side-head > span {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--muted);
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+
+  .admin-branches-side-head strong {
+    color: var(--foreground);
+    display: block;
+    font-size: 15px;
+    margin-bottom: 5px;
+  }
+
+  .admin-branches-side-head p {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .admin-branches-side-stats {
+    display: grid;
+    gap: 8px;
+  }
+
+  .admin-branches-side-stats div {
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--muted);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .admin-branches-side-stats span,
+  .admin-branches-side-note span {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 850;
+  }
+
+  .admin-branches-side-stats strong {
+    color: var(--foreground);
+    font-size: 14px;
+  }
+
+  .admin-branches-side-note {
+    border-top: 1px solid var(--border);
+    color: var(--home-green);
+    padding-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .admin-roles-simple-page {
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+
+  .admin-roles-simple-page .platform-v2-layout-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.32fr);
+  }
+
+  .admin-roles-main-stack {
+    display: grid;
+    gap: 14px;
+  }
+
+  .admin-roles-summary {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(255, 253, 249, 0.94);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .admin-roles-summary div {
+    min-width: 0;
+    border-radius: 10px;
+    background: var(--muted);
+    padding: 12px;
+    display: grid;
+    gap: 4px;
+  }
+
+  .admin-roles-summary span,
+  .admin-roles-table small,
+  .admin-roles-rule-preview > span {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 850;
+  }
+
+  .admin-roles-summary strong {
+    color: var(--foreground);
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .admin-roles-table td:first-child {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 220px;
+  }
+
+  .admin-roles-table td:first-child div,
+  .admin-roles-table td:nth-child(4) {
+    display: grid;
+    gap: 3px;
+  }
+
+  .admin-roles-table td:nth-child(2) {
+    width: 34%;
+  }
+
+  .admin-roles-table td:nth-child(2) span,
+  .admin-roles-table td:nth-child(3) span {
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .admin-roles-role-mark {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .admin-roles-side-panel {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(255, 253, 249, 0.94);
+    padding: 16px;
+    display: grid;
+    gap: 16px;
+  }
+
+  .admin-roles-side-header {
+    display: flex;
+    gap: 12px;
+  }
+
+  .admin-roles-side-header > span {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--muted);
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+
+  .admin-roles-side-header strong {
+    color: var(--foreground);
+    display: block;
+    font-size: 15px;
+    margin-bottom: 5px;
+  }
+
+  .admin-roles-side-header p {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .admin-roles-link-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .admin-roles-link-list a {
+    min-height: 42px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: white;
+    color: var(--foreground);
+    padding: 0 12px;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 16px;
+    align-items: center;
+    gap: 9px;
+    font-size: 13px;
+    font-weight: 850;
+    text-decoration: none;
+  }
+
+  .admin-roles-link-list a:hover,
+  .admin-roles-table tr:hover {
+    background: color-mix(in srgb, var(--muted) 64%, white);
+  }
+
+  .admin-roles-rule-preview {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .admin-permissions-page {
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+
+  .admin-permissions-page .platform-v2-layout-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.32fr);
+  }
+
+  .admin-permissions-workspace,
+  .admin-permissions-side {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(255, 253, 249, 0.94);
+  }
+
+  .admin-permissions-workspace {
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .admin-permissions-heading {
+    display: grid;
+    gap: 5px;
+  }
+
+  .admin-permissions-heading > span {
+    color: var(--muted-foreground);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 850;
+  }
+
+  .admin-permissions-heading > strong {
+    color: var(--foreground);
+    font-size: 20px;
+    line-height: 1.15;
+  }
+
+  .admin-permissions-heading p,
+  .admin-permissions-side-head p,
+  .admin-permissions-side-note p {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .admin-permissions-toolbar {
+    display: flex;
+    align-items: end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .admin-permissions-toolbar label {
+    display: grid;
+    gap: 5px;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 850;
+  }
+
+  .admin-permissions-toolbar select {
+    min-height: 38px;
+    min-width: 190px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: white;
+    color: var(--foreground);
+    padding: 0 11px;
+    font: inherit;
+  }
+
+  .admin-permissions-count {
+    min-height: 38px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--muted);
+    padding: 7px 12px;
+    display: grid;
+    gap: 2px;
+  }
+
+  .admin-permissions-count span,
+  .admin-permissions-side-stat span,
+  .admin-permissions-side-note span {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 850;
+  }
+
+  .admin-permissions-count strong {
+    color: var(--foreground);
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .admin-permissions-result {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: grid;
+    gap: 3px;
+  }
+
+  .admin-permissions-result.success {
+    border-color: color-mix(in srgb, var(--home-green) 22%, var(--border));
+    background: color-mix(in srgb, var(--home-green) 8%, white);
+  }
+
+  .admin-permissions-result.error {
+    border-color: color-mix(in srgb, var(--destructive) 24%, var(--border));
+    background: color-mix(in srgb, var(--destructive) 8%, white);
+  }
+
+  .admin-permissions-result strong {
+    color: var(--foreground);
+    font-size: 13px;
+  }
+
+  .admin-permissions-result span {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .admin-permission-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .admin-permission-toggle {
+    min-height: 62px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: white;
+    color: var(--foreground);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    grid-template-areas:
+      "icon title"
+      "icon status";
+    align-items: center;
+    column-gap: 9px;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .admin-permission-toggle:hover {
+    background: color-mix(in srgb, var(--muted) 62%, white);
+  }
+
+  .admin-permission-toggle:disabled {
+    cursor: wait;
+    opacity: 0.72;
+  }
+
+  .admin-permission-toggle > span {
+    grid-area: icon;
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    background: var(--muted);
+    display: grid;
+    place-items: center;
+  }
+
+  .admin-permission-toggle.granted > span {
+    color: var(--home-green);
+    background: color-mix(in srgb, var(--home-green) 12%, white);
+  }
+
+  .admin-permission-toggle strong {
+    grid-area: title;
+    color: var(--foreground);
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .admin-permission-toggle small {
+    grid-area: status;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .admin-permissions-side {
+    padding: 16px;
+    display: grid;
+    align-content: start;
+    gap: 14px;
+  }
+
+  .admin-permissions-side-head {
+    display: flex;
+    gap: 12px;
+  }
+
+  .admin-permissions-side-head > span {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--muted);
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+
+  .admin-permissions-side-head strong,
+  .admin-permissions-side-stat strong {
+    color: var(--foreground);
+    display: block;
+    font-size: 15px;
+    margin-bottom: 4px;
+  }
+
+  .admin-permissions-side-stat,
+  .admin-permissions-side-note {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    display: grid;
+    gap: 7px;
+  }
+
   .teacher-classes-page .platform-v2-layout-grid,
   .teacher-class-detail-page .platform-v2-layout-grid,
   .teacher-class-workspace-page .platform-v2-layout-grid,
   .profile-workspace .platform-v2-layout-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-classes-page .platform-v2-layout-toolbar {
+    width: fit-content;
+    max-width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    justify-content: flex-start;
   }
 
   .teacher-classes-toolbar {
@@ -18104,6 +19032,59 @@
     width: 32%;
   }
 
+  .teacher-class-attendance-panel .platform-attendance-grid article {
+    grid-template-columns: minmax(180px, 1fr) minmax(360px, 0.64fr);
+    align-items: start;
+  }
+
+  .teacher-class-attendance-panel .platform-attendance-grid article > div:last-child {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(78px, 1fr));
+    align-items: center;
+    justify-content: stretch;
+    gap: 8px;
+  }
+
+  .teacher-class-attendance-panel .platform-attendance-grid button {
+    min-width: 84px;
+    min-height: 42px;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+
+  .teacher-class-attendance-panel .platform-attendance-grid button span {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    font-size: 10px;
+  }
+
+  .teacher-class-attendance-panel .platform-attendance-grid button strong {
+    display: inline;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  .teacher-class-attendance-panel .platform-attendance-note-input {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  @media (max-width: 1100px) {
+    .teacher-class-attendance-panel .platform-attendance-grid article {
+      grid-template-columns: 1fr;
+    }
+
+    .teacher-class-attendance-panel .platform-attendance-grid article > div:last-child {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .teacher-class-attendance-panel .platform-attendance-note-input {
+      grid-column: 1 / -1;
+    }
+  }
+
   @media (max-width: 720px) {
     .portal-simple-toolbar {
       align-items: stretch;
@@ -18118,8 +19099,103 @@
       grid-template-columns: 1fr;
     }
 
+    .simple-portal-page .platform-v2-layout-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .simple-portal-page .platform-v2-layout-toolbar,
+    .simple-portal-toolbar,
+    .simple-portal-toolbar label {
+      width: 100%;
+    }
+
+    .simple-portal-toolbar {
+      align-items: stretch;
+    }
+
+    .simple-portal-toolbar input,
+    .simple-portal-toolbar select {
+      width: 100%;
+    }
+
+    .admin-branches-page .platform-v2-layout-grid,
+    .admin-roles-simple-page .platform-v2-layout-grid,
+    .admin-roles-summary {
+      grid-template-columns: 1fr;
+    }
+
+    .admin-branches-page .platform-v2-layout-toolbar,
+    .admin-branches-toolbar,
+    .admin-branches-toolbar label {
+      width: 100%;
+    }
+
+    .admin-permissions-page .platform-v2-layout-grid,
+    .admin-permission-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .admin-permissions-toolbar,
+    .admin-permissions-toolbar label,
+    .admin-permissions-toolbar select {
+      width: 100%;
+    }
+
     .teacher-classes-page .platform-v2-layout-grid {
       grid-template-columns: 1fr;
+    }
+
+    .teacher-classes-page .platform-v2-layout-toolbar,
+    .teacher-classes-toolbar,
+    .teacher-classes-toolbar label {
+      width: 100%;
+    }
+
+    .teacher-classes-toolbar input,
+    .teacher-classes-toolbar select {
+      width: 100%;
+    }
+
+    .teacher-classes-table td,
+    .teacher-classes-table td:nth-child(1) {
+      width: 100%;
+      min-width: 0;
+      grid-template-columns: minmax(86px, 0.32fr) minmax(0, 1fr);
+    }
+
+    .teacher-classes-table td:nth-child(1)::before {
+      content: "Class";
+    }
+
+    .teacher-classes-table td:nth-child(2)::before {
+      content: "Schedule";
+    }
+
+    .teacher-classes-table td:nth-child(3)::before {
+      content: "Learners";
+    }
+
+    .teacher-classes-table td:nth-child(4)::before {
+      content: "Next session";
+    }
+
+    .teacher-classes-table td:nth-child(5)::before {
+      content: "Status";
+    }
+
+    .teacher-classes-table td:nth-child(6)::before {
+      content: "Action";
+    }
+
+    .teacher-classes-table td > strong,
+    .teacher-classes-table td > small,
+    .teacher-classes-table td > .platform-status,
+    .teacher-classes-table td > .teacher-classes-row-action {
+      grid-column: 2;
+    }
+
+    .teacher-classes-row-action {
+      justify-content: center;
     }
 
     .teacher-class-detail-page .platform-v2-layout-grid,

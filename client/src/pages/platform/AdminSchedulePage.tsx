@@ -533,8 +533,8 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
     { title: string; description: string; actionHref: string; actionLabel: string }
   > = {
     calendar: {
-      title: "Schedule",
-      description: "View platform calendar events.",
+      title: "Schedule calendar",
+      description: "Review school events by date, room, branch, and status.",
       actionHref: "/app/admin/schedule/conflicts",
       actionLabel: "Review conflicts",
     },
@@ -546,7 +546,7 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
     },
     conflicts: {
       title: "Schedule conflicts",
-      description: "Review schedule items that need attention.",
+      description: "Review pending room, time, and approval issues.",
       actionHref: "/app/admin/schedule",
       actionLabel: "Back to calendar",
     },

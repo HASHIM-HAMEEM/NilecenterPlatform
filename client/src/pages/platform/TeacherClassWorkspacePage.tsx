@@ -53,6 +53,20 @@ function attendanceTone(status: AttendanceStatus): "green" | "amber" | "red" | "
   return "slate";
 }
 
+const attendanceStatusLabels: Record<AttendanceStatus, string> = {
+  present: "Present",
+  late: "Late",
+  absent: "Absent",
+  excused: "Excused",
+};
+
+const attendanceStatusShortLabels: Record<AttendanceStatus, string> = {
+  present: "P",
+  late: "L",
+  absent: "A",
+  excused: "E",
+};
+
 function studentTone(status: StudentStatus): "green" | "amber" | "red" | "slate" {
   if (status === "active" || status === "enrolled" || status === "completed") return "green";
   if (status === "paused" || status === "cancelled") return "red";
@@ -308,7 +322,8 @@ export default function TeacherClassWorkspacePage({ classId, view }: TeacherClas
                         <button
                           key={option}
                           type="button"
-                          title={option}
+                          title={attendanceStatusLabels[option]}
+                          aria-label={`Mark ${user?.name ?? "student"} ${attendanceStatusLabels[option]}`}
                           className={status === option ? "active" : ""}
                           onClick={() =>
                             setAttendanceStatuses(previous => ({
@@ -317,7 +332,8 @@ export default function TeacherClassWorkspacePage({ classId, view }: TeacherClas
                             }))
                           }
                         >
-                          <span>{option}</span>
+                          <span aria-hidden="true">{attendanceStatusShortLabels[option]}</span>
+                          <strong>{attendanceStatusLabels[option]}</strong>
                         </button>
                       ))}
                       <input

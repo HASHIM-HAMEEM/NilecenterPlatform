@@ -102,7 +102,7 @@ export default function TeacherClassesPage() {
           ) : null
         }
         toolbar={
-          <div className="portal-simple-toolbar teacher-classes-toolbar">
+          <div className="simple-portal-toolbar teacher-classes-toolbar">
             <label>
               Search
               <span>

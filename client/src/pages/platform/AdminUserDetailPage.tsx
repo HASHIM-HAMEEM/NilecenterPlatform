@@ -126,7 +126,6 @@ export default function AdminUserDetailPage({
         )
         .slice(0, 8)
     : [];
-  const lastActivity = activityRows[0]?.createdAt ?? staffProfile?.updatedAt;
   const teacherRuns = user
     ? state.courseRuns.filter(run => run.teacherId === user.id)
     : [];
@@ -308,6 +307,27 @@ export default function AdminUserDetailPage({
     { id: "activity", label: "Activity" },
     { id: "related", label: "Related records" },
   ];
+  const tabMeta: Record<
+    DetailTab,
+    { title: string; description: string }
+  > = {
+    overview: {
+      title: "Account overview",
+      description: "Read identity, contact, role, and school scope.",
+    },
+    access: {
+      title: "Access settings",
+      description: "Update this user's role, branch, department, or status.",
+    },
+    activity: {
+      title: "Account activity",
+      description: "Review recent changes for this account.",
+    },
+    related: {
+      title: "Related work",
+      description: "Review assigned classes and teacher assignment.",
+    },
+  };
 
   const header = (
     <section
@@ -423,14 +443,6 @@ export default function AdminUserDetailPage({
             </dd>
           </div>
         </dl>
-      </section>
-      <section className="admin-user-detail-section">
-        <h2>Recent activity</h2>
-        <p>
-          {activityRows[0]?.summary ??
-            "No recent activity recorded for this user."}
-        </p>
-        <small>{formatDate(lastActivity)}</small>
       </section>
     </div>
   );
@@ -601,7 +613,7 @@ export default function AdminUserDetailPage({
   const related = (
     <div className="admin-user-detail-grid">
       <section className="admin-user-detail-section">
-        <h2>Assigned work</h2>
+        <h2>{isTeacherAccount ? "Assigned classes" : "Assigned work"}</h2>
         {isTeacherAccount ? (
           <div className="admin-user-detail-related-list">
             {teacherClasses.slice(0, 5).map(group => {
@@ -761,9 +773,13 @@ export default function AdminUserDetailPage({
     <PlatformShell role="superadmin" title={user.name}>
       <DetailLayout
         className="admin-user-detail-page"
-        title={user.name}
-        description="Understand and manage one Nile Learn account."
-        context={<span>{role.label}</span>}
+        title={tabMeta[activeTab].title}
+        description={tabMeta[activeTab].description}
+        context={
+          <span>
+            {user.name} · {role.label}
+          </span>
+        }
         main={
           <>
             {header}
@@ -776,6 +792,8 @@ export default function AdminUserDetailPage({
                 <button
                   key={tab.id}
                   type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
                   className={activeTab === tab.id ? "active" : ""}
                   onClick={() => setActiveTab(tab.id)}
                 >
@@ -783,6 +801,10 @@ export default function AdminUserDetailPage({
                 </button>
               ))}
             </div>
+            <section className="admin-user-detail-tab-heading">
+              <strong>{tabMeta[activeTab].title}</strong>
+              <span>{tabMeta[activeTab].description}</span>
+            </section>
             <div className="admin-user-detail-tab-panel">
               {activeTab === "overview" ? overview : null}
               {activeTab === "access" ? access : null}
