@@ -19,14 +19,17 @@ function createLocalStorageMock(): Storage {
   };
 }
 
-function pendingMedia(kind: PendingMediaAttachment["kind"] = "audio"): PendingMediaAttachment {
+function pendingMedia(
+  kind: PendingMediaAttachment["kind"] = "audio"
+): PendingMediaAttachment {
   return {
     id: `pending_${kind}`,
     name: kind === "audio" ? "recitation.mp3" : "worksheet.pdf",
     type: kind === "audio" ? "audio/mpeg" : "application/pdf",
     size: 2048,
     kind,
-    previewLabel: kind === "audio" ? "recitation.mp3 · 2 KB" : "worksheet.pdf · 2 KB",
+    previewLabel:
+      kind === "audio" ? "recitation.mp3 · 2 KB" : "worksheet.pdf · 2 KB",
     storageStatus: "pending_storage",
     createdAt: "2026-07-06T10:00:00.000Z",
   };
@@ -42,6 +45,34 @@ afterEach(() => {
 });
 
 describe("platformStore workflow guards", () => {
+  it("keeps a scoped snapshot authoritative instead of merging global seed rows", () => {
+    const scoped = platformStore.getState();
+    scoped.users = scoped.users.filter(item => item.id === "usr_student_demo");
+    scoped.staffProfiles = [];
+    scoped.courseRuns = scoped.courseRuns.filter(
+      item => item.id === "run_ar_l3_2026"
+    );
+    scoped.classGroups = scoped.classGroups.filter(
+      item => item.id === "class_ar_l3_a"
+    );
+    scoped.events = scoped.events.filter(item => item.id === "evt_ar_live");
+    scoped.portalSettings = [];
+
+    platformStore.setState(scoped);
+    const restored = platformStore.getState();
+
+    expect(restored.users.map(item => item.id)).toEqual(["usr_student_demo"]);
+    expect(restored.staffProfiles).toEqual([]);
+    expect(restored.courseRuns.map(item => item.id)).toEqual([
+      "run_ar_l3_2026",
+    ]);
+    expect(restored.classGroups.map(item => item.id)).toEqual([
+      "class_ar_l3_a",
+    ]);
+    expect(restored.events.map(item => item.id)).toEqual(["evt_ar_live"]);
+    expect(restored.portalSettings).toEqual([]);
+  });
+
   it("does not increase enrollment progress twice for the same completed lesson", () => {
     const state = platformStore.getState();
     const lesson = state.lessons[0];
@@ -53,20 +84,53 @@ describe("platformStore workflow guards", () => {
       item =>
         item.courseRunId === courseRun?.id && item.studentId === "stu_demo"
     );
+    const courseModuleIds = new Set(
+      state.modules
+        .filter(item => item.courseId === module?.courseId)
+        .map(item => item.id)
+    );
+    const courseLessonIds = new Set(
+      state.lessons
+        .filter(item => courseModuleIds.has(item.moduleId))
+        .map(item => item.id)
+    );
+    const completedLessonIds = new Set(
+      state.lessonProgress
+        .filter(
+          item =>
+            item.studentId === "stu_demo" &&
+            item.enrollmentId === initialEnrollment?.id &&
+            item.status === "completed" &&
+            courseLessonIds.has(item.lessonId)
+        )
+        .map(item => item.lessonId)
+    );
+    completedLessonIds.add(lesson.id);
+    const expectedProgress = Math.round(
+      (completedLessonIds.size / courseLessonIds.size) * 100
+    );
 
-    platformStore.completeLesson(lesson.id);
+    platformStore.completeLesson(
+      lesson.id,
+      "stu_demo",
+      "usr_student_demo",
+      initialEnrollment?.id
+    );
     const afterFirst = platformStore
       .getState()
       .enrollments.find(item => item.id === initialEnrollment?.id);
 
-    platformStore.completeLesson(lesson.id);
+    platformStore.completeLesson(
+      lesson.id,
+      "stu_demo",
+      "usr_student_demo",
+      initialEnrollment?.id
+    );
     const afterSecond = platformStore
       .getState()
       .enrollments.find(item => item.id === initialEnrollment?.id);
 
-    expect(afterFirst?.progress).toBe(
-      Math.min(100, (initialEnrollment?.progress ?? 0) + 6)
-    );
+    expect(afterFirst?.progress).toBe(expectedProgress);
     expect(afterSecond?.progress).toBe(afterFirst?.progress);
   });
 
@@ -183,7 +247,15 @@ describe("platformStore workflow guards", () => {
 
   it("sets quiz questions with dedupe, derived types, and audit evidence", () => {
     const state = platformStore.getState();
-    const quiz = state.quizzes.find(item => item.id === "quiz_ar_3");
+    const run = state.courseRuns.find(item => item.id === "run_ar_l3_2026");
+    const quiz = platformStore.createQuiz({
+      courseRunId: run!.id,
+      title: "Draft question set quiz",
+      dueAt: "2026-07-20T18:00:00+03:00",
+      durationMinutes: 20,
+      attemptsAllowed: 1,
+      questionTypes: ["short_answer"],
+    });
     const questions = state.questionBankItems.filter(
       item => item.courseRunId === quiz?.courseRunId
     );
@@ -210,7 +282,14 @@ describe("platformStore workflow guards", () => {
 
   it("rejects quiz question attachment across course runs", () => {
     const state = platformStore.getState();
-    const quiz = state.quizzes.find(item => item.id === "quiz_ar_3");
+    const quiz = platformStore.createQuiz({
+      courseRunId: "run_ar_l3_2026",
+      title: "Draft cross-run quiz",
+      dueAt: "2026-07-20T18:00:00+03:00",
+      durationMinutes: 20,
+      attemptsAllowed: 1,
+      questionTypes: ["short_answer"],
+    });
     const otherRunQuestion = state.questionBankItems.find(
       item => item.courseRunId !== quiz?.courseRunId
     );
@@ -274,10 +353,14 @@ describe("platformStore workflow guards", () => {
 
   it("creates a connected student account with enrollment, class roster, and lesson progress", () => {
     const before = platformStore.getState();
-    const classBefore = before.classGroups.find(item => item.id === "class_ar_l3_a");
+    const classBefore = before.classGroups.find(
+      item => item.id === "class_ar_l3_a"
+    );
     const lessonCount = before.modules
       .filter(item => item.courseId === "course_ar_l3")
-      .flatMap(module => before.lessons.filter(lesson => lesson.moduleId === module.id)).length;
+      .flatMap(module =>
+        before.lessons.filter(lesson => lesson.moduleId === module.id)
+      ).length;
 
     const result = platformStore.applyAction({
       type: "user.create",
@@ -302,7 +385,9 @@ describe("platformStore workflow guards", () => {
       student: { id: string; userId: string };
       enrollment: { studentId: string; courseRunId: string };
     };
-    const classAfter = after.classGroups.find(item => item.id === "class_ar_l3_a");
+    const classAfter = after.classGroups.find(
+      item => item.id === "class_ar_l3_a"
+    );
 
     expect(created.user.activeRole).toBe("student");
     expect(created.student.userId).toBe(created.user.id);
@@ -311,8 +396,12 @@ describe("platformStore workflow guards", () => {
       courseRunId: "run_ar_l3_2026",
     });
     expect(classAfter?.studentIds).toContain(created.student.id);
-    expect(classAfter?.studentIds.length).toBe((classBefore?.studentIds.length ?? 0) + 1);
-    expect(after.lessonProgress.filter(item => item.studentId === created.student.id)).toHaveLength(lessonCount);
+    expect(classAfter?.studentIds.length).toBe(
+      (classBefore?.studentIds.length ?? 0) + 1
+    );
+    expect(
+      after.lessonProgress.filter(item => item.studentId === created.student.id)
+    ).toHaveLength(lessonCount);
     expect(after.auditLogs[0]).toMatchObject({
       action: "user.created",
       entityType: "User",
@@ -322,10 +411,14 @@ describe("platformStore workflow guards", () => {
 
   it("creates a registrar student lifecycle record with class, teacher, invoice, and audit evidence", () => {
     const before = platformStore.getState();
-    const classBefore = before.classGroups.find(item => item.id === "class_ar_l3_cairo");
+    const classBefore = before.classGroups.find(
+      item => item.id === "class_ar_l3_cairo"
+    );
     const lessonCount = before.modules
       .filter(item => item.courseId === "course_ar_l3")
-      .flatMap(module => before.lessons.filter(lesson => lesson.moduleId === module.id)).length;
+      .flatMap(module =>
+        before.lessons.filter(lesson => lesson.moduleId === module.id)
+      ).length;
 
     const result = platformStore.applyAction({
       type: "student.create",
@@ -349,14 +442,33 @@ describe("platformStore workflow guards", () => {
     const after = platformStore.getState();
     const created = result.result as {
       user: { id: string; activeRole: string; branchId?: string };
-      student: { id: string; userId: string; guardianName?: string; source?: string; courseInterest?: string };
-      enrollment: { id: string; studentId: string; courseRunId: string; levelId?: string; classGroupId?: string; teacherId?: string; source?: string };
+      student: {
+        id: string;
+        userId: string;
+        guardianName?: string;
+        source?: string;
+        courseInterest?: string;
+      };
+      enrollment: {
+        id: string;
+        studentId: string;
+        courseRunId: string;
+        levelId?: string;
+        classGroupId?: string;
+        teacherId?: string;
+        source?: string;
+      };
       invoice?: { studentId: string; status: string };
     };
-    const classAfter = after.classGroups.find(item => item.id === "class_ar_l3_cairo");
+    const classAfter = after.classGroups.find(
+      item => item.id === "class_ar_l3_cairo"
+    );
 
     expect(result.action).toBe("student.created");
-    expect(created.user).toMatchObject({ activeRole: "student", branchId: "br_cairo" });
+    expect(created.user).toMatchObject({
+      activeRole: "student",
+      branchId: "br_cairo",
+    });
     expect(created.student).toMatchObject({
       userId: created.user.id,
       guardianName: "QA Guardian",
@@ -371,16 +483,29 @@ describe("platformStore workflow guards", () => {
       teacherId: "usr_teacher_demo",
       source: "direct",
     });
-    expect(created.invoice).toMatchObject({ studentId: created.student.id, status: "pending" });
+    expect(created.invoice).toMatchObject({
+      studentId: created.student.id,
+      status: "pending",
+    });
     expect(classAfter?.studentIds).toContain(created.student.id);
-    expect(classAfter?.studentIds.length).toBe((classBefore?.studentIds.length ?? 0) + 1);
-    expect(after.lessonProgress.filter(item => item.studentId === created.student.id)).toHaveLength(lessonCount);
+    expect(classAfter?.studentIds.length).toBe(
+      (classBefore?.studentIds.length ?? 0) + 1
+    );
+    expect(
+      after.lessonProgress.filter(item => item.studentId === created.student.id)
+    ).toHaveLength(lessonCount);
     expect(after.auditLogs[0]).toMatchObject({
       action: "enrollment.created",
       entityType: "Enrollment",
       entityId: created.enrollment.id,
     });
-    expect(after.auditLogs.some(item => item.action === "student.created" && item.entityId === created.student.id)).toBe(true);
+    expect(
+      after.auditLogs.some(
+        item =>
+          item.action === "student.created" &&
+          item.entityId === created.student.id
+      )
+    ).toBe(true);
   });
 
   it("requires guardian details for minor student creation", () => {
@@ -426,7 +551,9 @@ describe("platformStore workflow guards", () => {
     platformStore.setState({
       ...initial,
       classGroups: initial.classGroups.map(item =>
-        item.id === "class_ar_l3_cairo" ? { ...item, capacity: item.studentIds.length } : item
+        item.id === "class_ar_l3_cairo"
+          ? { ...item, capacity: item.studentIds.length }
+          : item
       ),
     });
 
@@ -463,7 +590,9 @@ describe("platformStore workflow guards", () => {
     });
     const lead = leadResult.result as { id: string };
     const application = platformStore.convertLeadToApplication(lead.id)!;
-    const workflow = platformStore.convertApplicationToEnrollment(application.id)!;
+    const workflow = platformStore.convertApplicationToEnrollment(
+      application.id
+    )!;
     const after = platformStore.getState();
 
     expect(workflow).toMatchObject({
@@ -474,15 +603,23 @@ describe("platformStore workflow guards", () => {
       status: "ready_to_enroll",
       source: "application",
     });
-    expect(after.applications.find(item => item.id === application.id)?.status).toBe("approved");
+    expect(
+      after.applications.find(item => item.id === application.id)?.status
+    ).toBe("approved");
     expect(after.communicationLogs[0]).toMatchObject({
       actorId: "usr_registrar_demo",
       channel: "manual",
       subject: "Enrollment handoff",
       status: "completed",
     });
-    expect(after.communicationLogs[0].body).toContain("no external message was sent");
-    expect(after.communicationLogs.some(item => item.subject === "Lead conversion" && item.channel === "manual")).toBe(true);
+    expect(after.communicationLogs[0].body).toContain(
+      "no external message was sent"
+    );
+    expect(
+      after.communicationLogs.some(
+        item => item.subject === "Lead conversion" && item.channel === "manual"
+      )
+    ).toBe(true);
     expect(after.auditLogs[0]).toMatchObject({
       action: "application.converted",
       entityType: "EnrollmentWorkflow",
@@ -522,7 +659,9 @@ describe("platformStore workflow guards", () => {
       subject: "Application intake",
       status: "completed",
     });
-    expect(after.applications.find(item => item.id === created.application.id)).toBeTruthy();
+    expect(
+      after.applications.find(item => item.id === created.application.id)
+    ).toBeTruthy();
     expect(after.communicationLogs[0].id).toBe(created.communicationLog.id);
     expect(after.auditLogs[0]).toMatchObject({
       action: "application.created",
@@ -622,9 +761,18 @@ describe("platformStore workflow guards", () => {
       "usr_student_demo",
       "usr_teacher_demo",
     ]);
-    expect(after.communicationLogs.length - before.communicationLogs.length).toBe(2);
-    expect(after.notifications.filter(item => item.title === "Platform notice")).toHaveLength(2);
-    expect(after.auditLogs.filter(item => item.action === "message.sent" && item.actorId === "usr_admin_demo")).toHaveLength(2);
+    expect(
+      after.communicationLogs.length - before.communicationLogs.length
+    ).toBe(2);
+    expect(
+      after.notifications.filter(item => item.title === "Platform notice")
+    ).toHaveLength(2);
+    expect(
+      after.auditLogs.filter(
+        item =>
+          item.action === "message.sent" && item.actorId === "usr_admin_demo"
+      )
+    ).toHaveLength(2);
   });
 
   it("maps placement results to the matching course and level", () => {
@@ -640,11 +788,25 @@ describe("platformStore workflow guards", () => {
       actorId: "usr_registrar_demo",
     }).result as { id: string };
 
-    platformStore.recordPlacementResult(booking.id, "Tajweed 1", 86, "Ready for tajweed group.");
-    platformStore.recordPlacementResult(booking.id, "Tajweed 2", 90, "Updated after oral review.");
+    platformStore.recordPlacementResult(
+      booking.id,
+      "Tajweed 1",
+      86,
+      "Ready for tajweed group."
+    );
+    platformStore.recordPlacementResult(
+      booking.id,
+      "Tajweed 2",
+      90,
+      "Updated after oral review."
+    );
     const after = platformStore.getState();
-    const workflow = platformStore.getState().enrollmentWorkflows.find(item => item.placementTestId === booking.id);
-    const workflows = after.enrollmentWorkflows.filter(item => item.placementTestId === booking.id);
+    const workflow = platformStore
+      .getState()
+      .enrollmentWorkflows.find(item => item.placementTestId === booking.id);
+    const workflows = after.enrollmentWorkflows.filter(
+      item => item.placementTestId === booking.id
+    );
 
     expect(workflows).toHaveLength(1);
     expect(workflow).toMatchObject({
@@ -655,11 +817,15 @@ describe("platformStore workflow guards", () => {
       source: "placement",
       status: "ready_to_enroll",
     });
-    expect(after.placementTests.find(item => item.id === booking.id)).toMatchObject({
+    expect(
+      after.placementTests.find(item => item.id === booking.id)
+    ).toMatchObject({
       status: "completed",
       recommendedLevel: "Tajweed 2",
     });
-    expect(after.placementResults.find(item => item.bookingId === booking.id)).toMatchObject({
+    expect(
+      after.placementResults.find(item => item.bookingId === booking.id)
+    ).toMatchObject({
       score: 90,
       recommendedLevel: "Tajweed 2",
       notes: "Updated after oral review.",
@@ -671,10 +837,15 @@ describe("platformStore workflow guards", () => {
   });
 
   it("updates student status through registrar workflow and syncs linked account and enrollment", () => {
-    const result = platformStore.updateStudentStatus("stu_cairo_demo", "paused");
+    const result = platformStore.updateStudentStatus(
+      "stu_cairo_demo",
+      "paused"
+    );
     const after = platformStore.getState();
     const user = after.users.find(item => item.id === "usr_student_cairo_demo");
-    const enrollment = after.enrollments.find(item => item.studentId === "stu_cairo_demo");
+    const enrollment = after.enrollments.find(
+      item => item.studentId === "stu_cairo_demo"
+    );
 
     expect(result?.status).toBe("paused");
     expect(user?.status).toBe("paused");
@@ -748,29 +919,55 @@ describe("platformStore workflow guards", () => {
         assignedClassIds: string[];
         status: string;
       };
-      teacherAssignment: { classGroups: { id: string }[]; availability: { teacherId: string }[] };
+      teacherAssignment: {
+        classGroups: { id: string }[];
+        availability: { teacherId: string }[];
+      };
     };
-    const run = after.courseRuns.find(item => item.id === "run_qt_teacher_creation");
+    const run = after.courseRuns.find(
+      item => item.id === "run_qt_teacher_creation"
+    );
 
     expect(created.user.activeRole).toBe("teacher");
     expect(created.teacherProfile.userId).toBe(created.user.id);
     expect(created.teacherProfile.branchId).toBe("br_online");
     expect(created.teacherProfile.departmentId).toBe("dep_arabic");
-    expect(created.teacherProfile.subjects).toEqual(expect.arrayContaining(["Quran", "Tajweed"]));
-    expect(created.teacherProfile.teachingLevels).toEqual(expect.arrayContaining(["Tajweed 1"]));
-    expect(created.teacherProfile.specialties).toEqual(expect.arrayContaining(["Quran", "Tajweed", "Tajweed 1"]));
+    expect(created.teacherProfile.subjects).toEqual(
+      expect.arrayContaining(["Quran", "Tajweed"])
+    );
+    expect(created.teacherProfile.teachingLevels).toEqual(
+      expect.arrayContaining(["Tajweed 1"])
+    );
+    expect(created.teacherProfile.specialties).toEqual(
+      expect.arrayContaining(["Quran", "Tajweed", "Tajweed 1"])
+    );
     expect(created.teacherProfile.availabilityStatus).toBe("available");
-    expect(created.teacherProfile.assignedClassIds).toContain("class_qt_teacher_creation");
+    expect(created.teacherProfile.assignedClassIds).toContain(
+      "class_qt_teacher_creation"
+    );
     expect(created.teacherProfile.status).toBe("active");
     expect(run?.teacherId).toBe(created.user.id);
-    expect(created.teacherAssignment.classGroups.map(item => item.id)).toContain("class_qt_teacher_creation");
-    expect(after.teacherAvailability.some(item => item.teacherId === created.user.id && item.weekday === "Thursday")).toBe(true);
+    expect(
+      created.teacherAssignment.classGroups.map(item => item.id)
+    ).toContain("class_qt_teacher_creation");
+    expect(
+      after.teacherAvailability.some(
+        item =>
+          item.teacherId === created.user.id && item.weekday === "Thursday"
+      )
+    ).toBe(true);
     expect(after.auditLogs[0]).toMatchObject({
       action: "user.created",
       entityType: "User",
       entityId: created.user.id,
     });
-    expect(after.auditLogs.some(item => item.action === "teacher.assigned" && item.entityId === "run_qt_teacher_creation")).toBe(true);
+    expect(
+      after.auditLogs.some(
+        item =>
+          item.action === "teacher.assigned" &&
+          item.entityId === "run_qt_teacher_creation"
+      )
+    ).toBe(true);
   });
 
   it("creates a staff registrar account with profile scope and audit evidence", () => {
@@ -791,7 +988,12 @@ describe("platformStore workflow guards", () => {
     const after = platformStore.getState();
     const created = result.result as {
       user: { id: string; activeRole: string };
-      staffProfile: { userId: string; role: string; permissionScope: string; operationalScope: string[] };
+      staffProfile: {
+        userId: string;
+        role: string;
+        permissionScope: string;
+        operationalScope: string[];
+      };
       relationshipSummary: string;
     };
 
@@ -802,9 +1004,15 @@ describe("platformStore workflow guards", () => {
       role: "registrar",
       permissionScope: "admissions",
     });
-    expect(created.staffProfile.operationalScope).toEqual(expect.arrayContaining(["leads", "placement"]));
-    expect(after.students.some(item => item.userId === created.user.id)).toBe(false);
-    expect(after.staffProfiles.some(item => item.userId === created.user.id)).toBe(true);
+    expect(created.staffProfile.operationalScope).toEqual(
+      expect.arrayContaining(["leads", "placement"])
+    );
+    expect(after.students.some(item => item.userId === created.user.id)).toBe(
+      false
+    );
+    expect(
+      after.staffProfiles.some(item => item.userId === created.user.id)
+    ).toBe(true);
     expect(after.auditLogs[0]).toMatchObject({
       action: "staff.user.created",
       entityType: "User",
@@ -822,7 +1030,9 @@ describe("platformStore workflow guards", () => {
       status: "paused",
       actorId: "usr_admin_demo",
     });
-    const updated = platformStore.getState().staffProfiles.find(item => item.userId === created.user.id);
+    const updated = platformStore
+      .getState()
+      .staffProfiles.find(item => item.userId === created.user.id);
     expect(updated).toMatchObject({
       status: "paused",
       branchIds: ["br_online"],
@@ -832,7 +1042,9 @@ describe("platformStore workflow guards", () => {
 
   it("creates a staff teacher foundation without assigning a course run", () => {
     const before = platformStore.getState();
-    const runBefore = before.courseRuns.find(item => item.id === "run_ar_l3_2026");
+    const runBefore = before.courseRuns.find(
+      item => item.id === "run_ar_l3_2026"
+    );
     const result = platformStore.applyAction({
       type: "staff.user.create",
       name: "QA Staff Teacher",
@@ -863,7 +1075,9 @@ describe("platformStore workflow guards", () => {
         status: string;
       };
     };
-    const runAfter = after.courseRuns.find(item => item.id === "run_ar_l3_2026");
+    const runAfter = after.courseRuns.find(
+      item => item.id === "run_ar_l3_2026"
+    );
 
     expect(created.user.activeRole).toBe("teacher");
     expect(created.staffProfile.availabilityStatus).toBe("limited");
@@ -872,12 +1086,20 @@ describe("platformStore workflow guards", () => {
     expect(created.teacherProfile.departmentId).toBe("dep_arabic");
     expect(created.teacherProfile.subjects).toEqual(["Arabic grammar"]);
     expect(created.teacherProfile.teachingLevels).toEqual(["Arabic Level 3"]);
-    expect(created.teacherProfile.specialties).toEqual(expect.arrayContaining(["Arabic grammar", "Arabic Level 3"]));
+    expect(created.teacherProfile.specialties).toEqual(
+      expect.arrayContaining(["Arabic grammar", "Arabic Level 3"])
+    );
     expect(created.teacherProfile.availabilityStatus).toBe("limited");
     expect(created.teacherProfile.assignedClassIds).toEqual([]);
     expect(created.teacherProfile.status).toBe("pending");
     expect(runAfter?.teacherId).toBe(runBefore?.teacherId);
-    expect(after.auditLogs.some(item => item.action === "teacher.assigned" && item.entityId === created.user.id)).toBe(false);
+    expect(
+      after.auditLogs.some(
+        item =>
+          item.action === "teacher.assigned" &&
+          item.entityId === created.user.id
+      )
+    ).toBe(false);
   });
 
   it("rejects staff account creation for student roles and missing role fields", () => {
@@ -909,59 +1131,59 @@ describe("platformStore workflow guards", () => {
       })
     ).toThrow("Teacher accounts require at least one teaching level");
 
-	    expect(() =>
-	      platformStore.applyAction({
-	        type: "staff.user.create",
-	        name: "Wrong Scope Admin",
+    expect(() =>
+      platformStore.applyAction({
+        type: "staff.user.create",
+        name: "Wrong Scope Admin",
         email: "wrong.scope.admin@nilelearn.local",
         role: "superadmin",
         branchId: "br_global",
         departmentId: "dep_platform",
         permissionScope: "branch",
         actorId: "usr_admin_demo",
-	      })
-	    ).toThrow("Super admin accounts require global permission scope");
+      })
+    ).toThrow("Super admin accounts require global permission scope");
 
-	    expect(() =>
-	      platformStore.applyAction({
-	        type: "staff.user.create",
-	        name: "Wrong Scope Registrar",
-	        email: "wrong.scope.registrar@nilelearn.local",
-	        role: "registrar",
-	        branchId: "br_cairo",
-	        departmentId: "dep_admissions",
-	        permissionScope: "department",
-	        actorId: "usr_admin_demo",
-	      })
-	    ).toThrow("Registrar accounts require admissions permission scope");
+    expect(() =>
+      platformStore.applyAction({
+        type: "staff.user.create",
+        name: "Wrong Scope Registrar",
+        email: "wrong.scope.registrar@nilelearn.local",
+        role: "registrar",
+        branchId: "br_cairo",
+        departmentId: "dep_admissions",
+        permissionScope: "department",
+        actorId: "usr_admin_demo",
+      })
+    ).toThrow("Registrar accounts require admissions permission scope");
 
-	    expect(() =>
-	      platformStore.applyAction({
-	        type: "staff.user.create",
-	        name: "Wrong Scope HOD",
-	        email: "wrong.scope.hod@nilelearn.local",
-	        role: "headofdepartment",
-	        branchId: "br_global",
-	        departmentId: "dep_arabic",
-	        permissionScope: "branch",
-	        actorId: "usr_admin_demo",
-	      })
-	    ).toThrow("HOD accounts require department permission scope");
+    expect(() =>
+      platformStore.applyAction({
+        type: "staff.user.create",
+        name: "Wrong Scope HOD",
+        email: "wrong.scope.hod@nilelearn.local",
+        role: "headofdepartment",
+        branchId: "br_global",
+        departmentId: "dep_arabic",
+        permissionScope: "branch",
+        actorId: "usr_admin_demo",
+      })
+    ).toThrow("HOD accounts require department permission scope");
 
-	    expect(() =>
-	      platformStore.applyAction({
-	        type: "staff.user.create",
-	        name: "No Scope Branch Admin",
-	        email: "no.scope.branch@nilelearn.local",
-	        role: "branchadmin",
-	        branchId: "br_cairo",
-	        departmentId: "dep_operations",
-	        permissionScope: "operations",
-	        operationalScope: [],
-	        actorId: "usr_admin_demo",
-	      })
-	    ).toThrow("Branch admin accounts require at least one operational scope");
-	  });
+    expect(() =>
+      platformStore.applyAction({
+        type: "staff.user.create",
+        name: "No Scope Branch Admin",
+        email: "no.scope.branch@nilelearn.local",
+        role: "branchadmin",
+        branchId: "br_cairo",
+        departmentId: "dep_operations",
+        permissionScope: "operations",
+        operationalScope: [],
+        actorId: "usr_admin_demo",
+      })
+    ).toThrow("Branch admin accounts require at least one operational scope");
+  });
 
   it("rejects connected student accounts with mismatched branch and class scope", () => {
     expect(() =>
@@ -1048,9 +1270,15 @@ describe("platformStore workflow guards", () => {
       actorId: "usr_admin_demo",
     });
     const after = platformStore.getState();
-    const updatedUser = after.users.find(item => item.id === "usr_student_demo");
-    const updatedStudent = after.students.find(item => item.userId === "usr_student_demo");
-    const updatedEnrollment = after.enrollments.find(item => item.studentId === updatedStudent?.id);
+    const updatedUser = after.users.find(
+      item => item.id === "usr_student_demo"
+    );
+    const updatedStudent = after.students.find(
+      item => item.userId === "usr_student_demo"
+    );
+    const updatedEnrollment = after.enrollments.find(
+      item => item.studentId === updatedStudent?.id
+    );
 
     expect(result.action).toBe("user.updated");
     expect(updatedUser?.roles).toEqual(["student", "registrar"]);
@@ -1082,7 +1310,8 @@ describe("platformStore workflow guards", () => {
 
   it("updates role permissions through the workflow action with audit evidence", () => {
     const before = platformStore.getState();
-    const initiallyGranted = before.permissions.teacher.includes("payments:read");
+    const initiallyGranted =
+      before.permissions.teacher.includes("payments:read");
 
     const result = platformStore.applyAction({
       type: "permission.update",
@@ -1132,7 +1361,7 @@ describe("platformStore workflow guards", () => {
       actorId: "usr_branch_demo",
     });
     const after = platformStore.getState();
-    const room = after.rooms.find((item) => item.id === "room_cairo_4");
+    const room = after.rooms.find(item => item.id === "room_cairo_4");
 
     expect(result.action).toBe("room.status_updated");
     expect(room?.status).toBe("paused");
@@ -1154,7 +1383,7 @@ describe("platformStore workflow guards", () => {
       actorId: "usr_branch_demo",
     });
     const after = platformStore.getState();
-    const room = after.rooms.find((item) => item.id === result.entityId);
+    const room = after.rooms.find(item => item.id === result.entityId);
 
     expect(result.action).toBe("room.created");
     expect(room).toMatchObject({
@@ -1435,7 +1664,9 @@ describe("platformStore workflow guards", () => {
     expect(
       platformStore
         .getState()
-        .grades.some(item => item.itemId === quiz!.id && item.studentId === "stu_demo")
+        .grades.some(
+          item => item.itemId === quiz!.id && item.studentId === "stu_demo"
+        )
     ).toBe(false);
   });
 
@@ -1563,7 +1794,7 @@ describe("platformStore workflow guards", () => {
     });
     expect(
       after.enrollments.find(item => item.id === "enr_ar_l3")?.attendanceRate
-    ).toBe(100);
+    ).toBe(50);
     expect(
       after.classSessions.find(item => item.id === "session_ar_live")
         ?.attendanceSaved
@@ -1578,9 +1809,13 @@ describe("platformStore workflow guards", () => {
   });
 
   it("saves attendance when the caller supplies the linked calendar event id", () => {
-    const saved = platformStore.saveAttendanceBulk("class_ar_l3_a", "evt_ar_live", {
-      stu_demo: "late",
-    });
+    const saved = platformStore.saveAttendanceBulk(
+      "class_ar_l3_a",
+      "evt_ar_live",
+      {
+        stu_demo: "late",
+      }
+    );
     const after = platformStore.getState();
 
     expect(saved).toHaveLength(1);
@@ -1643,9 +1878,15 @@ describe("platformStore workflow guards", () => {
     });
     expect(second[0].notes).toBe("Arrived after warmup");
     expect(third[0].notes).toBe("Parent approved late arrival");
-    expect(afterFirst.auditLogs.filter(item => item.action === "attendance.saved")).toHaveLength(1);
-    expect(afterSecond.auditLogs.filter(item => item.action === "attendance.saved")).toHaveLength(1);
-    expect(afterThird.auditLogs.filter(item => item.action === "attendance.saved")).toHaveLength(2);
+    expect(
+      afterFirst.auditLogs.filter(item => item.action === "attendance.saved")
+    ).toHaveLength(1);
+    expect(
+      afterSecond.auditLogs.filter(item => item.action === "attendance.saved")
+    ).toHaveLength(1);
+    expect(
+      afterThird.auditLogs.filter(item => item.action === "attendance.saved")
+    ).toHaveLength(2);
   });
 
   it("does not append duplicate attendance audit rows for clean saves", () => {
@@ -1655,8 +1896,7 @@ describe("platformStore workflow guards", () => {
     const afterFirst = platformStore.getState();
     const firstAuditCount = afterFirst.auditLogs.filter(
       item =>
-        item.action === "attendance.saved" &&
-        item.entityId === "class_ar_l3_a"
+        item.action === "attendance.saved" && item.entityId === "class_ar_l3_a"
     ).length;
 
     platformStore.saveAttendanceBulk("class_ar_l3_a", "session_ar_live", {
@@ -1665,8 +1905,7 @@ describe("platformStore workflow guards", () => {
     const afterSecond = platformStore.getState();
     const secondAuditCount = afterSecond.auditLogs.filter(
       item =>
-        item.action === "attendance.saved" &&
-        item.entityId === "class_ar_l3_a"
+        item.action === "attendance.saved" && item.entityId === "class_ar_l3_a"
     ).length;
 
     expect(firstAuditCount).toBe(1);
@@ -1680,9 +1919,13 @@ describe("platformStore workflow guards", () => {
     const before = platformStore.getState();
     const beforeAuditIds = before.auditLogs.map(item => item.id);
 
-    const second = platformStore.saveAttendanceBulk("class_ar_l3_a", "session_ar_live", {
-      stu_demo: "late",
-    });
+    const second = platformStore.saveAttendanceBulk(
+      "class_ar_l3_a",
+      "session_ar_live",
+      {
+        stu_demo: "late",
+      }
+    );
     const after = platformStore.getState();
 
     expect(second).toHaveLength(1);
@@ -1691,7 +1934,8 @@ describe("platformStore workflow guards", () => {
       after.attendance.filter(
         item =>
           item.classGroupId === "class_ar_l3_a" &&
-          item.studentId === "stu_demo"
+          item.studentId === "stu_demo" &&
+          item.sessionId === "session_ar_live"
       )
     ).toHaveLength(1);
   });
@@ -1720,15 +1964,19 @@ describe("platformStore workflow guards", () => {
       platformStore
         .getState()
         .classSessions.find(item => item.id === "session_ar_live")
-      ?.attendanceSaved
+        ?.attendanceSaved
     ).toBe(false);
   });
 
   it("rejects attendance saves when the session belongs to another class", () => {
     expect(() =>
-      platformStore.saveAttendanceBulk("class_ar_l3_a", "session_ar_cairo_live", {
-        stu_demo: "present",
-      })
+      platformStore.saveAttendanceBulk(
+        "class_ar_l3_a",
+        "session_ar_cairo_live",
+        {
+          stu_demo: "present",
+        }
+      )
     ).toThrow("Attendance session does not belong to this class group");
 
     expect(
@@ -1810,27 +2058,24 @@ describe("platformStore workflow guards", () => {
       stu_demo: "absent",
     });
     expect(
-      platformStore
-        .getState()
-        .enrollments.find(item => item.id === "enr_ar_l3")?.attendanceRate
+      platformStore.getState().enrollments.find(item => item.id === "enr_ar_l3")
+        ?.attendanceRate
     ).toBe(0);
 
     platformStore.saveAttendanceBulk("class_ar_l3_a", "session_ar_followup", {
       stu_demo: "late",
     });
     expect(
-      platformStore
-        .getState()
-        .enrollments.find(item => item.id === "enr_ar_l3")?.attendanceRate
+      platformStore.getState().enrollments.find(item => item.id === "enr_ar_l3")
+        ?.attendanceRate
     ).toBe(50);
 
     platformStore.saveAttendanceBulk("class_ar_l3_a", "session_ar_live", {
       stu_demo: "excused",
     });
     expect(
-      platformStore
-        .getState()
-      .enrollments.find(item => item.id === "enr_ar_l3")?.attendanceRate
+      platformStore.getState().enrollments.find(item => item.id === "enr_ar_l3")
+        ?.attendanceRate
     ).toBe(100);
   });
 
@@ -1878,9 +2123,9 @@ describe("platformStore workflow guards", () => {
     expect(
       after.enrollments.find(item => item.id === "enr_ar_l3")?.attendanceRate
     ).toBe(100);
-    expect(
-      after.attendance.some(item => item.id === "att_orphan_legacy")
-    ).toBe(true);
+    expect(after.attendance.some(item => item.id === "att_orphan_legacy")).toBe(
+      true
+    );
   });
 
   it("lets a branch actor save branch attendance with audit evidence", () => {
@@ -1941,14 +2186,22 @@ describe("platformStore workflow guards", () => {
   it("records partial payment balance, reference, and clamps final overpayment", () => {
     const invoice = platformStore.getState().invoices[0];
 
-    const partial = platformStore.recordPayment(invoice.id, "usr_registrar_demo", {
-      amount: 300,
-      method: "bank_transfer",
-      reference: "BT-REG-001",
-    });
+    const partial = platformStore.recordPayment(
+      invoice.id,
+      "usr_registrar_demo",
+      {
+        amount: 300,
+        method: "bank_transfer",
+        reference: "BT-REG-001",
+      }
+    );
     const afterPartial = platformStore.getState();
-    const partialRows = afterPartial.payments.filter(item => item.invoiceId === invoice.id);
-    const partialReport = platformStore.exportReportRows("finance").find(item => item.id === invoice.id);
+    const partialRows = afterPartial.payments.filter(
+      item => item.invoiceId === invoice.id
+    );
+    const partialReport = platformStore
+      .exportReportRows("finance")
+      .find(item => item.id === invoice.id);
 
     expect(partial).toMatchObject({
       amount: 300,
@@ -1956,7 +2209,9 @@ describe("platformStore workflow guards", () => {
       reference: "BT-REG-001",
       status: "paid",
     });
-    expect(afterPartial.invoices.find(item => item.id === invoice.id)?.status).toBe("pending");
+    expect(
+      afterPartial.invoices.find(item => item.id === invoice.id)?.status
+    ).toBe("pending");
     expect(partialRows).toHaveLength(2);
     expect(partialReport).toMatchObject({
       paid: 1500,
@@ -1964,21 +2219,31 @@ describe("platformStore workflow guards", () => {
       status: "pending",
     });
 
-    const finalPayment = platformStore.recordPayment(invoice.id, "usr_registrar_demo", {
-      amount: 2000,
-      method: "card",
-      reference: "CARD-FINAL",
-    });
+    const finalPayment = platformStore.recordPayment(
+      invoice.id,
+      "usr_registrar_demo",
+      {
+        amount: 2000,
+        method: "card",
+        reference: "CARD-FINAL",
+      }
+    );
     const afterFinal = platformStore.getState();
-    const finalReport = platformStore.exportReportRows("finance").find(item => item.id === invoice.id);
+    const finalReport = platformStore
+      .exportReportRows("finance")
+      .find(item => item.id === invoice.id);
 
     expect(finalPayment).toMatchObject({
       amount: 900,
       method: "card",
       reference: "CARD-FINAL",
     });
-    expect(afterFinal.invoices.find(item => item.id === invoice.id)?.status).toBe("paid");
-    const enrollment = afterFinal.enrollments.find(item => item.studentId === invoice.studentId);
+    expect(
+      afterFinal.invoices.find(item => item.id === invoice.id)?.status
+    ).toBe("paid");
+    const enrollment = afterFinal.enrollments.find(
+      item => item.studentId === invoice.studentId
+    );
     expect(enrollment).toBeTruthy();
     expect(afterFinal.auditLogs[0].summary).toContain(invoice.id);
     expect(afterFinal.auditLogs[0].summary).toContain(enrollment!.id);
@@ -2007,6 +2272,71 @@ describe("platformStore workflow guards", () => {
     expect(applications).toHaveLength(1);
     expect(second.id).toBe(first.id);
   });
+
+  it("rejects missing admissions targets without mutating another record", () => {
+    const before = platformStore.getState();
+    const leadStatuses = before.leads.map(item => [item.id, item.status]);
+    const placementStatuses = before.placementTests.map(item => [
+      item.id,
+      item.status,
+    ]);
+    const applicationCount = before.applications.length;
+    const placementResultCount = before.placementResults.length;
+    const auditCount = before.auditLogs.length;
+
+    expect(() =>
+      platformStore.convertLeadToApplication("lead_missing_exact_target")
+    ).toThrow("Lead lead_missing_exact_target was not found.");
+    expect(() =>
+      platformStore.recordPlacementResult(
+        "placement_missing_exact_target",
+        "Arabic Level 3",
+        80,
+        "Must not update another booking."
+      )
+    ).toThrow(
+      "Placement booking placement_missing_exact_target was not found."
+    );
+
+    const after = platformStore.getState();
+    expect(after.leads.map(item => [item.id, item.status])).toEqual(
+      leadStatuses
+    );
+    expect(after.placementTests.map(item => [item.id, item.status])).toEqual(
+      placementStatuses
+    );
+    expect(after.applications).toHaveLength(applicationCount);
+    expect(after.placementResults).toHaveLength(placementResultCount);
+    expect(after.auditLogs).toHaveLength(auditCount);
+  });
+
+  it.each([-1, 101])(
+    "rejects out-of-range placement score %s without lifecycle writes",
+    score => {
+      const booking = platformStore.getState().placementTests[0];
+      const before = platformStore.getState();
+      const resultCount = before.placementResults.length;
+      const workflowCount = before.enrollmentWorkflows.length;
+      const auditCount = before.auditLogs.length;
+
+      expect(() =>
+        platformStore.recordPlacementResult(
+          booking.id,
+          "Arabic Level 3",
+          score,
+          "Invalid score must fail."
+        )
+      ).toThrow("Placement score must be between 0 and 100.");
+
+      const after = platformStore.getState();
+      expect(after.placementResults).toHaveLength(resultCount);
+      expect(after.enrollmentWorkflows).toHaveLength(workflowCount);
+      expect(after.auditLogs).toHaveLength(auditCount);
+      expect(after.placementTests.find(item => item.id === booking.id)).toEqual(
+        booking
+      );
+    }
+  );
 
   it("activates an enrollment workflow into a student account, class seat, and invoice", () => {
     const lead = platformStore.createLead({
@@ -2049,16 +2379,34 @@ describe("platformStore workflow guards", () => {
     const after = platformStore.getState();
     const user = after.users.find(item => item.id === activated?.userId);
     const enrollment = after.enrollments.find(
-      item => item.studentId === activated?.id && item.courseRunId === "run_ar_l3_2026"
+      item =>
+        item.studentId === activated?.id &&
+        item.courseRunId === "run_ar_l3_2026"
     );
-    const classGroup = after.classGroups.find(item => item.id === "class_ar_l3_a");
-    const invoice = after.invoices.find(item => item.studentId === activated?.id);
-    const lessonRows = after.lessonProgress.filter(item => item.studentId === activated?.id);
-    const workflowAfter = after.enrollmentWorkflows.find(item => item.id === workflow!.id);
-    const runAssignments = after.assignments.filter(item => item.courseRunId === "run_ar_l3_2026");
-    const runQuizzes = after.quizzes.filter(item => item.courseRunId === "run_ar_l3_2026");
-    const classSessions = after.classSessions.filter(item => item.classGroupId === "class_ar_l3_a");
-    const classEvents = after.events.filter(item => item.classGroupId === "class_ar_l3_a");
+    const classGroup = after.classGroups.find(
+      item => item.id === "class_ar_l3_a"
+    );
+    const invoice = after.invoices.find(
+      item => item.studentId === activated?.id
+    );
+    const lessonRows = after.lessonProgress.filter(
+      item => item.studentId === activated?.id
+    );
+    const workflowAfter = after.enrollmentWorkflows.find(
+      item => item.id === workflow!.id
+    );
+    const runAssignments = after.assignments.filter(
+      item => item.courseRunId === "run_ar_l3_2026"
+    );
+    const runQuizzes = after.quizzes.filter(
+      item => item.courseRunId === "run_ar_l3_2026"
+    );
+    const classSessions = after.classSessions.filter(
+      item => item.classGroupId === "class_ar_l3_a"
+    );
+    const classEvents = after.events.filter(
+      item => item.classGroupId === "class_ar_l3_a"
+    );
 
     expect(user).toMatchObject({
       name: "Activation Lead",
@@ -2085,7 +2433,11 @@ describe("platformStore workflow guards", () => {
       status: "active",
     });
     expect(classGroup?.studentIds).toContain(activated?.id);
-    expect(invoice).toMatchObject({ amount: 2400, currency: "EGP", status: "pending" });
+    expect(invoice).toMatchObject({
+      amount: 2400,
+      currency: "EGP",
+      status: "pending",
+    });
     expect(lessonRows.length).toBeGreaterThan(0);
     expect(runAssignments.length).toBeGreaterThan(0);
     expect(runQuizzes.length).toBeGreaterThan(0);
@@ -2096,6 +2448,102 @@ describe("platformStore workflow guards", () => {
       entityType: "EnrollmentWorkflow",
       entityId: workflow!.id,
     });
+  });
+
+  it("keeps application and placement transitions in one enrollment workflow", () => {
+    const applicationResult = platformStore.createApplication({
+      fullName: "Linked Placement Learner",
+      email: "linked.placement@nilelearn.local",
+      phone: "+20 100 000 0111",
+      branchId: "br_cairo",
+      courseInterest: "Arabic Language",
+      schedulePreference: "Evening",
+      notes: "Placement is required before enrollment.",
+    });
+    const booking = platformStore.createPlacementBooking({
+      leadId: applicationResult.lead.id,
+      fullName: "Ignored client identity",
+      email: "ignored@nilelearn.local",
+      phone: "+20 000 000 0000",
+      branchId: "br_cairo",
+      subject: "Ignored client subject",
+      preferredDate: "2026-07-16",
+      currentLevel: "Placement pending",
+    });
+
+    expect(booking).toMatchObject({
+      leadId: applicationResult.lead.id,
+      fullName: applicationResult.lead.fullName,
+      email: applicationResult.lead.email,
+      phone: applicationResult.lead.phone,
+      branchId: applicationResult.application.branchId,
+      subject: applicationResult.application.courseInterest,
+    });
+
+    platformStore.recordPlacementResult(
+      booking.id,
+      "Arabic Level 3",
+      84,
+      "Ready for the assigned level."
+    );
+    const afterPlacement = platformStore.getState();
+    const placementWorkflow = afterPlacement.enrollmentWorkflows.find(
+      item => item.placementTestId === booking.id
+    );
+    expect(placementWorkflow).toMatchObject({
+      leadId: applicationResult.lead.id,
+      applicationId: applicationResult.application.id,
+      placementTestId: booking.id,
+      source: "placement",
+      status: "ready_to_enroll",
+    });
+
+    const converted = platformStore.convertApplicationToEnrollment(
+      applicationResult.application.id
+    );
+    const linkedWorkflows = platformStore
+      .getState()
+      .enrollmentWorkflows.filter(
+        item => item.leadId === applicationResult.lead.id
+      );
+    expect(linkedWorkflows).toHaveLength(1);
+    expect(converted.id).toBe(placementWorkflow?.id);
+    expect(converted).toMatchObject({
+      applicationId: applicationResult.application.id,
+      placementTestId: booking.id,
+      recommendedLevel: "Arabic Level 3",
+      source: "placement",
+    });
+
+    const beforeRejectedUpdate = platformStore.getState();
+    platformStore.setState({
+      ...beforeRejectedUpdate,
+      enrollmentWorkflows: beforeRejectedUpdate.enrollmentWorkflows.map(item =>
+        item.id === converted.id ? { ...item, status: "active" } : item
+      ),
+    });
+    const activeSnapshot = platformStore.getState();
+    const resultBefore = activeSnapshot.placementResults.find(
+      item => item.bookingId === booking.id
+    );
+    const auditCountBefore = activeSnapshot.auditLogs.length;
+    expect(() =>
+      platformStore.recordPlacementResult(
+        booking.id,
+        "Arabic Level 4",
+        90,
+        "Must not replace an active handoff."
+      )
+    ).toThrow(
+      "Active enrollment workflows cannot be replaced by placement results."
+    );
+    const afterRejectedUpdate = platformStore.getState();
+    expect(
+      afterRejectedUpdate.placementResults.find(
+        item => item.bookingId === booking.id
+      )
+    ).toEqual(resultBefore);
+    expect(afterRejectedUpdate.auditLogs).toHaveLength(auditCountBefore);
   });
 
   it("activates an application handoff with level, class, invoice, and portal learning data", () => {
@@ -2109,18 +2557,30 @@ describe("platformStore workflow guards", () => {
       notes: "Application handoff activation test.",
       source: "manual",
     });
-    const workflow = platformStore.convertApplicationToEnrollment(created.application.id)!;
+    const workflow = platformStore.convertApplicationToEnrollment(
+      created.application.id
+    )!;
 
     const activated = platformStore.activateEnrollmentWorkflow(workflow.id, {
       courseRunId: "run_ar_l3_cairo_2026",
       classGroupId: "class_ar_l3_cairo",
     });
     const after = platformStore.getState();
-    const enrollment = after.enrollments.find(item => item.studentId === activated?.id);
-    const classGroup = after.classGroups.find(item => item.id === "class_ar_l3_cairo");
-    const invoice = after.invoices.find(item => item.studentId === activated?.id);
-    const lessonRows = after.lessonProgress.filter(item => item.studentId === activated?.id);
-    const workflowAfter = after.enrollmentWorkflows.find(item => item.id === workflow.id);
+    const enrollment = after.enrollments.find(
+      item => item.studentId === activated?.id
+    );
+    const classGroup = after.classGroups.find(
+      item => item.id === "class_ar_l3_cairo"
+    );
+    const invoice = after.invoices.find(
+      item => item.studentId === activated?.id
+    );
+    const lessonRows = after.lessonProgress.filter(
+      item => item.studentId === activated?.id
+    );
+    const workflowAfter = after.enrollmentWorkflows.find(
+      item => item.id === workflow.id
+    );
 
     expect(activated).toMatchObject({
       status: "active",
@@ -2135,22 +2595,38 @@ describe("platformStore workflow guards", () => {
       teacherId: "usr_teacher_demo",
     });
     expect(classGroup?.studentIds).toContain(activated?.id);
-    expect(invoice).toMatchObject({ amount: 2400, currency: "EGP", status: "pending" });
+    expect(invoice).toMatchObject({
+      amount: 2400,
+      currency: "EGP",
+      status: "pending",
+    });
     expect(lessonRows.length).toBeGreaterThan(0);
     expect(workflowAfter).toMatchObject({
       studentId: activated?.id,
       status: "active",
       nextStep: "Portal active, class assigned, invoice pending payment",
     });
-    expect(after.applications.find(item => item.id === created.application.id)?.status).toBe("approved");
-    expect(after.leads.find(item => item.id === created.lead.id)?.status).toBe("active");
+    expect(
+      after.applications.find(item => item.id === created.application.id)
+        ?.status
+    ).toBe("approved");
+    expect(after.leads.find(item => item.id === created.lead.id)?.status).toBe(
+      "active"
+    );
     expect(invoice).toBeTruthy();
     expect(after.auditLogs[0].summary).toContain(invoice!.id);
   });
 
   it("does not duplicate a workflow activation", () => {
     const workflow = platformStore.getState().enrollmentWorkflows[0];
-    const first = platformStore.activateEnrollmentWorkflow(workflow.id);
+    const exactAssignment = {
+      courseRunId: "run_ar_l3_2026",
+      classGroupId: "class_ar_l3_a",
+    };
+    const first = platformStore.activateEnrollmentWorkflow(
+      workflow.id,
+      exactAssignment
+    );
     const usersAfterFirst = platformStore.getState().users.length;
     const second = platformStore.activateEnrollmentWorkflow(workflow.id);
     const afterSecond = platformStore.getState();
@@ -2160,52 +2636,52 @@ describe("platformStore workflow guards", () => {
     expect(
       afterSecond.enrollmentWorkflows.find(item => item.id === workflow.id)
         ?.studentId
-	    ).toBe(first?.id);
-	  });
+    ).toBe(first?.id);
+  });
 
-	  it("rejects conflicting assignment changes after workflow activation", () => {
-	    const workflow = platformStore.getState().enrollmentWorkflows[0];
-	    const first = platformStore.activateEnrollmentWorkflow(workflow.id, {
-	      courseRunId: "run_ar_l3_2026",
-	      classGroupId: "class_ar_l3_a",
-	    });
+  it("rejects conflicting assignment changes after workflow activation", () => {
+    const workflow = platformStore.getState().enrollmentWorkflows[0];
+    const first = platformStore.activateEnrollmentWorkflow(workflow.id, {
+      courseRunId: "run_ar_l3_2026",
+      classGroupId: "class_ar_l3_a",
+    });
 
-	    expect(first?.id).toBeTruthy();
-	    expect(() =>
-	      platformStore.activateEnrollmentWorkflow(workflow.id, {
-	        courseRunId: "run_ar_l3_cairo_2026",
-	        classGroupId: "class_ar_l3_cairo",
-	      })
-		    ).toThrow("cannot be reassigned to a different course run");
-		  });
+    expect(first?.id).toBeTruthy();
+    expect(() =>
+      platformStore.activateEnrollmentWorkflow(workflow.id, {
+        courseRunId: "run_ar_l3_cairo_2026",
+        classGroupId: "class_ar_l3_cairo",
+      })
+    ).toThrow("cannot be reassigned to a different course run");
+  });
 
-	  it("requires real intake identity before activating an enrollment workflow", () => {
-	    const state = platformStore.getState();
-	    platformStore.setState({
-	      ...state,
-	      enrollmentWorkflows: [
-	        {
-	          id: "ew_missing_identity",
-	          targetCourseId: "course_ar_l3",
-	          targetLevelId: "lvl_ar_l3",
-	          source: "lead",
-	          status: "ready_to_enroll",
-	          nextStep: "Complete intake identity",
-	          updatedAt: "2026-07-01T09:00:00+03:00",
-	        },
-	        ...state.enrollmentWorkflows,
-	      ],
-	    });
+  it("requires real intake identity before activating an enrollment workflow", () => {
+    const state = platformStore.getState();
+    platformStore.setState({
+      ...state,
+      enrollmentWorkflows: [
+        {
+          id: "ew_missing_identity",
+          targetCourseId: "course_ar_l3",
+          targetLevelId: "lvl_ar_l3",
+          source: "lead",
+          status: "ready_to_enroll",
+          nextStep: "Complete intake identity",
+          updatedAt: "2026-07-01T09:00:00+03:00",
+        },
+        ...state.enrollmentWorkflows,
+      ],
+    });
 
-	    expect(() =>
-	      platformStore.activateEnrollmentWorkflow("ew_missing_identity", {
-	        courseRunId: "run_ar_l3_2026",
-	        classGroupId: "class_ar_l3_a",
-	      })
-	    ).toThrow("requires lead or placement identity");
-	  });
+    expect(() =>
+      platformStore.activateEnrollmentWorkflow("ew_missing_identity", {
+        courseRunId: "run_ar_l3_2026",
+        classGroupId: "class_ar_l3_a",
+      })
+    ).toThrow("requires lead or placement identity");
+  });
 
-	  it("does not duplicate certificate issue notifications or audit entries", () => {
+  it("does not duplicate certificate issue notifications or audit entries", () => {
     const certificate = platformStore.getState().certificates[0];
 
     platformStore.approveCertificate(certificate.id, "usr_hod_demo");
@@ -2233,10 +2709,12 @@ describe("platformStore workflow guards", () => {
       afterSecond.certificates.find(item => item.id === certificate.id)?.status
     ).toBe("issued");
     expect(
-      afterSecond.certificates.find(item => item.id === certificate.id)?.issuedBy
+      afterSecond.certificates.find(item => item.id === certificate.id)
+        ?.issuedBy
     ).toBe(firstIssuedCertificate?.issuedBy);
     expect(
-      afterSecond.certificates.find(item => item.id === certificate.id)?.issuedAt
+      afterSecond.certificates.find(item => item.id === certificate.id)
+        ?.issuedAt
     ).toBe(firstIssuedCertificate?.issuedAt);
     expect(firstDocuments).toHaveLength(1);
     expect(secondDocuments).toHaveLength(1);
@@ -2261,7 +2739,10 @@ describe("platformStore workflow guards", () => {
   it("does not issue a certificate before approval", () => {
     const certificate = platformStore.getState().certificates[0];
 
-    const issued = platformStore.issueCertificate(certificate.id, "usr_hod_demo");
+    const issued = platformStore.issueCertificate(
+      certificate.id,
+      "usr_hod_demo"
+    );
     const after = platformStore.getState();
 
     expect(issued).toBeUndefined();
@@ -2359,7 +2840,9 @@ describe("platformStore workflow guards", () => {
       firstApprovedCertificate?.approvedAt
     );
     expect(
-      afterSecond.auditLogs.filter(item => item.action === "certificate.approved")
+      afterSecond.auditLogs.filter(
+        item => item.action === "certificate.approved"
+      )
     ).toHaveLength(1);
   });
 
@@ -2446,7 +2929,10 @@ describe("platformStore workflow guards", () => {
       "usr_hod_demo",
       "Eligibility evidence was incomplete"
     );
-    const issued = platformStore.issueCertificate(certificate.id, "usr_hod_demo");
+    const issued = platformStore.issueCertificate(
+      certificate.id,
+      "usr_hod_demo"
+    );
     const after = platformStore.getState();
 
     expect(issued).toBeUndefined();
@@ -2890,13 +3376,15 @@ describe("platformStore workflow guards", () => {
     expect(reviewed).toMatchObject({
       id: submission.id,
       status: "approved",
-      feedback: "Strong recitation. Review ghunnah timing before next submission.",
+      feedback:
+        "Strong recitation. Review ghunnah timing before next submission.",
     });
     expect(
       after.notifications.some(
         item =>
           item.title === "Recitation reviewed" &&
-          item.body === "Strong recitation. Review ghunnah timing before next submission."
+          item.body ===
+            "Strong recitation. Review ghunnah timing before next submission."
       )
     ).toBe(true);
     expect(
@@ -2938,13 +3426,13 @@ describe("platformStore workflow guards", () => {
     expect(after.assignments[0]).toMatchObject({
       id: assignment.id,
       courseRunId: run.id,
-      status: "active",
+      status: "draft",
     });
     expect(after.quizzes[0]).toMatchObject({
       id: quiz.id,
       courseRunId: run.id,
       dueAt: "2026-07-04T18:00:00.000Z",
-      status: "active",
+      status: "draft",
     });
     expect(after.auditLogs[0].action).toBe("quiz.created");
     expect(after.auditLogs[1].action).toBe("assignment.created");
@@ -2981,8 +3469,12 @@ describe("platformStore workflow guards", () => {
 
   it("blocks unassigned teachers from class-scoped assessment, attendance, and grading work", () => {
     const state = platformStore.getState();
-    const submission = state.assignmentSubmissions.find(item => item.assignmentId === "asg_ar_grammar");
-    const attempt = state.quizAttempts.find(item => item.quizId === "quiz_ar_3");
+    const submission = state.assignmentSubmissions.find(
+      item => item.assignmentId === "asg_ar_grammar"
+    );
+    const attempt = state.quizAttempts.find(
+      item => item.quizId === "quiz_ar_3"
+    );
     expect(submission).toBeTruthy();
     expect(attempt).toBeTruthy();
 
@@ -3027,8 +3519,13 @@ describe("platformStore workflow guards", () => {
     ).toThrow("Teacher can only review assigned class quiz attempts.");
 
     const after = platformStore.getState();
-    expect(after.assignmentSubmissions.find(item => item.id === submission!.id)?.status).toBe(submission!.status);
-    expect(after.quizAttempts.find(item => item.id === attempt!.id)?.status).toBe(attempt!.status);
+    expect(
+      after.assignmentSubmissions.find(item => item.id === submission!.id)
+        ?.status
+    ).toBe(submission!.status);
+    expect(
+      after.quizAttempts.find(item => item.id === attempt!.id)?.status
+    ).toBe(attempt!.status);
   });
 });
 
@@ -3058,7 +3555,9 @@ describe("platformStore frontend utility helpers", () => {
   it("does not verify pending certificates by code", () => {
     const certificate = platformStore.getState().certificates[0];
 
-    expect(platformStore.verifyCertificate(certificate.verificationCode)).toBeNull();
+    expect(
+      platformStore.verifyCertificate(certificate.verificationCode)
+    ).toBeNull();
   });
 
   it("returns null for unknown certificate codes", () => {
@@ -3176,8 +3675,12 @@ describe("platformStore frontend utility helpers", () => {
         },
         ...state.users,
       ],
-      teachers: state.teachers.filter(item => item.userId !== "usr_teacher_new"),
-      teacherAvailability: state.teacherAvailability.filter(item => item.teacherId !== "usr_teacher_new"),
+      teachers: state.teachers.filter(
+        item => item.userId !== "usr_teacher_new"
+      ),
+      teacherAvailability: state.teacherAvailability.filter(
+        item => item.teacherId !== "usr_teacher_new"
+      ),
     });
 
     const assignment = platformStore.assignTeacherToCourseRun(
@@ -3193,13 +3696,27 @@ describe("platformStore frontend utility helpers", () => {
     );
     const after = platformStore.getState();
     const run = after.courseRuns.find(item => item.id === "run_ar_l3_2026");
-    const classGroup = after.classGroups.find(item => item.courseRunId === run?.id);
-    const event = after.events.find(item => item.classGroupId === classGroup?.id);
-    const profile = after.teachers.find(item => item.userId === "usr_teacher_new");
-    const staffProfile = after.staffProfiles.find(item => item.userId === "usr_teacher_new" && item.role === "teacher");
-    const runEnrollments = after.enrollments.filter(item => item.courseRunId === "run_ar_l3_2026");
-    const previousProfile = after.teachers.find(item => item.userId === "usr_teacher_demo");
-    const audit = after.auditLogs.find(item => item.action === "teacher.assigned");
+    const classGroup = after.classGroups.find(
+      item => item.courseRunId === run?.id
+    );
+    const event = after.events.find(
+      item => item.classGroupId === classGroup?.id
+    );
+    const profile = after.teachers.find(
+      item => item.userId === "usr_teacher_new"
+    );
+    const staffProfile = after.staffProfiles.find(
+      item => item.userId === "usr_teacher_new" && item.role === "teacher"
+    );
+    const runEnrollments = after.enrollments.filter(
+      item => item.courseRunId === "run_ar_l3_2026"
+    );
+    const previousProfile = after.teachers.find(
+      item => item.userId === "usr_teacher_demo"
+    );
+    const audit = after.auditLogs.find(
+      item => item.action === "teacher.assigned"
+    );
 
     expect(assignment.previousTeacher?.id).toBe("usr_teacher_demo");
     expect(assignment.classGroups.length).toBeGreaterThan(0);
@@ -3218,7 +3735,11 @@ describe("platformStore frontend utility helpers", () => {
     });
     expect(previousProfile?.assignedClassIds).not.toContain("class_ar_l3_a");
     expect(previousProfile?.assignedClassIds).toEqual(
-      expect.arrayContaining(["class_ar_l3_cairo", "class_qt_1_b", "class_ar_l3_assign_qa"])
+      expect.arrayContaining([
+        "class_ar_l3_cairo",
+        "class_qt_1_b",
+        "class_ar_l3_assign_qa",
+      ])
     );
     expect(staffProfile).toMatchObject({
       userId: "usr_teacher_new",
@@ -3231,11 +3752,27 @@ describe("platformStore frontend utility helpers", () => {
       status: "active",
     });
     expect(runEnrollments.length).toBeGreaterThan(0);
-    expect(runEnrollments.every(item => item.teacherId === "usr_teacher_new")).toBe(true);
-    expect(after.teacherAvailability.filter(item => item.teacherId === "usr_teacher_new")).toEqual(
+    expect(
+      runEnrollments.every(item => item.teacherId === "usr_teacher_new")
+    ).toBe(true);
+    expect(
+      after.teacherAvailability.filter(
+        item => item.teacherId === "usr_teacher_new"
+      )
+    ).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ weekday: "Monday", startsAt: "09:00", endsAt: "10:30", branchId: "br_online" }),
-        expect.objectContaining({ weekday: "Wednesday", startsAt: "09:00", endsAt: "10:30", branchId: "br_online" }),
+        expect.objectContaining({
+          weekday: "Monday",
+          startsAt: "09:00",
+          endsAt: "10:30",
+          branchId: "br_online",
+        }),
+        expect.objectContaining({
+          weekday: "Wednesday",
+          startsAt: "09:00",
+          endsAt: "10:30",
+          branchId: "br_online",
+        }),
       ])
     );
     expect(audit).toMatchObject({
@@ -3246,46 +3783,58 @@ describe("platformStore frontend utility helpers", () => {
     expect(audit?.summary).toContain("reassigned from Teacher Demo");
   });
 
-	  it("rejects teacher assignment when department, branch, or status is invalid", () => {
-	    const initial = platformStore.getState();
-	    platformStore.setState({
-	      ...initial,
-	      users: [
-	        {
-	          id: "usr_teacher_invalid_scope",
-	          name: "Invalid Scope Teacher",
-	          email: "invalid.scope.teacher@nilelearn.local",
-	          roles: ["teacher"],
-	          activeRole: "teacher",
-	          branchId: "br_online",
-	          departmentId: "dep_arabic",
-	          status: "active",
-	        },
-	        ...initial.users,
-	      ],
-	    });
+  it("rejects teacher assignment when department, branch, or status is invalid", () => {
+    const initial = platformStore.getState();
+    platformStore.setState({
+      ...initial,
+      users: [
+        {
+          id: "usr_teacher_invalid_scope",
+          name: "Invalid Scope Teacher",
+          email: "invalid.scope.teacher@nilelearn.local",
+          roles: ["teacher"],
+          activeRole: "teacher",
+          branchId: "br_online",
+          departmentId: "dep_arabic",
+          status: "active",
+        },
+        ...initial.users,
+      ],
+    });
 
-	    expect(() =>
-	      platformStore.assignTeacherToCourseRun("usr_teacher_invalid_scope", "run_ar_l3_2026", {
-	        departmentId: "dep_operations",
-	        specialties: ["Arabic grammar"],
-	      })
-	    ).toThrow("not available in the selected course branch");
+    expect(() =>
+      platformStore.assignTeacherToCourseRun(
+        "usr_teacher_invalid_scope",
+        "run_ar_l3_2026",
+        {
+          departmentId: "dep_operations",
+          specialties: ["Arabic grammar"],
+        }
+      )
+    ).toThrow("not available in the selected course branch");
 
-	    expect(() =>
-	      platformStore.assignTeacherToCourseRun("usr_teacher_invalid_scope", "run_ar_l3_2026", {
-	        departmentId: "dep_admissions",
-	        specialties: ["Arabic grammar"],
-	      })
-	    ).toThrow("must own the selected course run");
+    expect(() =>
+      platformStore.assignTeacherToCourseRun(
+        "usr_teacher_invalid_scope",
+        "run_ar_l3_2026",
+        {
+          departmentId: "dep_admissions",
+          specialties: ["Arabic grammar"],
+        }
+      )
+    ).toThrow("must own the selected course run");
 
-	    expect(() =>
-	      platformStore.assignTeacherToCourseRun("usr_teacher_invalid_scope", "run_ar_l3_2026", {
-	        departmentId: "dep_arabic",
-	        status: "issued" as never,
-	      })
-	    ).toThrow("valid account status");
-	  });
+    expect(() =>
+      platformStore.assignTeacherToCourseRun(
+        "usr_teacher_invalid_scope",
+        "run_ar_l3_2026",
+        {
+          departmentId: "dep_arabic",
+          status: "issued" as never,
+        }
+      )
+    ).toThrow("valid account status");
+  });
 
   it("rejects teacher assignment for unknown users, non-teachers, cross-branch teachers, inactive runs, and invalid availability", () => {
     const initial = platformStore.getState();
@@ -3347,28 +3896,44 @@ describe("platformStore frontend utility helpers", () => {
     ).toThrow("Teacher user usr_missing_teacher was not found");
 
     expect(() =>
-      platformStore.assignTeacherToCourseRun("usr_not_teacher_assign", "run_ar_l3_2026", {
-        departmentId: "dep_arabic",
-      })
+      platformStore.assignTeacherToCourseRun(
+        "usr_not_teacher_assign",
+        "run_ar_l3_2026",
+        {
+          departmentId: "dep_arabic",
+        }
+      )
     ).toThrow("does not have teacher access");
 
     expect(() =>
-      platformStore.assignTeacherToCourseRun("usr_teacher_wrong_branch", "run_ar_l3_2026", {
-        departmentId: "dep_arabic",
-      })
+      platformStore.assignTeacherToCourseRun(
+        "usr_teacher_wrong_branch",
+        "run_ar_l3_2026",
+        {
+          departmentId: "dep_arabic",
+        }
+      )
     ).toThrow("branch must match");
 
     expect(() =>
-      platformStore.assignTeacherToCourseRun("usr_teacher_inactive_run", "run_ar_l3_cancelled_test", {
-        departmentId: "dep_arabic",
-      })
+      platformStore.assignTeacherToCourseRun(
+        "usr_teacher_inactive_run",
+        "run_ar_l3_cancelled_test",
+        {
+          departmentId: "dep_arabic",
+        }
+      )
     ).toThrow("active or pending course run");
 
     expect(() =>
-      platformStore.assignTeacherToCourseRun("usr_teacher_inactive_run", "run_ar_l3_2026", {
-        departmentId: "dep_arabic",
-        availability: ["not a slot"],
-      })
+      platformStore.assignTeacherToCourseRun(
+        "usr_teacher_inactive_run",
+        "run_ar_l3_2026",
+        {
+          departmentId: "dep_arabic",
+          availability: ["not a slot"],
+        }
+      )
     ).toThrow("Use availability");
   });
 
@@ -3387,22 +3952,34 @@ describe("platformStore frontend utility helpers", () => {
           departmentId: "dep_arabic",
           status: "active",
         },
-        ...initial.users.filter(item => item.id !== "usr_orphan_previous_teacher"),
+        ...initial.users.filter(
+          item => item.id !== "usr_orphan_previous_teacher"
+        ),
       ],
       courseRuns: initial.courseRuns.map(run =>
-        run.id === "run_ar_l3_2026" ? { ...run, teacherId: "usr_orphan_previous_teacher" } : run
+        run.id === "run_ar_l3_2026"
+          ? { ...run, teacherId: "usr_orphan_previous_teacher" }
+          : run
       ),
     });
 
-    const assignment = platformStore.assignTeacherToCourseRun("usr_teacher_orphan_reassign", "run_ar_l3_2026", {
-      departmentId: "dep_arabic",
-      availability: ["Fri 09:00"],
-    });
-    const audit = platformStore.getState().auditLogs.find(item => item.action === "teacher.assigned");
+    const assignment = platformStore.assignTeacherToCourseRun(
+      "usr_teacher_orphan_reassign",
+      "run_ar_l3_2026",
+      {
+        departmentId: "dep_arabic",
+        availability: ["Fri 09:00"],
+      }
+    );
+    const audit = platformStore
+      .getState()
+      .auditLogs.find(item => item.action === "teacher.assigned");
 
     expect(assignment.previousTeacher).toBeUndefined();
     expect(assignment.previousTeacherId).toBe("usr_orphan_previous_teacher");
-    expect(audit?.summary).toContain("reassigned from usr_orphan_previous_teacher");
+    expect(audit?.summary).toContain(
+      "reassigned from usr_orphan_previous_teacher"
+    );
   });
 
   it("keeps teacher assignment idempotent and preserves course-run scoped tools", () => {
@@ -3422,35 +3999,63 @@ describe("platformStore frontend utility helpers", () => {
         },
         ...initial.users,
       ],
-      teachers: initial.teachers.filter(item => item.userId !== "usr_teacher_repeat"),
-      teacherAvailability: initial.teacherAvailability.filter(item => item.teacherId !== "usr_teacher_repeat"),
+      teachers: initial.teachers.filter(
+        item => item.userId !== "usr_teacher_repeat"
+      ),
+      teacherAvailability: initial.teacherAvailability.filter(
+        item => item.teacherId !== "usr_teacher_repeat"
+      ),
     });
 
-    platformStore.assignTeacherToCourseRun("usr_teacher_repeat", "run_ar_l3_2026", {
-      departmentId: "dep_arabic",
-      specialties: ["Arabic grammar"],
-      teachingLevels: ["Arabic Level 3"],
-      availability: ["Mon 09:00", "Mon 09:00"],
-    });
-    platformStore.assignTeacherToCourseRun("usr_teacher_repeat", "run_ar_l3_2026", {
-      departmentId: "dep_arabic",
-      specialties: ["Arabic grammar"],
-      teachingLevels: ["Arabic Level 3"],
-      availability: ["Mon 09:00"],
-    });
+    platformStore.assignTeacherToCourseRun(
+      "usr_teacher_repeat",
+      "run_ar_l3_2026",
+      {
+        departmentId: "dep_arabic",
+        specialties: ["Arabic grammar"],
+        teachingLevels: ["Arabic Level 3"],
+        availability: ["Mon 09:00", "Mon 09:00"],
+      }
+    );
+    platformStore.assignTeacherToCourseRun(
+      "usr_teacher_repeat",
+      "run_ar_l3_2026",
+      {
+        departmentId: "dep_arabic",
+        specialties: ["Arabic grammar"],
+        teachingLevels: ["Arabic Level 3"],
+        availability: ["Mon 09:00"],
+      }
+    );
 
     const after = platformStore.getState();
-    const teacherRuns = after.courseRuns.filter(run => run.teacherId === "usr_teacher_repeat");
+    const teacherRuns = after.courseRuns.filter(
+      run => run.teacherId === "usr_teacher_repeat"
+    );
     const teacherRunIds = new Set(teacherRuns.map(run => run.id));
-    const teacherClasses = after.classGroups.filter(group => teacherRunIds.has(group.courseRunId));
-    const teacherSessions = after.classSessions.filter(session => teacherClasses.some(group => group.id === session.classGroupId));
-    const teacherAssignments = after.assignments.filter(assignment => teacherRunIds.has(assignment.courseRunId));
-    const teacherQuizzes = after.quizzes.filter(quiz => teacherRunIds.has(quiz.courseRunId));
-    const profileRows = after.teachers.filter(item => item.userId === "usr_teacher_repeat");
-    const slots = after.teacherAvailability.filter(item => item.teacherId === "usr_teacher_repeat");
+    const teacherClasses = after.classGroups.filter(group =>
+      teacherRunIds.has(group.courseRunId)
+    );
+    const teacherSessions = after.classSessions.filter(session =>
+      teacherClasses.some(group => group.id === session.classGroupId)
+    );
+    const teacherAssignments = after.assignments.filter(assignment =>
+      teacherRunIds.has(assignment.courseRunId)
+    );
+    const teacherQuizzes = after.quizzes.filter(quiz =>
+      teacherRunIds.has(quiz.courseRunId)
+    );
+    const profileRows = after.teachers.filter(
+      item => item.userId === "usr_teacher_repeat"
+    );
+    const slots = after.teacherAvailability.filter(
+      item => item.teacherId === "usr_teacher_repeat"
+    );
 
     expect(profileRows).toHaveLength(1);
-    expect(profileRows[0].assignedClassIds).toEqual(expect.arrayContaining(["class_ar_l3_a"]));
+    expect(profileRows[0].assignedClassIds).toEqual(
+      expect.arrayContaining(["class_ar_l3_a"])
+    );
     expect(slots).toHaveLength(1);
     expect(teacherClasses.map(item => item.id)).toContain("class_ar_l3_a");
     expect(teacherSessions.map(item => item.id)).toContain("session_ar_live");
@@ -3460,7 +4065,9 @@ describe("platformStore frontend utility helpers", () => {
 
   it("creates curriculum modules through the workflow action with audit evidence", () => {
     const state = platformStore.getState();
-    const beforeCount = state.modules.filter(item => item.courseId === "course_ar_l3").length;
+    const beforeCount = state.modules.filter(
+      item => item.courseId === "course_ar_l3"
+    ).length;
     const result = applyPlatformWorkflowAction(state, {
       type: "curriculum.module.create",
       courseId: "course_ar_l3",
@@ -3500,7 +4107,9 @@ describe("platformStore frontend utility helpers", () => {
     expect(result.action).toBe("course.status_updated");
     expect(result.entityType).toBe("Course");
     expect(result.entityId).toBe("course_ar_l3");
-    expect(state.courses.find(item => item.id === "course_ar_l3")?.status).toBe("paused");
+    expect(state.courses.find(item => item.id === "course_ar_l3")?.status).toBe(
+      "paused"
+    );
     expect(state.auditLogs[0]).toMatchObject({
       actorId: "usr_hod_demo",
       action: "course.status_updated",
@@ -3521,7 +4130,9 @@ describe("platformStore frontend utility helpers", () => {
     expect(result.action).toBe("material.unpublished");
     expect(result.entityType).toBe("LessonResource");
     expect(result.entityId).toBe("res_ar_pdf");
-    expect(state.resources.find(item => item.id === "res_ar_pdf")?.published).toBe(false);
+    expect(
+      state.resources.find(item => item.id === "res_ar_pdf")?.published
+    ).toBe(false);
     expect(state.auditLogs[0]).toMatchObject({
       actorId: "usr_teacher_demo",
       action: "material.unpublished",
@@ -3552,7 +4163,9 @@ describe("platformStore frontend utility helpers", () => {
     });
 
     const user = state.users.find(item => item.id === "usr_student_demo");
-    const student = state.students.find(item => item.userId === "usr_student_demo");
+    const student = state.students.find(
+      item => item.userId === "usr_student_demo"
+    );
 
     expect(result.action).toBe("profile.updated");
     expect(user).toMatchObject({
@@ -3575,12 +4188,17 @@ describe("platformStore frontend utility helpers", () => {
       guardianName: "Guardian QA",
       guardianPhone: "+20 100 000 8888",
     });
-    expect(state.auditLogs.map(item => item.action)).toEqual(expect.arrayContaining(["profile.updated", "preferences.updated"]));
+    expect(state.auditLogs.map(item => item.action)).toEqual(
+      expect.arrayContaining(["profile.updated", "preferences.updated"])
+    );
   });
 
   it("updates teacher title and availability without changing role scope", () => {
     const state = platformStore.getState();
     const beforeUser = state.users.find(item => item.id === "usr_teacher_demo");
+    const beforeStaffProfile = state.staffProfiles.find(
+      item => item.userId === "usr_teacher_demo" && item.role === "teacher"
+    );
 
     applyPlatformWorkflowAction(state, {
       type: "profile.update",
@@ -3592,8 +4210,12 @@ describe("platformStore frontend utility helpers", () => {
     });
 
     const user = state.users.find(item => item.id === "usr_teacher_demo");
-    const staffProfile = state.staffProfiles.find(item => item.userId === "usr_teacher_demo" && item.role === "teacher");
-    const teacherProfile = state.teachers.find(item => item.userId === "usr_teacher_demo");
+    const staffProfile = state.staffProfiles.find(
+      item => item.userId === "usr_teacher_demo" && item.role === "teacher"
+    );
+    const teacherProfile = state.teachers.find(
+      item => item.userId === "usr_teacher_demo"
+    );
 
     expect(user).toMatchObject({
       name: "Teacher Profile QA",
@@ -3604,8 +4226,8 @@ describe("platformStore frontend utility helpers", () => {
     expect(staffProfile).toMatchObject({
       title: "Senior Arabic Teacher",
       availabilityStatus: "limited",
-      branchIds: ["br_online"],
-      departmentIds: ["dep_arabic"],
+      branchIds: beforeStaffProfile?.branchIds,
+      departmentIds: beforeStaffProfile?.departmentIds,
     });
     expect(teacherProfile).toMatchObject({ availabilityStatus: "limited" });
     expect(state.auditLogs[0]).toMatchObject({
@@ -3661,7 +4283,9 @@ describe("platformStore frontend utility helpers", () => {
       })
     ).toThrow("Guardian name and phone are required for minor students.");
 
-    expect(state.users.find(item => item.id === "usr_student_demo")?.name).toBe("Student Demo");
+    expect(state.users.find(item => item.id === "usr_student_demo")?.name).toBe(
+      "Student Demo"
+    );
     expect(state.students.find(item => item.id === "stu_demo")).toMatchObject({
       guardianName: "Current Guardian",
       guardianPhone: "+20 100 000 1111",

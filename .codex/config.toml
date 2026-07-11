@@ -8,9 +8,11 @@ default_loop = "READ -> SPEC -> PLAN -> IMPLEMENT -> VERIFY -> REVIEW -> FIX -> 
 
 sandbox_mode = "danger-full-access"
 [commands]
-format_check = "node_modules/.bin/prettier --check CLAUDE.md AGENTS.md .codex/hooks.json .codex/prompts/*.md"
+format_check = "node_modules/.bin/prettier --check CLAUDE.md AGENTS.md package.json docs/NILE_LEARN_MASTER_PLAN.md docs/MODERNIZATION_EXECUTION_CONTRACT.md docs/UI_INFORMATION_ARCHITECTURE.md docs/DESIGN_V2.md docs/SIMPLE_UI.md docs/legacy-ems-discovery.md docs/production-persistence-architecture.md docs/production-persistence-plan.md docs/session-hardening-plan.md docs/auth-session-hardening.md docs/internal-admin-workflows.md docs/qa-baseline.md docs/decisions/*.md scripts/validate-phase1-schema.mjs scripts/validate-phase1-pglite.mjs .codex/hooks.json .codex/prompts/*.md"
 full_format_check = "FULL_FORMAT_CHECK=1 scripts/verify.sh"
 typecheck = "npm run check"
+phase1_schema_check = "npm run check:phase1-schema"
+phase1_schema_runtime_check = "npm run check:phase1-schema:runtime"
 verify_pnpm = "USE_PNPM=1 scripts/verify.sh"
 test = "npm test -- --run"
 build = "npm run build"
@@ -24,12 +26,16 @@ agents = ".codex/agents"
 hooks = ".codex/hooks.json"
 agent_guide = "AGENTS.md"
 engineering_rules = "CLAUDE.md"
+master_plan = "docs/NILE_LEARN_MASTER_PLAN.md"
+execution_contract = "docs/MODERNIZATION_EXECUTION_CONTRACT.md"
+ui_information_architecture = "docs/UI_INFORMATION_ARCHITECTURE.md"
 
 [workflow]
 discovery_prompt = ".codex/prompts/00-discovery.md"
+modernization_prompt = ".codex/prompts/16-modernization-execution.md"
 security_prompt = ".codex/prompts/15-security-review.md"
-required_instruction_files = ["CLAUDE.md", "AGENTS.md", ".codex/prompts/<matching-feature>.md"]
-instruction_precedence = "Follow the stricter rule. CLAUDE.md owns engineering discipline; AGENTS.md owns Nile Learn product, security, role, portal, and command authority."
+required_instruction_files = ["CLAUDE.md", "AGENTS.md", "docs/NILE_LEARN_MASTER_PLAN.md", "docs/MODERNIZATION_EXECUTION_CONTRACT.md", ".codex/prompts/<matching-feature>.md"]
+instruction_precedence = "Follow the stricter rule. CLAUDE.md owns engineering discipline; AGENTS.md owns product, role, security, portal, and commands; the master plan owns architecture and sequencing; the execution contract owns agent gates."
 required_response = ["mandatory_guidance_files_read", "summary", "changed_files", "commands_run", "validation_results", "remaining_limitations"]
 
 [reviewers]

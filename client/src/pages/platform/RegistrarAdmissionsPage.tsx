@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -14,6 +14,7 @@ import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
 import {
   DetailLayout,
+  FormFlowLayout,
   WorkspaceLayout,
 } from "@/components/platform/PlatformLayouts";
 import {
@@ -27,10 +28,13 @@ import { getDemoUser } from "@/lib/platformData";
 
 type RegistrarAdmissionsView =
   | "leads"
+  | "lead-create"
   | "lead-detail"
   | "applications"
+  | "application-create"
   | "application-detail"
   | "placement-tests"
+  | "placement-create"
   | "placement-detail";
 
 type RegistrarAdmissionsPageProps = {
@@ -91,6 +95,12 @@ function formatDate(value?: string) {
   }).format(date);
 }
 
+function statusLabel(value?: string) {
+  return (value ?? "not set")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, character => character.toUpperCase());
+}
+
 function defaultPlacementDate() {
   return "2026-07-15";
 }
@@ -101,8 +111,20 @@ export default function RegistrarAdmissionsPage({
   applicationId,
   bookingId,
 }: RegistrarAdmissionsPageProps) {
+  const initialState = platformStore.getState();
+  const initialApplication = applicationId
+    ? initialState.applications.find(item => item.id === applicationId)
+    : undefined;
+  const initialApplicationLead = initialApplication
+    ? initialState.leads.find(item => item.id === initialApplication.leadId)
+    : undefined;
   const [version, setVersion] = useState(0);
   const [search, setSearch] = useState("");
+  const [creationResult, setCreationResult] = useState<{
+    message: string;
+    href: string;
+    label: string;
+  } | null>(null);
   const [pendingAction, setPendingAction] = useState("");
   const [selectedPlacementId, setSelectedPlacementId] = useState(
     bookingId ?? ""
@@ -118,22 +140,21 @@ export default function RegistrarAdmissionsPage({
     source: "manual",
     notes: "",
   });
-  const [applicationDraft, setApplicationDraft] =
-    useState<ApplicationDraft>({
-      fullName: "",
-      email: "",
-      phone: "",
-      branchId: "br_online",
-      courseInterest: "Arabic Language",
-      schedulePreference: "To confirm",
-      notes: "",
-    });
-  const [placementDraft, setPlacementDraft] = useState<PlacementDraft>({
+  const [applicationDraft, setApplicationDraft] = useState<ApplicationDraft>({
     fullName: "",
     email: "",
     phone: "",
     branchId: "br_online",
-    subject: "Arabic Language",
+    courseInterest: "Arabic Language",
+    schedulePreference: "To confirm",
+    notes: "",
+  });
+  const [placementDraft, setPlacementDraft] = useState<PlacementDraft>({
+    fullName: initialApplicationLead?.fullName ?? "",
+    email: initialApplicationLead?.email ?? "",
+    phone: initialApplicationLead?.phone ?? "",
+    branchId: initialApplication?.branchId ?? "br_online",
+    subject: initialApplication?.courseInterest ?? "Arabic Language",
     preferredDate: defaultPlacementDate(),
     currentLevel: "Placement pending",
   });
@@ -175,6 +196,27 @@ export default function RegistrarAdmissionsPage({
     workflow => workflow.placementTestId === selectedPlacement?.id
   );
 
+  useEffect(() => {
+    setCreationResult(null);
+    if (view !== "placement-create" || !applicationId) return;
+    const latestState = platformStore.getState();
+    const application = latestState.applications.find(
+      item => item.id === applicationId
+    );
+    const lead = application
+      ? latestState.leads.find(item => item.id === application.leadId)
+      : undefined;
+    if (!application || !lead) return;
+    setPlacementDraft(current => ({
+      ...current,
+      fullName: lead.fullName,
+      email: lead.email,
+      phone: lead.phone,
+      branchId: application.branchId,
+      subject: application.courseInterest,
+    }));
+  }, [applicationId, view]);
+
   const query = search.trim().toLowerCase();
   const filteredLeads = state.leads.filter(lead =>
     [lead.fullName, lead.email, lead.phone, lead.subject, lead.status]
@@ -184,7 +226,9 @@ export default function RegistrarAdmissionsPage({
   );
   const filteredApplications = state.applications.filter(application => {
     const lead = state.leads.find(item => item.id === application.leadId);
-    const branch = state.branches.find(item => item.id === application.branchId);
+    const branch = state.branches.find(
+      item => item.id === application.branchId
+    );
     return [
       lead?.fullName,
       lead?.email,
@@ -283,6 +327,11 @@ export default function RegistrarAdmissionsPage({
         source: "manual",
         notes: "",
       });
+      setCreationResult({
+        message: "The enquiry has been added to the admissions queue.",
+        href: "/app/registrar/leads",
+        label: "View leads",
+      });
     }
   };
 
@@ -322,7 +371,7 @@ export default function RegistrarAdmissionsPage({
         actorId,
       },
       "Application created",
-      "Lead, application file, communication log, and audit evidence were saved."
+      "The application is ready for admissions review."
     );
     if (result) {
       setApplicationDraft(current => ({
@@ -332,6 +381,11 @@ export default function RegistrarAdmissionsPage({
         phone: "",
         notes: "",
       }));
+      setCreationResult({
+        message: "The application is ready for admissions review.",
+        href: "/app/registrar/applications",
+        label: "View applications",
+      });
     }
   };
 
@@ -365,8 +419,8 @@ export default function RegistrarAdmissionsPage({
         branchId: placementDraft.branchId,
         subject: placementDraft.subject.trim() || "Arabic Language",
         preferredDate: placementDraft.preferredDate,
-        currentLevel:
-          placementDraft.currentLevel.trim() || "Placement pending",
+        currentLevel: placementDraft.currentLevel.trim() || "Placement pending",
+        leadId: applicationId ? selectedApplicationLead?.id : undefined,
         actorId,
       },
       "Placement booking added"
@@ -385,6 +439,17 @@ export default function RegistrarAdmissionsPage({
         preferredDate: defaultPlacementDate(),
         currentLevel: "Placement pending",
       }));
+      const booking =
+        result && typeof result === "object" && "result" in result
+          ? (result.result as { id?: string } | undefined)
+          : undefined;
+      setCreationResult({
+        message: "The placement booking is ready for review.",
+        href: booking?.id
+          ? `/app/registrar/placement-tests/${booking.id}`
+          : "/app/registrar/placement-tests",
+        label: booking?.id ? "Open booking" : "View placement bookings",
+      });
     }
   };
 
@@ -407,7 +472,7 @@ export default function RegistrarAdmissionsPage({
     );
   };
 
-  const navActions = (
+  const admissionsNavigation = (
     <>
       <Link
         className={view === "leads" || view === "lead-detail" ? "active" : ""}
@@ -438,16 +503,21 @@ export default function RegistrarAdmissionsPage({
     </>
   );
 
-  const searchToolbar = (
-    <label className="platform-search-field">
-      <Search size={16} />
-      <input
-        value={search}
-        onChange={event => setSearch(event.target.value)}
-        placeholder="Search admissions records"
-        aria-label="Search admissions records"
-      />
-    </label>
+  const admissionsToolbar = (
+    <div className="registrar-admissions-toolbar-v3">
+      <nav className="portal-simple-tabs" aria-label="Admissions work areas">
+        {admissionsNavigation}
+      </nav>
+      <label className="platform-search-field">
+        <Search size={16} />
+        <input
+          value={search}
+          onChange={event => setSearch(event.target.value)}
+          placeholder="Search admissions records"
+          aria-label="Search admissions records"
+        />
+      </label>
+    </div>
   );
 
   const leadList = (
@@ -469,8 +539,11 @@ export default function RegistrarAdmissionsPage({
                   {lead.subject} · {lead.phone} · {lead.source}
                 </small>
               </div>
-              <span>{lead.status}</span>
-              <Link className="registrar-row-link" href={`/app/registrar/leads/${lead.id}`}>
+              <span>{statusLabel(lead.status)}</span>
+              <Link
+                className="registrar-row-link"
+                href={`/app/registrar/leads/${lead.id}`}
+              >
                 Open
               </Link>
               <button
@@ -506,7 +579,12 @@ export default function RegistrarAdmissionsPage({
           <span>Lead intake</span>
           <strong>Add one enquiry</strong>
         </div>
-        <Megaphone size={18} />
+        <Link
+          className="registrar-inline-close"
+          href="/app/registrar/leads"
+        >
+          Cancel
+        </Link>
       </div>
       <form className="registrar-lead-form" onSubmit={createLead}>
         <label>
@@ -527,7 +605,10 @@ export default function RegistrarAdmissionsPage({
           <input
             value={leadDraft.phone}
             onChange={event =>
-              setLeadDraft(current => ({ ...current, phone: event.target.value }))
+              setLeadDraft(current => ({
+                ...current,
+                phone: event.target.value,
+              }))
             }
             placeholder="+20..."
           />
@@ -538,7 +619,10 @@ export default function RegistrarAdmissionsPage({
             type="email"
             value={leadDraft.email}
             onChange={event =>
-              setLeadDraft(current => ({ ...current, email: event.target.value }))
+              setLeadDraft(current => ({
+                ...current,
+                email: event.target.value,
+              }))
             }
             placeholder="email@example.com"
           />
@@ -578,7 +662,10 @@ export default function RegistrarAdmissionsPage({
           <input
             value={leadDraft.notes}
             onChange={event =>
-              setLeadDraft(current => ({ ...current, notes: event.target.value }))
+              setLeadDraft(current => ({
+                ...current,
+                notes: event.target.value,
+              }))
             }
             placeholder="Schedule, branch, or language notes"
           />
@@ -615,7 +702,7 @@ export default function RegistrarAdmissionsPage({
                   {application.schedulePreference}
                 </small>
               </div>
-              <span>{application.status}</span>
+              <span>{statusLabel(application.status)}</span>
               <Link
                 className="registrar-row-link"
                 href={`/app/registrar/applications/${application.id}`}
@@ -655,7 +742,12 @@ export default function RegistrarAdmissionsPage({
           <span>Application intake</span>
           <strong>Create one application file</strong>
         </div>
-        <FileText size={18} />
+        <Link
+          className="registrar-inline-close"
+          href="/app/registrar/applications"
+        >
+          Cancel
+        </Link>
       </div>
       <form
         className="registrar-application-form"
@@ -783,7 +875,9 @@ export default function RegistrarAdmissionsPage({
     >
       <div className="registrar-application-list">
         {filteredPlacements.map(booking => {
-          const branch = state.branches.find(item => item.id === booking.branchId);
+          const branch = state.branches.find(
+            item => item.id === booking.branchId
+          );
           return (
             <article key={booking.id}>
               <div>
@@ -793,7 +887,7 @@ export default function RegistrarAdmissionsPage({
                   {branch?.name ?? "No branch"}
                 </small>
               </div>
-              <span>{booking.status}</span>
+              <span>{statusLabel(booking.status)}</span>
               <Link
                 className="registrar-row-link"
                 href={`/app/registrar/placement-tests/${booking.id}`}
@@ -825,7 +919,12 @@ export default function RegistrarAdmissionsPage({
           <span>Placement booking</span>
           <strong>Book one test</strong>
         </div>
-        <ClipboardList size={18} />
+        <Link
+          className="registrar-inline-close"
+          href="/app/registrar/placement-tests"
+        >
+          Cancel
+        </Link>
       </div>
       <form
         className="registrar-placement-booking-form"
@@ -942,7 +1041,9 @@ export default function RegistrarAdmissionsPage({
       <div className="registrar-panel-head">
         <div>
           <span>Result</span>
-          <strong>{selectedPlacement?.fullName ?? "No booking selected"}</strong>
+          <strong>
+            {selectedPlacement?.fullName ?? "No booking selected"}
+          </strong>
         </div>
         <CheckCircle2 size={18} />
       </div>
@@ -1004,6 +1105,65 @@ export default function RegistrarAdmissionsPage({
     </section>
   );
 
+  if (
+    view === "lead-create" ||
+    view === "application-create" ||
+    view === "placement-create"
+  ) {
+    const createConfig =
+      view === "lead-create"
+        ? {
+            title: "New lead",
+            description: "Capture one new enquiry for the admissions team.",
+            form: leadForm,
+          }
+        : view === "application-create"
+          ? {
+              title: "New application",
+              description: "Create one application file for admissions review.",
+              form: applicationForm,
+            }
+          : {
+              title: "Book placement",
+              description: "Schedule one learner placement test.",
+              form: placementForm,
+            };
+
+    return (
+      <PlatformShell role="registrar" title={createConfig.title}>
+        <FormFlowLayout
+          className="registrar-admissions-page registrar-create-page"
+          title={createConfig.title}
+          description={createConfig.description}
+          context="Registrar"
+          actions={
+            creationResult ? (
+              <Link
+                className="platform-primary-button"
+                href={creationResult.href}
+              >
+                {creationResult.label}
+              </Link>
+            ) : undefined
+          }
+          main={
+            creationResult ? (
+              <section className="registrar-create-success" role="status">
+                <CheckCircle2 size={20} />
+                <div>
+                  <strong>Saved</strong>
+                  <span>{creationResult.message}</span>
+                </div>
+              </section>
+            ) : (
+              createConfig.form
+            )
+          }
+        />
+      </PlatformShell>
+    );
+  }
+
   if (view === "lead-detail") {
     const missing = leadId && !selectedLead;
     return (
@@ -1013,7 +1173,10 @@ export default function RegistrarAdmissionsPage({
           description="Review one enquiry and decide the next admissions action."
           context="Registrar"
           actions={
-            <Link className="platform-secondary-button" href="/app/registrar/leads">
+            <Link
+              className="platform-secondary-button"
+              href="/app/registrar/leads"
+            >
               <ArrowRight size={15} />
               Back to leads
             </Link>
@@ -1106,7 +1269,9 @@ export default function RegistrarAdmissionsPage({
                 <AlertCircle size={18} />
                 <div>
                   <strong>This application does not exist.</strong>
-                  <small>Use the applications page to choose a valid file.</small>
+                  <small>
+                    Use the applications page to choose a valid file.
+                  </small>
                 </div>
               </div>
             ) : (
@@ -1131,13 +1296,17 @@ export default function RegistrarAdmissionsPage({
                   </article>
                   <article>
                     <span>Branch</span>
-                    <strong>{selectedApplicationBranch?.name ?? "No branch"}</strong>
+                    <strong>
+                      {selectedApplicationBranch?.name ?? "No branch"}
+                    </strong>
                     <small>{selectedApplication?.schedulePreference}</small>
                   </article>
                   <article>
                     <span>Enrollment handoff</span>
                     <strong>
-                      {selectedApplicationWorkflow ? "Prepared" : "Not prepared"}
+                      {selectedApplicationWorkflow
+                        ? "Prepared"
+                        : "Not prepared"}
                     </strong>
                     <small>
                       {selectedApplicationWorkflow?.nextStep ??
@@ -1172,6 +1341,13 @@ export default function RegistrarAdmissionsPage({
                     <ArrowRight size={15} />
                     Open handoff
                   </Link>
+                  <Link
+                    className="registrar-row-link"
+                    href={`/app/registrar/applications/${selectedApplication?.id}/placement`}
+                  >
+                    <ClipboardList size={15} />
+                    Book placement
+                  </Link>
                 </div>
               </section>
             )
@@ -1204,7 +1380,9 @@ export default function RegistrarAdmissionsPage({
                 <AlertCircle size={18} />
                 <div>
                   <strong>This placement booking does not exist.</strong>
-                  <small>Use the placement page to choose a valid booking.</small>
+                  <small>
+                    Use the placement page to choose a valid booking.
+                  </small>
                 </div>
               </div>
             ) : (
@@ -1261,13 +1439,20 @@ export default function RegistrarAdmissionsPage({
       <PlatformShell role="registrar" title="Applications">
         <WorkspaceLayout
           title="Applications"
-          description="Create and review application files."
+          description="Review application files and prepare enrollment."
           context="Registrar"
-          actions={navActions}
-          toolbar={searchToolbar}
+          actions={
+            <Link
+              className="platform-primary-button"
+              href="/app/registrar/applications/new"
+            >
+              <UserPlus size={15} />
+              New application
+            </Link>
+          }
+          toolbar={admissionsToolbar}
           main={applicationsList}
-          side={applicationForm}
-          className="registrar-workspace"
+          className="registrar-workspace registrar-admissions-page"
         />
       </PlatformShell>
     );
@@ -1278,18 +1463,20 @@ export default function RegistrarAdmissionsPage({
       <PlatformShell role="registrar" title="Placement tests">
         <WorkspaceLayout
           title="Placement tests"
-          description="Book placement tests and record learner levels."
+          description="Review scheduled placement tests and learner levels."
           context="Registrar"
-          actions={navActions}
-          toolbar={searchToolbar}
-          main={placementList}
-          side={
-            <div className="registrar-workspace-side">
-              {placementForm}
-              {placementResultCard}
-            </div>
+          actions={
+            <Link
+              className="platform-primary-button"
+              href="/app/registrar/placement-tests/new"
+            >
+              <UserPlus size={15} />
+              Book placement
+            </Link>
           }
-          className="registrar-workspace"
+          toolbar={admissionsToolbar}
+          main={placementList}
+          className="registrar-workspace registrar-admissions-page"
         />
       </PlatformShell>
     );
@@ -1299,13 +1486,20 @@ export default function RegistrarAdmissionsPage({
     <PlatformShell role="registrar" title="Leads">
       <WorkspaceLayout
         title="Leads"
-        description="Capture enquiries and convert ready contacts."
+        description="Review enquiries and convert ready contacts."
         context="Registrar"
-        actions={navActions}
-        toolbar={searchToolbar}
+        actions={
+          <Link
+            className="platform-primary-button"
+            href="/app/registrar/leads/new"
+          >
+            <UserPlus size={15} />
+            Add lead
+          </Link>
+        }
+        toolbar={admissionsToolbar}
         main={leadList}
-        side={leadForm}
-        className="registrar-workspace"
+        className="registrar-workspace registrar-admissions-page"
       />
     </PlatformShell>
   );

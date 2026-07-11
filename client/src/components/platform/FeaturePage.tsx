@@ -2887,9 +2887,7 @@ function AdminSystemExperience({ pageId }: { pageId: string }) {
     }
     platformStore.setState(response.data.state);
     refresh();
-    toast.success("Platform settings saved", {
-      description: response.data.persistence,
-    });
+    toast.success("Platform settings saved");
   };
   const updateAuditQuery = (
     event:
@@ -3526,9 +3524,7 @@ function AcademicGovernanceExperience({
         : actionType === "certificate.issue"
           ? "Certificate issued"
           : "Certificate rejected",
-      {
-        description: `${changed.verificationCode} · ${response.data.persistence}`,
-      }
+      { description: changed.verificationCode }
     );
   };
   useEffect(() => {
@@ -3759,9 +3755,7 @@ function AcademicGovernanceExperience({
     }
     platformStore.setState(response.data.state);
     refresh();
-    toast.success("Course status updated", {
-      description: response.data.persistence,
-    });
+    toast.success("Course status updated");
   };
 
   const addModule = async (event: React.FormEvent) => {
@@ -3792,9 +3786,7 @@ function AcademicGovernanceExperience({
     platformStore.setState(response.data.state);
     setModuleDraft({ title: "", outcomes: "" });
     refresh();
-    toast.success("Module added", {
-      description: `${selectedCourse.title} · ${response.data.persistence}`,
-    });
+    toast.success("Module added", { description: selectedCourse.title });
   };
 
   const selectProgram = (programId: string) => {
@@ -3850,9 +3842,7 @@ function AcademicGovernanceExperience({
     platformStore.setState(response.data.state);
     setAssessmentDraft({ title: "", type: "quiz" });
     refresh();
-    toast.success("Assessment added to academic plan", {
-      description: response.data.persistence,
-    });
+    toast.success("Assessment added to academic plan");
   };
 
   const sendAcademicMessage = async (event: React.FormEvent) => {
@@ -3884,9 +3874,7 @@ function AcademicGovernanceExperience({
     platformStore.setState(response.data.state);
     setMessageDraft(value => ({ ...value, subject: "", body: "" }));
     refresh();
-    toast.success("Academic message sent", {
-      description: response.data.persistence,
-    });
+    toast.success("Academic message sent");
   };
 
   const exportAcademicCsv = () => {
@@ -5423,9 +5411,7 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
     }
     platformStore.setState(result.data.state);
     refresh();
-    toast.success("Room status updated", {
-      description: result.data.persistence,
-    });
+    toast.success("Room status updated");
   };
 
   const addRoom = async (event: React.FormEvent) => {
@@ -5456,7 +5442,7 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
     platformStore.setState(result.data.state);
     setRoomDraft({ name: "", capacity: "18", equipment: "" });
     refresh();
-    toast.success("Room added", { description: result.data.persistence });
+    toast.success("Room added");
   };
 
   useEffect(() => {
@@ -5538,9 +5524,7 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
       payload?.conflicts?.length
         ? "Event saved with conflict"
         : "Event scheduled",
-      {
-        description: `${eventDraft.title.trim()} · ${result.data.persistence}`,
-      }
+      { description: eventDraft.title.trim() }
     );
   };
 
@@ -5567,9 +5551,7 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
     }
     platformStore.setState(result.data.state);
     refresh();
-    toast.success("Branch payment recorded", {
-      description: `${invoice.id} · ${result.data.persistence}`,
-    });
+    toast.success("Branch payment recorded", { description: invoice.id });
   };
 
   const sendBranchMessage = async (event: React.FormEvent) => {
@@ -5602,9 +5584,7 @@ function BranchOperationsExperience({ pageId }: { pageId: string }) {
     platformStore.setState(result.data.state);
     setMessageDraft(value => ({ ...value, subject: "", body: "" }));
     refresh();
-    toast.success("Branch message sent", {
-      description: result.data.persistence,
-    });
+    toast.success("Branch message sent");
   };
 
   const exportBranchCsv = () => {
@@ -9722,9 +9702,7 @@ function TeacherDeliveryExperience({
       endsAt: "2026-06-29T10:30",
     });
     refresh();
-    toast.success("Class session created", {
-      description: result.data.persistence,
-    });
+    toast.success("Class session created");
   };
 
   const saveAllPresent = async () => {
@@ -9755,9 +9733,7 @@ function TeacherDeliveryExperience({
     }
     platformStore.setState(result.data.state);
     refresh();
-    toast.success("Attendance saved", {
-      description: `${selectedClass.name} · ${result.data.persistence}`,
-    });
+    toast.success("Attendance saved", { description: selectedClass.name });
   };
 
   const sendClassReminder = async () => {
@@ -9785,9 +9761,7 @@ function TeacherDeliveryExperience({
     }
     platformStore.setState(result.data.state);
     refresh();
-    toast.success("Class reminder sent", {
-      description: result.data.persistence,
-    });
+    toast.success("Class reminder sent");
   };
 
   const toggleResourcePublish = async (resourceId: string) => {
@@ -9812,9 +9786,7 @@ function TeacherDeliveryExperience({
     refresh();
     toast.success(
       !resource.published ? "Material published" : "Material unpublished",
-      {
-        description: result.data.persistence,
-      }
+      {}
     );
   };
 

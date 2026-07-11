@@ -12,7 +12,13 @@ run_step() {
 }
 
 check_required_guides() {
-  local guides=(CLAUDE.md AGENTS.md)
+  local guides=(
+    CLAUDE.md
+    AGENTS.md
+    package.json
+    docs/NILE_LEARN_MASTER_PLAN.md
+    docs/MODERNIZATION_EXECUTION_CONTRACT.md
+  )
   for guide in "${guides[@]}"; do
     if [[ ! -r "$guide" ]]; then
       printf 'Required guide is missing or unreadable: %s\n' "$guide" >&2
@@ -31,6 +37,27 @@ run_prettier_check() {
   local targets=(
     CLAUDE.md
     AGENTS.md
+    package.json
+    docs/NILE_LEARN_MASTER_PLAN.md
+    docs/MODERNIZATION_EXECUTION_CONTRACT.md
+    docs/UI_INFORMATION_ARCHITECTURE.md
+    docs/DESIGN_V2.md
+    docs/SIMPLE_UI.md
+    docs/legacy-ems-discovery.md
+    docs/production-persistence-architecture.md
+    docs/production-persistence-plan.md
+    docs/session-hardening-plan.md
+    docs/auth-session-hardening.md
+    docs/internal-admin-workflows.md
+    docs/qa-baseline.md
+    docs/decisions/README.md
+    docs/decisions/ADR-001-system-authority.md
+    docs/decisions/ADR-002-durable-sessions-and-role-grants.md
+    docs/decisions/ADR-003-moodle-read-projection.md
+    docs/decisions/ADR-004-finite-legacy-ems-migration.md
+    docs/decisions/ADR-005-atomic-audit-and-outbox.md
+    scripts/validate-phase1-schema.mjs
+    scripts/validate-phase1-pglite.mjs
     .codex/hooks.json
     .codex/prompts/00-discovery.md
     .codex/prompts/01-public-site.md
@@ -48,6 +75,7 @@ run_prettier_check() {
     .codex/prompts/13-quran-features.md
     .codex/prompts/14-reports.md
     .codex/prompts/15-security-review.md
+    .codex/prompts/16-modernization-execution.md
   )
 
   if [[ "${FULL_FORMAT_CHECK:-0}" == "1" ]]; then
@@ -179,10 +207,11 @@ wait_for_url() {
 start_portal_qa_server() {
   local port="${QA_PORT:-3001}"
   local base_url="${QA_BASE_URL:-http://127.0.0.1:${port}}"
+  local data_dir="${QA_LOCAL_DATA_DIR:-${ROOT_DIR}/.local-data/portal-qa-${QA_SESSION:-$$}}"
   export QA_BASE_URL="$base_url"
 
   if [[ "${QA_RESET_LOCAL_STATE:-1}" == "1" ]]; then
-    rm -f ".local-data/platform-state.json"
+    rm -f "${data_dir}/platform-state.json" "${data_dir}/platform-records.json"
   fi
 
   if node -e "fetch(process.argv[1]).then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))" "${base_url}/auth/login"; then
@@ -191,7 +220,13 @@ start_portal_qa_server() {
   fi
 
   printf 'Starting portal QA server at %s\n' "$base_url"
-  PORT="$port" NODE_ENV=production NILE_PLATFORM_STATE_LOCAL_ONLY=1 node dist-server/index.js >/tmp/nile-learn-portal-qa.log 2>&1 &
+  PORT="$port" \
+    NODE_ENV=production \
+    NILE_PLATFORM_STATE_LOCAL_ONLY=1 \
+    NILE_FORMS_COMPATIBILITY_ENABLED=1 \
+    NILE_FORMS_DRAFT_KEY=000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f \
+    NILE_LOCAL_DATA_DIR="$data_dir" \
+    node dist-server/index.js >/tmp/nile-learn-portal-qa.log 2>&1 &
   QA_SERVER_PID="$!"
   wait_for_url "${base_url}/auth/login"
 }
@@ -209,12 +244,31 @@ if has_script "qa:portals"; then
   run_step "Portal QA syntax" node --check scripts/qa-portals-cli.mjs
 fi
 
+if has_script "check:phase1-schema"; then
+  run_step "Phase 1 schema contract" run_package_script check:phase1-schema
+fi
+
+if has_script "check:phase1-schema:runtime"; then
+  run_step "Phase 1 PostgreSQL runtime" run_package_script check:phase1-schema:runtime
+fi
+
+if has_script "check:phase1-schema:supabase"; then
+  if [[ "${RUN_SUPABASE_LOCAL_CHECK:-0}" == "1" ]]; then
+    run_step "Phase 1 local Supabase promotion gate" \
+      run_package_script check:phase1-schema:supabase
+  else
+    printf '\n==> Phase 1 local Supabase promotion gate skipped (RUN_SUPABASE_LOCAL_CHECK=1 to enable)\n'
+  fi
+fi
+
 run_step "TypeScript check" run_package_script check
 run_step "Unit tests" run_package_script test
 run_step "Production build" run_package_script build
 
 if has_script "qa:portals"; then
   if [[ "${SKIP_PORTAL_QA:-0}" != "1" ]]; then
+    export QA_SESSION="${QA_SESSION:-nile-portals-verify-$$}"
+    export NILE_DEMO_PASSWORD="${NILE_DEMO_PASSWORD:-qa-${QA_SESSION}}"
     export QA_SUITE_TIMEOUT_MS="${QA_SUITE_TIMEOUT_MS:-2700000}"
     export QA_COMMAND_TIMEOUT_MS="${QA_COMMAND_TIMEOUT_MS:-90000}"
     export QA_ROUTE_MATRIX_ROUTE_TIMEOUT_MS="${QA_ROUTE_MATRIX_ROUTE_TIMEOUT_MS:-7000}"

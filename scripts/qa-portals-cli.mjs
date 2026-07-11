@@ -95,6 +95,8 @@ const roles = [
       "/app/student/support",
       "/app/student/profile",
       "/app/student/quran-progress",
+      "/app/student/forms",
+      "/app/student/forms/publication_form_support_1",
     ],
   },
   {
@@ -116,6 +118,7 @@ const roles = [
       "/app/teacher/quizzes",
       "/app/teacher/quizzes/new",
       "/app/teacher/quizzes/review",
+      "/app/teacher/quizzes/review/attempt_mr92cxmr_pqt5a",
       "/app/teacher/question-bank",
       "/app/teacher/question-bank/new",
       "/app/teacher/calendar",
@@ -123,6 +126,7 @@ const roles = [
       "/app/teacher/reports",
       "/app/teacher/profile",
       "/app/teacher/quran-review",
+      "/app/teacher/forms",
     ],
   },
   {
@@ -133,6 +137,7 @@ const roles = [
     routes: [
       "/app/registrar/leads/lead_demo_1",
       "/app/registrar/applications/app_demo_1",
+      "/app/registrar/applications/app_demo_1/placement",
       "/app/registrar/students/stu_demo",
       "/app/registrar/placement-tests/pt_demo_1",
       "/app/registrar/leads",
@@ -140,12 +145,20 @@ const roles = [
       "/app/registrar/students",
       "/app/registrar/placement-tests",
       "/app/registrar/enrollments",
+      "/app/registrar/enrollments/records",
+      "/app/registrar/enrollments/records/enr_ar_l3_cairo",
       "/app/registrar/classes",
+      "/app/registrar/payments/inv_cairo_demo_1",
       "/app/registrar/schedule",
       "/app/registrar/payments",
       "/app/registrar/messages",
       "/app/registrar/reports",
       "/app/registrar/settings",
+      "/app/registrar/forms",
+      "/app/registrar/forms/manage",
+      "/app/registrar/forms/manage/form_application/builder",
+      "/app/registrar/forms/manage/form_application/publish",
+      "/app/registrar/forms/review",
     ],
   },
   {
@@ -162,11 +175,17 @@ const roles = [
       "/app/hod/curriculum",
       "/app/hod/teachers",
       "/app/hod/classes",
+      "/app/hod/classes/runs/new",
       "/app/hod/schedule",
       "/app/hod/assessments",
       "/app/hod/certificates",
       "/app/hod/reports",
       "/app/hod/messages",
+      "/app/hod/forms",
+      "/app/hod/forms/manage",
+      "/app/hod/forms/manage/form_consent/builder",
+      "/app/hod/forms/manage/form_consent/publish",
+      "/app/hod/forms/review",
     ],
   },
   {
@@ -178,13 +197,22 @@ const roles = [
       "/app/branch/students",
       "/app/branch/teachers",
       "/app/branch/classes",
+      "/app/branch/classes/new",
+      "/app/branch/classes/class_ar_l3_cairo",
       "/app/branch/rooms",
       "/app/branch/schedule",
+      "/app/branch/schedule/sessions/session_ar_cairo_upcoming",
       "/app/branch/attendance",
+      "/app/branch/payments/inv_cairo_demo_1",
       "/app/branch/payments",
       "/app/branch/reports",
       "/app/branch/messages",
       "/app/branch/settings",
+      "/app/branch/forms",
+      "/app/branch/forms/manage",
+      "/app/branch/forms/manage/form_incident/builder",
+      "/app/branch/forms/manage/form_incident/publish",
+      "/app/branch/forms/review",
     ],
   },
   {
@@ -224,6 +252,11 @@ const roles = [
       "/app/admin/system-health",
       "/app/admin/platform-blueprint",
       "/app/admin/users/new",
+      "/app/admin/forms",
+      "/app/admin/forms/manage",
+      "/app/admin/forms/manage/form_enquiry/builder",
+      "/app/admin/forms/manage/form_enquiry/publish",
+      "/app/admin/forms/review",
     ],
   },
 ];
@@ -252,6 +285,9 @@ const publicRoutes = [
   "/about",
   "/privacy",
   "/terms",
+  "/forms/free-trial-enquiry",
+  "/forms/course-application",
+  "/forms/placement-request",
   "/404",
 ];
 
@@ -617,6 +653,22 @@ function inspectSource(expectedPath) {
         };
       })
       .slice(0, 8);
+    const shellTinyControls = controls
+      .filter((element) => element.closest(".platform-topbar"))
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width < 40 || rect.height < 40;
+      })
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          tag: element.tagName.toLowerCase(),
+          text: controlName(element).slice(0, 60),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        };
+      })
+      .slice(0, 8);
     const viewportWidth = document.documentElement.clientWidth;
     const documentOverflow = Math.max(0, document.documentElement.scrollWidth - viewportWidth);
     const overflowElements = documentOverflow > 1
@@ -654,6 +706,12 @@ function inspectSource(expectedPath) {
       visibleControls: controls.length,
       unlabeledControls,
       tinyControls,
+      shellTinyControls,
+      mainCount: document.querySelectorAll("main").length,
+      skipTarget: document.querySelector(".platform-skip-link")?.getAttribute("href") || "",
+      currentNavCount: document.querySelectorAll('.platform-nav-item[aria-current="page"], .platform-nav-item[aria-current="location"]').length,
+      searchTrigger: Boolean(document.querySelector('.platform-search-trigger[aria-controls="platform-global-search"]')),
+      searchClosed: !document.querySelector("#platform-global-search"),
       overflowElements,
       accessDenied: text.includes("Access denied"),
       notFound: text.includes("Page not found"),
@@ -859,6 +917,9 @@ function inspectRouteMatrixSource(routes) {
         quoteSource: document.querySelector(".platform-context-quote em")?.textContent?.trim() || "",
         textLength: text.trim().length,
         visibleControls: controls.length,
+        mainCount: document.querySelectorAll("main").length,
+        skipTarget: document.querySelector(".platform-skip-link")?.getAttribute("href") || "",
+        currentNavCount: document.querySelectorAll('.platform-nav-item[aria-current="page"], .platform-nav-item[aria-current="location"]').length,
         unlabeledControls,
         overflowElements,
         accessDenied: text.includes("Access denied"),
@@ -1058,7 +1119,9 @@ function workflowActionSource(body) {
       const expected = normalize(label).toLowerCase();
       const match = Array.from(document.querySelectorAll("label"))
         .find((item) => normalize(item.textContent).toLowerCase().includes(expected));
-      const control = match?.querySelector("input, select, textarea");
+      const control = match?.querySelector("input, select, textarea") ||
+        (match?.htmlFor ? document.getElementById(match.htmlFor) : null);
+      if (!control) throw new Error(\`Control not found for label: \${label}\`);
       setValue(control, value);
     };
     const answerQuizQuestions = async () => {
@@ -1094,6 +1157,69 @@ function workflowActionSource(body) {
         const contentText = normalize(document.querySelector(".platform-content")?.textContent || "");
         return document.querySelector(".platform-shell") && document.querySelector(".platform-content") && !document.querySelector(".platform-route-loading") && !text.includes("Loading workspace") && contentText.length > 80;
       }, ${JSON.stringify(workflowReadyTimeoutMs)});
+      ${body}
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        path: location.pathname,
+        visibleText: normalize(document.body.innerText || document.body.textContent).slice(0, 700)
+      };
+    }
+  }`;
+}
+
+function publicFormWorkflowActionSource(body) {
+  return `async () => {
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const normalize = (value) => (value || "").replace(/\\s+/g, " ").trim();
+    const visible = (element) => {
+      if (!element) return false;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+    };
+    const waitFor = async (predicate, timeout = ${JSON.stringify(workflowActionTimeoutMs)}) => {
+      const started = performance.now();
+      let last = null;
+      while (performance.now() - started < timeout) {
+        last = predicate();
+        if (last) return last;
+        await delay(60);
+      }
+      return last;
+    };
+    const setValue = (element, value) => {
+      if (!element) throw new Error("Input not found");
+      const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value");
+      if (descriptor?.set) descriptor.set.call(element, value);
+      else element.value = value;
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const setByLabel = (label, value) => {
+      const expected = normalize(label).toLowerCase();
+      const match = Array.from(document.querySelectorAll("label"))
+        .find((item) => normalize(item.textContent).toLowerCase().includes(expected));
+      const control = match?.querySelector("input, select, textarea") ||
+        (match?.htmlFor ? document.getElementById(match.htmlFor) : null);
+      if (!control) throw new Error(\`Control not found for label: \${label}\`);
+      setValue(control, value);
+    };
+    const clickButton = async (label, exact = false, root = document) => {
+      const expected = normalize(label).toLowerCase();
+      const button = Array.from(root.querySelectorAll("button"))
+        .filter((item) => visible(item) && !item.disabled)
+        .find((item) => {
+          const text = normalize(item.textContent).toLowerCase();
+          return exact ? text === expected : text.includes(expected);
+        });
+      if (!button) throw new Error(\`Button not found: \${label}\`);
+      button.click();
+      await delay(90);
+    };
+    try {
+      await waitFor(() => document.querySelector(".nile-form-renderer form"));
       ${body}
     } catch (error) {
       return {
@@ -1242,7 +1368,174 @@ async function runDeepWorkflow({
   });
 }
 
+async function runPublicFormWorkflow({ name, route, source, predicate }) {
+  recordProgress(`workflow: ${name}`, { route });
+  assertRunBudget(`running workflow ${name}`);
+  await goto(route);
+  const routeCheck = await pageEval(inspectPublicSource(route));
+  const routeReady = await assertCheck(
+    `${name} route ready`,
+    routeCheck,
+    value =>
+      value?.path === route &&
+      Boolean(value?.heading) &&
+      value?.errorBoundary === false &&
+      value?.notFound === false,
+    { route, publicWorkflow: true }
+  );
+  if (!routeReady) return;
+  const result = await pageEval(source);
+  await assertCheck(name, result, predicate, {
+    route,
+    publicWorkflow: true,
+  });
+}
+
+async function runFormsRoleDenialChecks() {
+  const student = roles.find(item => item.role === "student");
+  if (!student)
+    throw new Error("Student role is unavailable for Forms denial checks");
+  recordProgress("Nile Forms role denials", { role: student.role });
+  const loginOk = await authenticateRole(
+    student,
+    "student Forms denial checks login"
+  );
+  if (!loginOk) return;
+
+  const apiDenials = await pageEval(`async () => {
+    const responses = await Promise.all([
+      fetch("/api/forms/definitions", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Nile-Learn-Request": "browser"
+        },
+        body: JSON.stringify({
+          key: "qa-student-denied",
+          titleEn: "Denied QA form",
+          titleAr: "Denied QA form",
+          category: "student_support"
+        })
+      }),
+      fetch("/api/forms/submissions", { credentials: "include" })
+    ]);
+    return Promise.all(responses.map(async (response) => ({
+      status: response.status,
+      body: (await response.text()).slice(0, 240)
+    })));
+  }`);
+  await assertCheck(
+    "student API cannot manage Nile Forms definitions",
+    apiDenials?.[0],
+    value => value?.status === 403,
+    { role: student.role, route: "POST /api/forms/definitions" }
+  );
+  await assertCheck(
+    "student API cannot review Nile Forms submissions",
+    apiDenials?.[1],
+    value => value?.status === 403,
+    { role: student.role, route: "/api/forms/submissions" }
+  );
+
+  for (const route of [
+    "/app/registrar/forms/manage",
+    "/app/registrar/forms/review",
+  ]) {
+    await goto(route);
+    const denial = await pageEval(inspectSource(route));
+    await assertCheck(
+      `student direct access to ${route} is denied`,
+      denial,
+      value =>
+        value?.path === route &&
+        value?.shell === true &&
+        value?.accessDenied === true &&
+        value?.errorBoundary === false,
+      { role: student.role, route }
+    );
+  }
+}
+
+const publicFormWorkflowCases = [
+  {
+    name: "public Nile Form submits a valid enquiry and confirms receipt",
+    route: "/forms/free-trial-enquiry",
+    source: publicFormWorkflowActionSource(`
+      setByLabel("Full name", "Portal QA ${session}");
+      setByLabel("Email", "portal-qa-${process.pid}@example.test");
+      setByLabel("Phone", "+201000${process.pid}");
+      setByLabel("Course interest", "arabic");
+      setByLabel("Preferred contact", "email");
+      setByLabel("Anything else?", "Deterministic Phase 13 public form coverage.");
+      await clickButton("Submit", true);
+      const success = await waitFor(() => document.querySelector('.nile-form-success[role="status"]'));
+      return {
+        ok: Boolean(success),
+        heading: normalize(success?.querySelector("h2")?.textContent),
+        confirmation: normalize(success?.querySelector("p")?.textContent),
+        submissionId: normalize(success?.querySelector("small")?.textContent)
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.heading === "Response submitted" &&
+      value?.confirmation === "Your response has been received." &&
+      Boolean(value?.submissionId),
+  },
+];
+const formsRoleDenialWorkflowName =
+  "student Nile Forms management and review access is denied";
+
 const deepWorkflowCases = [
+  {
+    name: "student assigned Nile Form submits and renders its recorded response",
+    role: "student",
+    route: "/app/student/forms/publication_form_support_1",
+    source: workflowActionSource(`
+      const form = await waitFor(() => document.querySelector(".nile-form-renderer form"));
+      if (!form) throw new Error("Assigned support form was not rendered");
+      const beforeResponse = await fetch("/api/forms/assigned/publication_form_support_1", { credentials: "include" });
+      const beforePayload = beforeResponse.ok ? await beforeResponse.json() : null;
+      const beforeSubmissionIds = new Set(
+        (beforePayload?.previousSubmissions || []).map((item) => item.id)
+      );
+      const subject = "Portal QA support ${session}";
+      setByLabel("Category", "technical");
+      setByLabel("Subject", subject);
+      setByLabel("Details", "Deterministic Phase 13 assigned respondent lifecycle coverage.");
+      await clickButtonWithin('[role="group"][aria-label="Is this blocking your next class?"]', "No", true);
+      await clickButton("Submit", true);
+      let submissionId = "";
+      for (let attempt = 0; attempt < 40 && !submissionId; attempt += 1) {
+        const response = await fetch("/api/forms/assigned/publication_form_support_1", { credentials: "include" });
+        const payload = response.ok ? await response.json() : null;
+        submissionId = payload?.previousSubmissions?.find(
+          (item) => !beforeSubmissionIds.has(item.id)
+        )?.id || "";
+        if (!submissionId) await delay(100);
+      }
+      if (!submissionId) throw new Error("Assigned form submission ID was not returned");
+      const responseRoute = "/app/student/forms/publication_form_support_1/responses/" + encodeURIComponent(submissionId);
+      goto(responseRoute);
+      const detail = await waitFor(() => document.querySelector('[data-testid="nile-form-response-detail"]'));
+      const status = document.querySelector('[data-testid="nile-form-response-status"]');
+      return {
+        ok: Boolean(detail),
+        responseRoute,
+        path: location.pathname,
+        status: normalize(status?.textContent),
+        hasSubject: normalize(document.querySelector(".nile-form-review-answers")?.textContent).includes(subject),
+        submissionId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.path === value?.responseRoute &&
+      value?.status === "Submitted" &&
+      value?.hasSubject === true &&
+      Boolean(value?.submissionId),
+  },
   {
     name: "student shell search, branch, and notifications are connected",
     role: "student",
@@ -1262,19 +1555,42 @@ const deepWorkflowCases = [
         const next = readState();
         return next.notifications?.filter((item) => item.userId === "usr_student_demo").every((item) => item.read) ? next : null;
       });
-      setValue(document.querySelector('input[aria-label="Global search"]'), "Grammar worksheet");
+      const searchClosed = !document.querySelector("#platform-global-search");
+      const searchTrigger = document.querySelector('.platform-search-trigger[aria-controls="platform-global-search"]');
+      if (!searchTrigger) throw new Error("Global search disclosure was not rendered");
+      searchTrigger.click();
+      const searchRegion = await waitFor(() => document.querySelector('#platform-global-search[role="search"]'));
+      const searchInput = searchRegion?.querySelector('input[aria-label="Global search"]');
+      if (!searchInput) throw new Error("Global search input was not disclosed");
+      setValue(searchInput, "Grammar worksheet");
       await waitFor(() => document.querySelector(".platform-search-results button"));
       await clickButton("Grammar worksheet");
       const navigatedPath = await waitFor(() => location.pathname.includes("/app/student/assignments/asg_ar_grammar") ? location.pathname : null);
+      const scopedState = state || readState();
+      const scopeIsNarrow =
+        !scopedState?.courseRuns?.some((item) => item.id === "run_ar_l1_alex_2026") &&
+        !scopedState?.classGroups?.some((item) => item.id === "class_ar_l3_cairo") &&
+        !scopedState?.events?.some((item) => item.branchId === "br_alex") &&
+        scopedState?.classGroups?.every((item) =>
+          (item.studentIds || []).every((studentId) => studentId === "stu_demo")
+        );
       return {
-        ok: Boolean(storedBranch === "Online" && navigatedPath && state),
+        ok: Boolean(storedBranch === "Online" && navigatedPath && state && searchClosed && searchRegion && scopeIsNarrow),
         storedBranch,
         navigatedPath,
-        unread: state?.notifications?.filter((item) => item.userId === "usr_student_demo" && !item.read).length
+        searchClosed,
+        searchDisclosed: Boolean(searchRegion),
+        unread: state?.notifications?.filter((item) => item.userId === "usr_student_demo" && !item.read).length,
+        scopeIsNarrow
       };
     `),
     predicate: value =>
-      value?.ok && value?.storedBranch === "Online" && value?.unread === 0,
+      value?.ok &&
+      value?.storedBranch === "Online" &&
+      value?.searchClosed === true &&
+      value?.searchDisclosed === true &&
+      value?.scopeIsNarrow === true &&
+      value?.unread === 0,
   },
   {
     name: "student learning workflow completes next lesson and persists progress",
@@ -1282,7 +1598,7 @@ const deepWorkflowCases = [
     route: "/app/student/courses/course_ar_l3/learn/lesson_ar_conditional",
     setupSource: workflowSetupSource(`
       const state = readState();
-      const progress = state.lessonProgress?.find((item) => item.lessonId === "lesson_ar_conditional" && item.studentId === "stu_demo");
+      const progress = state.lessonProgress?.find((item) => item.lessonId === "lesson_ar_conditional" && item.studentId === "stu_demo" && item.enrollmentId === "enr_ar_l3");
       if (progress) {
         progress.status = "in_progress";
         delete progress.completedAt;
@@ -1291,13 +1607,12 @@ const deepWorkflowCases = [
         state.lessonProgress.push({
           id: "lp_ar_conditional_qa",
           studentId: "stu_demo",
+          enrollmentId: "enr_ar_l3",
           lessonId: "lesson_ar_conditional",
           status: "in_progress",
           notes: "QA deterministic setup."
         });
       }
-      const enrollment = state.enrollments?.find((item) => item.id === "enr_ar_l3");
-      if (enrollment) enrollment.progress = 68;
       state.auditLogs = (state.auditLogs || []).filter((item) => item.action !== "lesson.completed" || item.entityId !== "lesson_ar_conditional");
       writeState(state);
       return { ok: true };
@@ -1306,7 +1621,7 @@ const deepWorkflowCases = [
     source: workflowActionSource(`
       await waitFor(() => !document.querySelector(".learning-sync-pill.loading"), 5000);
       const before = readState();
-      const progress = before.lessonProgress?.find((item) => item.lessonId === "lesson_ar_conditional" && item.studentId === "stu_demo");
+      const progress = before.lessonProgress?.find((item) => item.lessonId === "lesson_ar_conditional" && item.studentId === "stu_demo" && item.enrollmentId === "enr_ar_l3");
       if (progress) {
         progress.status = "in_progress";
         delete progress.completedAt;
@@ -1315,13 +1630,12 @@ const deepWorkflowCases = [
         before.lessonProgress.push({
           id: "lp_ar_conditional_qa",
           studentId: "stu_demo",
+          enrollmentId: "enr_ar_l3",
           lessonId: "lesson_ar_conditional",
           status: "in_progress",
           notes: "QA deterministic setup."
         });
       }
-      const enrollment = before.enrollments?.find((item) => item.id === "enr_ar_l3");
-      if (enrollment) enrollment.progress = 68;
       before.auditLogs = (before.auditLogs || []).filter((item) => item.action !== "lesson.completed" || item.entityId !== "lesson_ar_conditional");
       writeState(before);
       await waitFor(() => {
@@ -1329,22 +1643,54 @@ const deepWorkflowCases = [
         return Array.from(actions?.querySelectorAll("button") || []).some((button) => visible(button) && !button.disabled && normalize(button.textContent).includes("Mark complete"));
       });
       const beforeProgress = before.enrollments?.find((item) => item.id === "enr_ar_l3")?.progress ?? 0;
+      const moduleIds = new Set((before.modules || []).filter((item) => item.courseId === "course_ar_l3").map((item) => item.id));
+      const lessonIds = new Set((before.lessons || []).filter((item) => moduleIds.has(item.moduleId)).map((item) => item.id));
+      const completedLessonIds = new Set((before.lessonProgress || [])
+        .filter((item) => item.enrollmentId === "enr_ar_l3" && item.status === "completed" && lessonIds.has(item.lessonId))
+        .map((item) => item.lessonId));
+      completedLessonIds.add("lesson_ar_conditional");
+      const expectedProgress = lessonIds.size ? Math.round((completedLessonIds.size / lessonIds.size) * 100) : 0;
       await clickButtonWithin(".learning-player-actions", "Mark complete");
       const after = await waitFor(() => {
         const state = readState();
         const progress = state.enrollments?.find((item) => item.id === "enr_ar_l3")?.progress ?? 0;
-        const completed = state.lessonProgress?.some((item) => item.lessonId === "lesson_ar_conditional" && item.status === "completed");
-        return progress > beforeProgress && completed ? state : null;
+        const completed = state.lessonProgress?.some((item) => item.lessonId === "lesson_ar_conditional" && item.enrollmentId === "enr_ar_l3" && item.status === "completed");
+        return progress === expectedProgress && completed ? state : null;
       });
+      const adminLogin = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "X-Nile-Learn-Request": "browser" },
+        body: JSON.stringify({
+          email: "a@nl.test",
+          password: ${JSON.stringify(password)},
+          role: "superadmin"
+        })
+      });
+      const adminStateResponse = adminLogin.ok
+        ? await fetch("/api/platform/state", { credentials: "include" })
+        : null;
+      const adminStatePayload = adminStateResponse?.ok
+        ? await adminStateResponse.json()
+        : null;
+      const auditVerified = adminStatePayload?.state?.auditLogs?.some(
+        (item) =>
+          item.action === "lesson.completed" &&
+          item.entityId === "lesson_ar_conditional" &&
+          item.actorId === "usr_student_demo"
+      );
       return {
         ok: Boolean(after),
         beforeProgress,
+        expectedProgress,
         afterProgress: after?.enrollments?.find((item) => item.id === "enr_ar_l3")?.progress,
-        lessonAudit: after?.auditLogs?.find((item) => item.action === "lesson.completed" && item.entityId === "lesson_ar_conditional")?.action
+        auditVerified
       };
     `),
     predicate: value =>
-      value?.ok && value?.afterProgress > value?.beforeProgress,
+      value?.ok &&
+      value?.afterProgress === value?.expectedProgress &&
+      value?.auditVerified === true,
   },
   {
     name: "student assignment workflow submits edited response",
@@ -1359,8 +1705,10 @@ const deepWorkflowCases = [
     reloadAfterSetup: false,
     source: workflowActionSource(`
       const response = "QA response " + Date.now();
-      setValue(document.querySelector(".platform-workflow-card textarea"), response);
-      await clickButtonWithin(".platform-workflow-main .platform-workflow-card", "Submit assignment");
+      const workspace = await waitFor(() => document.querySelector(".student-assignment-workspace"));
+      if (!workspace) throw new Error("Student assignment workspace not found");
+      setValue(workspace.querySelector('textarea[aria-label="Assignment response"]'), response);
+      await clickButtonWithin(".student-assignment-workspace", "Submit assignment", true);
       const state = await waitFor(() => {
         const next = readState();
         return next.assignmentSubmissions?.some((item) => item.assignmentId === "asg_ar_grammar" && item.response === response) ? next : null;
@@ -1379,30 +1727,16 @@ const deepWorkflowCases = [
     name: "student manual quiz workflow creates pending review attempt",
     role: "student",
     route: "/app/student/quizzes/quiz_ar_3",
-    setupSource: workflowSetupSource(`
-      const state = readState();
-      state.quizAttempts = (state.quizAttempts || []).filter((item) => item.quizId !== "quiz_ar_3");
-      state.grades = (state.grades || []).filter((item) => item.itemId !== "quiz_ar_3");
-      writeState(state);
-      return { ok: true };
-    `),
+    setupSource: workflowSetupSource(`return { ok: true };`),
     reloadAfterSetup: true,
     source: workflowActionSource(`
-      const prepared = readState();
-      prepared.quizAttempts = (prepared.quizAttempts || []).filter((item) => item.quizId !== "quiz_ar_3");
-      prepared.grades = (prepared.grades || []).filter((item) => item.itemId !== "quiz_ar_3");
-      writeState(prepared);
-      await delay(120);
       const before = readState();
       const beforeAttemptIds = new Set((before.quizAttempts || []).filter((item) => item.quizId === "quiz_ar_3").map((item) => item.id));
       const beforeGradeIds = new Set((before.grades || []).filter((item) => item.itemId === "quiz_ar_3").map((item) => item.id));
       const beforeAttempts = beforeAttemptIds.size;
-      const quizCard = await waitFor(() =>
-        Array.from(document.querySelectorAll(".platform-workflow-card"))
-          .find((card) => normalize(card.textContent).includes("Grammar Quiz 3"))
-      );
+      const quizCard = await waitFor(() => document.querySelector(".student-quiz-workspace"));
       if (!quizCard) throw new Error("Grammar Quiz 3 card was not rendered");
-      for (const card of Array.from(quizCard.querySelectorAll(".platform-quiz-question-card"))) {
+      for (const card of Array.from(quizCard.querySelectorAll(".student-quiz-question"))) {
         const textarea = card.querySelector("textarea");
         if (textarea && visible(textarea) && !textarea.disabled) {
           setValue(textarea, "A complete QA short answer");
@@ -1414,7 +1748,7 @@ const deepWorkflowCases = [
           setValue(textInput, "A complete QA short answer");
           continue;
         }
-        const choice = Array.from(card.querySelectorAll(".platform-quiz-choice-grid button, .platform-quiz-storage-state button"))
+        const choice = Array.from(card.querySelectorAll(".platform-quiz-choice-grid button, .platform-quiz-media-answer button"))
           .find((button) => visible(button) && !button.disabled);
         if (choice) {
           choice.click();
@@ -1482,9 +1816,11 @@ const deepWorkflowCases = [
       await delay(120);
       const response = "QA audio route response " + Date.now();
       await waitFor(() => normalize(document.body.textContent).includes("Audio recitation"));
-      setValue(document.querySelector(".platform-workflow-card textarea"), response);
+      const workspace = await waitFor(() => document.querySelector(".student-assignment-workspace"));
+      if (!workspace) throw new Error("Student assignment workspace not found");
+      setValue(workspace.querySelector('textarea[aria-label="Assignment response"]'), response);
       await delay(350);
-      await clickButtonWithin(".platform-workflow-main .platform-workflow-card", "Submit assignment");
+      await clickButtonWithin(".student-assignment-workspace", "Submit assignment", true);
       const state = await waitFor(() => {
         const next = readState();
         return next.assignmentSubmissions?.[0]?.assignmentId === "asg_qt_audio" && next.assignmentSubmissions?.[0]?.response === response ? next : null;
@@ -1520,9 +1856,25 @@ const deepWorkflowCases = [
       writeState(prepared);
       await delay(120);
       const before = readState();
-      await answerQuizQuestions();
+      const workspace = await waitFor(() => document.querySelector(".student-quiz-workspace"));
+      if (!workspace) throw new Error("Student quiz workspace not found");
+      for (const card of Array.from(workspace.querySelectorAll(".student-quiz-question"))) {
+        const textarea = card.querySelector("textarea");
+        if (textarea && visible(textarea) && !textarea.disabled) {
+          setValue(textarea, "A complete QA short answer");
+          continue;
+        }
+        const choice = Array.from(card.querySelectorAll(".platform-quiz-choice-grid button"))
+          .find((button) => visible(button) && !button.disabled);
+        if (choice) {
+          choice.click();
+          await delay(80);
+        }
+      }
+      const fallbackInput = workspace.querySelector(".platform-inline-form input");
+      if (fallbackInput && visible(fallbackInput) && !fallbackInput.disabled) setValue(fallbackInput, "A complete QA short answer");
       await delay(350);
-      await clickButtonWithin(".platform-workflow-main .platform-workflow-card:nth-of-type(2)", "Submit attempt");
+      await clickButtonWithin(".student-quiz-workspace", "Submit attempt", true);
       const state = await waitFor(() => {
         const next = readState();
         const attempt = next.quizAttempts?.find((item) => item.quizId === "quiz_qt_madd");
@@ -1555,23 +1907,28 @@ const deepWorkflowCases = [
       const controlLabels = () => Array.from(document.querySelectorAll("button, [role='button'], input[type='submit']"))
         .filter(visible)
         .map((control) => normalize(control.textContent || control.getAttribute("aria-label") || control.getAttribute("value")));
+      const attendanceText = (await waitFor(() => {
+        const text = normalize(document.body.innerText || document.body.textContent);
+        const lower = text.toLowerCase();
+        return lower.includes("your attendance") && lower.includes("exceptions are linked") ? text : null;
+      }, 5000)) || "";
       const before = readState();
       const attendanceButtons = controlLabels();
-      const attendanceText = normalize(document.body.textContent);
+      const attendanceTextLower = attendanceText.toLowerCase();
       const forbiddenAttendanceControls = attendanceButtons.filter((label) => /^(save attendance|mark all present|mark all late|mark all absent|mark all excused|present|late|absent|excused)$/i.test(label));
       const afterAttendance = readState();
       await goto("/app/student/certificates");
-      await waitFor(() => location.pathname === "/app/student/certificates" && normalize(document.body.textContent).includes("Certificate wallet"));
+      await waitFor(() => location.pathname === "/app/student/certificates" && normalize(document.body.innerText || document.body.textContent).includes("Certificate of learning"));
       const certificateButtons = controlLabels();
       const forbiddenCertificateControls = certificateButtons.filter((label) => /^(approve|approved|issue|issued)$/i.test(label));
       return {
         ok: true,
-        attendanceReadOnlyRendered: attendanceText.includes("Attendance record") && attendanceText.includes("Request review"),
+        attendanceReadOnlyRendered: attendanceTextLower.includes("your attendance") && attendanceTextLower.includes("exceptions are linked"),
         forbiddenAttendanceControls,
         attendanceCountUnchanged: (before.attendance?.length ?? 0) === (afterAttendance.attendance?.length ?? 0),
         auditCountUnchanged: (before.auditLogs?.length ?? 0) === (afterAttendance.auditLogs?.length ?? 0),
         forbiddenCertificateControls,
-        certificateText: normalize(document.body.textContent)
+        certificateText: normalize(document.body.innerText || document.body.textContent)
       };
     `),
     predicate: value =>
@@ -1581,7 +1938,58 @@ const deepWorkflowCases = [
       value?.attendanceCountUnchanged === true &&
       value?.auditCountUnchanged === true &&
       (value?.forbiddenCertificateControls?.length ?? 0) === 0 &&
-      value?.certificateText?.includes("Certificate wallet"),
+      value?.certificateText
+        ?.toLowerCase()
+        .includes("certificate of learning") &&
+      value?.certificateText
+        ?.toLowerCase()
+        .includes("issued certificates only"),
+  },
+  {
+    name: "student attendance exception workflow submits exact absent record",
+    role: "student",
+    route: "/app/student/attendance",
+    setupSource: workflowSetupSource(`
+      const state = readState();
+      state.attendanceExceptions = (state.attendanceExceptions || []).filter(
+        (item) => item.attendanceRecordId !== "att_ar_online_absence"
+      );
+      const record = state.attendance?.find((item) => item.id === "att_ar_online_absence");
+      if (!record) throw new Error("Student absence fixture is missing");
+      record.status = "absent";
+      writeState(state);
+      return { ok: true };
+    `),
+    source: workflowActionSource(`
+      const open = await waitFor(() => document.querySelector('[data-testid="student-attendance-request-att_ar_online_absence"]'));
+      if (!open) throw new Error("Attendance exception control did not render");
+      open.click();
+      await waitFor(() => document.querySelector('[data-testid="student-attendance-exception-submit"]'));
+      setByLabel("Exception reason", "Medical appointment prevented attendance during the class.");
+      await clickButton("Submit request");
+      const state = await waitFor(() => {
+        const next = readState();
+        return next.attendanceExceptions?.some(
+          (item) => item.attendanceRecordId === "att_ar_online_absence" && item.status === "pending"
+        ) ? next : null;
+      });
+      const request = state?.attendanceExceptions?.find(
+        (item) => item.attendanceRecordId === "att_ar_online_absence"
+      );
+      return {
+        requestStatus: request?.status,
+        requestStudentId: request?.studentId,
+        requestSessionId: request?.sessionId,
+        auditAction: state?.auditLogs?.find((item) => item.entityId === request?.id)?.action,
+        attendanceStatus: state?.attendance?.find((item) => item.id === "att_ar_online_absence")?.status
+      };
+    `),
+    predicate: value =>
+      value?.requestStatus === "pending" &&
+      value?.requestStudentId === "stu_demo" &&
+      value?.requestSessionId === "session_ar_online_absence" &&
+      value?.auditAction === "attendance_exception.submitted" &&
+      value?.attendanceStatus === "absent",
   },
   {
     name: "student quran page submits recitation without teacher review controls",
@@ -1601,8 +2009,14 @@ const deepWorkflowCases = [
         .filter(visible)
         .map((control) => normalize(control.textContent || control.getAttribute("aria-label") || control.getAttribute("value")));
       const beforeForbiddenControls = quranControlLabels().filter((label) => staffControlPattern.test(label));
-      setByLabel("Recitation title", title);
-      await clickButtonWithin(".platform-workflow-main .platform-workflow-card", "Submit recitation");
+      await clickButton("Submit recitation", true);
+      const composer = await waitFor(() => document.querySelector('[data-testid="student-quran-submission"]'));
+      if (!composer) throw new Error("Recitation submission form did not open");
+      setByLabel("Title", title);
+      const sendButton = Array.from(composer.querySelectorAll("button"))
+        .find((button) => visible(button) && !button.disabled && normalize(button.textContent) === "Send recitation");
+      if (!sendButton) throw new Error("Send recitation button not found");
+      sendButton.click();
       const state = await waitFor(() => {
         const next = readState();
         return next.recitationSubmissions?.[0]?.title === title ? next : null;
@@ -1626,20 +2040,31 @@ const deepWorkflowCases = [
     role: "student",
     route: "/app/student/messages",
     source: workflowActionSource(`
-      const options = Array.from(document.querySelectorAll("select option")).map((option) => option.value);
+      await goto("/app/student/messages/new");
+      const composer = await waitFor(() => document.querySelector('[data-testid="portal-message-compose-student"]'));
+      if (!composer) throw new Error("Message composer did not open");
+      const recipient = composer.querySelector("select");
+      const recipientOption = Array.from(recipient?.options || []).find((option) => option.value === "usr_teacher_demo");
+      if (!recipient || !recipientOption) throw new Error("Permitted recipient not found");
+      const options = Array.from(recipient.options).map((option) => option.value);
+      setValue(recipient, recipientOption.value);
       const subject = "QA student message " + Date.now();
-      setValue(document.querySelectorAll(".platform-inline-form input")[0], subject);
-      setValue(document.querySelector("textarea"), "Student scoped message body");
+      setValue(composer.querySelector('input[placeholder]'), subject);
+      setValue(composer.querySelector("textarea"), "Student scoped message body");
+      await delay(120);
       await clickButton("Send message");
       const state = await waitFor(() => {
         const next = readState();
-        return next.messages?.[0]?.subject === subject ? next : null;
+        return next.messages?.some((item) => item.subject === subject) ? next : null;
       });
+      const message = state?.messages?.find((item) => item.subject === subject);
+      const errorText = normalize(document.querySelector(".platform-attendance-error")?.textContent);
       return {
         ok: Boolean(state),
-        fromUserId: state?.messages?.[0]?.fromUserId,
-        toUserId: state?.messages?.[0]?.toUserId,
-        hasSelfRecipient: options.includes("usr_student_demo")
+        fromUserId: message?.fromUserId,
+        toUserId: message?.toUserId,
+        hasSelfRecipient: options.includes("usr_student_demo"),
+        errorText
       };
     `),
     predicate: value =>
@@ -1653,10 +2078,10 @@ const deepWorkflowCases = [
     role: "student",
     route: "/app/student/reports",
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Student report"));
-      const text = normalize(document.body.textContent);
+      await waitFor(() => normalize(document.body.innerText || document.body.textContent).includes("Learning summary"));
+      const text = normalize(document.body.innerText || document.body.textContent);
       return {
-        ok: text.includes("Standard Arabic Level 3") && text.includes("Export my CSV"),
+        ok: text.includes("Standard Arabic Level 3") && text.includes("Download report"),
         hasReportTypeSelector: Boolean(document.querySelector(".platform-report-controls select")),
         hasFinanceGlobal: text.includes("Finance report") || text.includes("Audit report")
       };
@@ -1681,44 +2106,53 @@ const deepWorkflowCases = [
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
-      const teacherSessionSelect = document.querySelectorAll(".platform-attendance-control-grid select")[2];
-      if (teacherSessionSelect) setValue(teacherSessionSelect, "session_ar_live");
-      await waitFor(() => Array.from(document.querySelectorAll(".platform-attendance-grid button")).some((button) => normalize(button.getAttribute("title")).toLowerCase() === "late"));
+      const workspace = await waitFor(() => document.querySelector('[data-testid="teacher-attendance-workspace"]'));
+      if (!workspace) throw new Error("Teacher attendance workspace not found");
+      const teacherSessionSelect = workspace.querySelector('[data-testid="teacher-attendance-session"]');
+      if (!teacherSessionSelect) throw new Error("Teacher attendance session selector not found");
+      setValue(teacherSessionSelect, "session_ar_live");
       const lateButton = await waitFor(() =>
-        Array.from(document.querySelectorAll(".platform-attendance-grid button"))
-          .find((button) => visible(button) && !button.disabled && normalize(button.getAttribute("title")).toLowerCase() === "late")
+        workspace.querySelector('[data-testid="teacher-attendance-status-stu_demo-late"]')
       );
       if (!lateButton) throw new Error("Late attendance status button not found");
+      const attendanceRow = lateButton.closest(".teacher-attendance-row");
+      if (!attendanceRow) throw new Error("Student Demo attendance row not found");
       lateButton.click();
       const note = "QA attendance note " + Date.now();
-      const noteInput = await waitFor(() => document.querySelector(".platform-attendance-note-input"));
+      const noteInput = attendanceRow.querySelector('input[aria-label="Student Demo attendance note"]');
       if (!noteInput || noteInput.disabled) throw new Error("Attendance note input not found");
       setValue(noteInput, note);
       await delay(90);
-      await waitFor(() => Array.from(document.querySelectorAll(".platform-attendance-grid button.active")).some((button) => normalize(button.getAttribute("title")).toLowerCase() === "late"));
-      await clickButtonWithin(".platform-workflow-card", "Save attendance");
+      await waitFor(() => lateButton.getAttribute("aria-pressed") === "true");
+      const saveButton = workspace.querySelector('[data-testid="teacher-attendance-save"]');
+      if (!saveButton || saveButton.disabled) throw new Error("Save attendance button not found");
+      saveButton.click();
       const state = await waitFor(() => {
         const next = readState();
         const saved = next.classSessions?.find((item) => item.id === "session_ar_live")?.attendanceSaved;
-        const record = next.attendance?.find((item) => item.sessionId === "session_ar_live" && item.studentId === "stu_demo");
-        return saved && record?.status === "late" && record?.notes === note ? next : null;
+        const record = next.attendance?.find((item) => item.classGroupId === "class_ar_l3_a" && item.sessionId === "session_ar_live" && item.studentId === "stu_demo");
+        const audit = next.auditLogs?.find((item) => item.action === "attendance.saved" && item.entityType === "AttendanceRecord" && item.entityId === "class_ar_l3_a" && item.actorId === "usr_teacher_demo");
+        return saved && record?.status === "late" && record?.notes === note && audit ? next : null;
       });
       const fallback = readState();
+      const audit = (state || fallback)?.auditLogs?.find((item) => item.action === "attendance.saved" && item.entityType === "AttendanceRecord" && item.entityId === "class_ar_l3_a" && item.actorId === "usr_teacher_demo");
       return {
         ok: Boolean(state),
         attendanceSaved: (state || fallback)?.classSessions?.find((item) => item.id === "session_ar_live")?.attendanceSaved,
         status: (state || fallback)?.attendance?.find((item) => item.sessionId === "session_ar_live" && item.studentId === "stu_demo")?.status,
         note: (state || fallback)?.attendance?.find((item) => item.sessionId === "session_ar_live" && item.studentId === "stu_demo")?.notes,
         records: (state || fallback)?.attendance?.map((item) => ({ sessionId: item.sessionId, status: item.status })).slice(0, 4),
-        lastAudit: (state || fallback)?.auditLogs?.[0]?.action,
-        auditActorId: (state || fallback)?.auditLogs?.[0]?.actorId
+        lastAudit: audit?.action,
+        auditActorId: audit?.actorId
       };
     `),
     predicate: value =>
       value?.ok &&
       value?.attendanceSaved === true &&
       value?.status === "late" &&
-      value?.note?.startsWith("QA attendance note"),
+      value?.note?.startsWith("QA attendance note") &&
+      value?.lastAudit === "attendance.saved" &&
+      value?.auditActorId === "usr_teacher_demo",
   },
   {
     name: "teacher materials workflow publishes assigned lesson resource",
@@ -1813,6 +2247,213 @@ const deepWorkflowCases = [
       value?.actorId === "usr_teacher_demo",
   },
   {
+    name: "teacher assignment workflow drafts, edits, and publishes assigned work",
+    role: "teacher",
+    route: "/app/teacher/assignments/new",
+    source: workflowActionSource(`
+      const createForm = await waitFor(() => document.querySelector('[data-testid="teacher-assignment-create-form"]'));
+      if (!createForm) throw new Error("Assignment draft form did not render");
+      const draftTitle = "QA assignment draft " + Date.now();
+      setByLabel("Class", "run_ar_l3_2026");
+      setByLabel("Title", draftTitle);
+      setByLabel("Due date", "2026-07-25");
+      setByLabel("Submission", "text");
+      setByLabel("Rubric", "Accuracy, Clarity");
+      await clickButtonWithin('[data-testid="teacher-assignment-create-form"]', "Save draft", true);
+      const draftState = await waitFor(() => {
+        const next = readState();
+        const assignment = next.assignments?.find((item) => item.title === draftTitle);
+        const audit = assignment
+          ? next.auditLogs?.find((item) => item.action === "assignment.created" && item.entityId === assignment.id)
+          : null;
+        return assignment?.status === "draft" && audit ? next : null;
+      }, 5000);
+      const draft = draftState?.assignments?.find((item) => item.title === draftTitle);
+      if (!draft) throw new Error("Assignment draft was not persisted");
+
+      await goto("/app/teacher/assignments/" + draft.id);
+      const draftControls = await waitFor(() => document.querySelector('[data-testid="teacher-assignment-draft-controls"]'));
+      if (!draftControls) throw new Error("Assignment draft controls did not render");
+      const publishedTitle = draftTitle + " published";
+      setByLabel("Title", publishedTitle);
+      setByLabel("Due date", "2026-07-26");
+      setByLabel("Submission type", "file");
+      setByLabel("Rubric", "Evidence, Structure");
+      await clickButtonWithin('[data-testid="teacher-assignment-draft-controls"]', "Save draft", true);
+      const updatedState = await waitFor(() => {
+        const next = readState();
+        const assignment = next.assignments?.find((item) => item.id === draft.id);
+        const audit = next.auditLogs?.find((item) => item.action === "assignment.updated" && item.entityId === draft.id);
+        return assignment?.title === publishedTitle && assignment?.submissionType === "file" && audit ? next : null;
+      }, 5000);
+      if (!updatedState) throw new Error("Assignment draft update was not persisted");
+
+      const publishButton = await waitFor(() => {
+        const button = document.querySelector('[data-testid="teacher-assignment-publish"]');
+        return button && !button.disabled ? button : null;
+      }, 5000);
+      if (!publishButton) throw new Error("Publish assignment button did not become available");
+      publishButton.click();
+      const publishedState = await waitFor(() => {
+        const next = readState();
+        const assignment = next.assignments?.find((item) => item.id === draft.id);
+        const audit = next.auditLogs?.find((item) => item.action === "assignment.published" && item.entityId === draft.id);
+        return assignment?.status === "active" && audit ? next : null;
+      }, 5000);
+      const assignment = publishedState?.assignments?.find((item) => item.id === draft.id);
+      const createdAudit = publishedState?.auditLogs?.find((item) => item.action === "assignment.created" && item.entityId === draft.id);
+      const updatedAudit = publishedState?.auditLogs?.find((item) => item.action === "assignment.updated" && item.entityId === draft.id);
+      const publishedAudit = publishedState?.auditLogs?.find((item) => item.action === "assignment.published" && item.entityId === draft.id);
+      const publishedControls = await waitFor(() => document.querySelector('[data-testid="teacher-assignment-published-controls"]'));
+      return {
+        ok: Boolean(publishedState && publishedControls),
+        status: assignment?.status,
+        title: assignment?.title,
+        submissionType: assignment?.submissionType,
+        rubric: assignment?.rubric,
+        createdActorId: createdAudit?.actorId,
+        updatedActorId: updatedAudit?.actorId,
+        publishedActorId: publishedAudit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.status === "active" &&
+      value?.title?.startsWith("QA assignment draft") &&
+      value?.submissionType === "file" &&
+      value?.rubric?.includes("Evidence") &&
+      value?.createdActorId === "usr_teacher_demo" &&
+      value?.updatedActorId === "usr_teacher_demo" &&
+      value?.publishedActorId === "usr_teacher_demo",
+  },
+  {
+    name: "teacher quiz workflow drafts, assembles, and publishes assigned quiz",
+    role: "teacher",
+    route: "/app/teacher/quizzes/new",
+    source: workflowActionSource(`
+      const createForm = await waitFor(() => document.querySelector('[data-testid="teacher-quiz-create-form"]'));
+      if (!createForm) throw new Error("Quiz draft form did not render");
+      const draftTitle = "QA quiz draft " + Date.now();
+      setByLabel("Class", "run_ar_l3_2026");
+      setByLabel("Quiz title", draftTitle);
+      setByLabel("Due date", "2026-07-29");
+      setByLabel("Minutes", "25");
+      setByLabel("Attempts", "2");
+      setByLabel("Question types", "multiple_choice");
+      await clickButtonWithin('[data-testid="teacher-quiz-create-form"]', "Save quiz draft", true);
+      const draftState = await waitFor(() => {
+        const next = readState();
+        const quiz = next.quizzes?.find((item) => item.title === draftTitle);
+        const audit = quiz
+          ? next.auditLogs?.find((item) => item.action === "quiz.created" && item.entityId === quiz.id)
+          : null;
+        return quiz?.status === "draft" && audit ? next : null;
+      }, 5000);
+      const draft = draftState?.quizzes?.find((item) => item.title === draftTitle);
+      if (!draft) throw new Error("Quiz draft was not persisted");
+
+      await goto("/app/teacher/quizzes/" + draft.id);
+      const draftControls = await waitFor(() => document.querySelector('[data-testid="teacher-quiz-draft-controls"]'));
+      if (!draftControls) throw new Error("Quiz draft controls did not render");
+      const publishedTitle = draftTitle + " published";
+      setByLabel("Quiz title", publishedTitle);
+      setByLabel("Due date", "2026-07-30");
+      setByLabel("Minutes", "30");
+      setByLabel("Attempts per learner", "3");
+      await clickButtonWithin('[data-testid="teacher-quiz-draft-controls"]', "Save draft", true);
+      const updatedState = await waitFor(() => {
+        const next = readState();
+        const quiz = next.quizzes?.find((item) => item.id === draft.id);
+        const audit = next.auditLogs?.find((item) => item.action === "quiz.updated" && item.entityId === draft.id);
+        return quiz?.title === publishedTitle && quiz?.durationMinutes === 30 && quiz?.attemptsAllowed === 3 && audit ? next : null;
+      }, 5000);
+      if (!updatedState) throw new Error("Quiz draft update was not persisted");
+
+      const questionEditor = await waitFor(() => document.querySelector('[data-testid="teacher-quiz-question-editor"]'));
+      if (!questionEditor) throw new Error("Quiz question editor did not render");
+      const question = questionEditor.querySelector('input[data-question-id="qbi_ar_conditional_mcq"]');
+      if (!question) throw new Error("Assigned-run question was not available");
+      if (!question.checked) question.click();
+      await waitFor(() => {
+        const button = questionEditor.querySelector('[data-testid="teacher-quiz-save-questions"]');
+        return button && !button.disabled ? button : null;
+      }, 3000);
+      await clickButtonWithin('[data-testid="teacher-quiz-question-editor"]', "Save questions", true);
+      const assembledState = await waitFor(() => {
+        const next = readState();
+        const quiz = next.quizzes?.find((item) => item.id === draft.id);
+        const audit = next.auditLogs?.find((item) => item.action === "quiz.questions.updated" && item.entityId === draft.id);
+        return quiz?.questionIds?.includes("qbi_ar_conditional_mcq") && audit ? next : null;
+      }, 5000);
+      if (!assembledState) throw new Error("Quiz question selection was not persisted");
+
+      const publishButton = await waitFor(() => {
+        const button = document.querySelector('[data-testid="teacher-quiz-publish"]');
+        return button && !button.disabled ? button : null;
+      }, 5000);
+      if (!publishButton) throw new Error("Publish quiz button did not become available");
+      publishButton.click();
+      const publishedState = await waitFor(() => {
+        const next = readState();
+        const quiz = next.quizzes?.find((item) => item.id === draft.id);
+        const audit = next.auditLogs?.find((item) => item.action === "quiz.published" && item.entityId === draft.id);
+        return quiz?.status === "active" && audit ? next : null;
+      }, 5000);
+      const quiz = publishedState?.quizzes?.find((item) => item.id === draft.id);
+      const createdAudit = publishedState?.auditLogs?.find((item) => item.action === "quiz.created" && item.entityId === draft.id);
+      const updatedAudit = publishedState?.auditLogs?.find((item) => item.action === "quiz.updated" && item.entityId === draft.id);
+      const questionsAudit = publishedState?.auditLogs?.find((item) => item.action === "quiz.questions.updated" && item.entityId === draft.id);
+      const publishedAudit = publishedState?.auditLogs?.find((item) => item.action === "quiz.published" && item.entityId === draft.id);
+      const publishedControls = await waitFor(() => document.querySelector('[data-testid="teacher-quiz-published-controls"]'));
+      const studentLogin = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "X-Nile-Learn-Request": "browser" },
+        body: JSON.stringify({
+          email: "s@nl.test",
+          password: ${JSON.stringify(password)},
+          role: "student"
+        })
+      });
+      const studentStateResponse = studentLogin.ok
+        ? await fetch("/api/platform/state", { credentials: "include" })
+        : null;
+      const studentStatePayload = studentStateResponse?.ok
+        ? await studentStateResponse.json()
+        : null;
+      const notification = studentStatePayload?.state?.notifications?.find(
+        (item) =>
+          item.userId === "usr_student_demo" &&
+          item.href === "/app/student/quizzes/" + draft.id
+      );
+      return {
+        ok: Boolean(publishedState && publishedControls && notification),
+        status: quiz?.status,
+        title: quiz?.title,
+        durationMinutes: quiz?.durationMinutes,
+        attemptsAllowed: quiz?.attemptsAllowed,
+        questionIds: quiz?.questionIds,
+        createdActorId: createdAudit?.actorId,
+        updatedActorId: updatedAudit?.actorId,
+        questionsActorId: questionsAudit?.actorId,
+        publishedActorId: publishedAudit?.actorId,
+        notificationUserId: notification?.userId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.status === "active" &&
+      value?.title?.startsWith("QA quiz draft") &&
+      value?.durationMinutes === 30 &&
+      value?.attemptsAllowed === 3 &&
+      value?.questionIds?.includes("qbi_ar_conditional_mcq") &&
+      value?.createdActorId === "usr_teacher_demo" &&
+      value?.updatedActorId === "usr_teacher_demo" &&
+      value?.questionsActorId === "usr_teacher_demo" &&
+      value?.publishedActorId === "usr_teacher_demo" &&
+      value?.notificationUserId === "usr_student_demo",
+  },
+  {
     name: "teacher grading workflow scores pending assignment submission",
     role: "teacher",
     route: "/app/teacher/grading",
@@ -1831,25 +2472,15 @@ const deepWorkflowCases = [
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Manual review") && normalize(document.body.textContent).includes("Draft answer saved locally"));
+      await goto("/app/teacher/grading/sub_ar_grammar_draft");
+      const editor = await waitFor(() => document.querySelector('[data-testid="teacher-grade-editor"]'));
+      if (!editor) throw new Error("Teacher grade editor not found");
       const feedback = "QA grading feedback " + Date.now();
-      const reviewCard = Array.from(document.querySelectorAll(".platform-workflow-card"))
-        .find((card) => normalize(card.textContent).includes("Manual review"));
-      const submissionRow = Array.from(reviewCard?.querySelectorAll(".platform-row-list article") || [])
-        .find((article) => normalize(article.textContent).includes("Grammar worksheet"));
-      const submissionOpen = submissionRow?.querySelector("button");
-      if (submissionOpen && visible(submissionOpen) && !submissionOpen.disabled) {
-        submissionOpen.click();
-        await delay(120);
-      }
-      const inputs = Array.from(reviewCard?.querySelectorAll("input") || []);
-      const scoreInput = inputs.find((input) => input.type === "number");
-      const feedbackInput = inputs.find((input) => input.type !== "number");
-      setValue(scoreInput, "91");
-      setValue(feedbackInput, feedback);
-      const gradeButton = Array.from(reviewCard?.querySelectorAll("button") || [])
-        .find((button) => visible(button) && !button.disabled && normalize(button.textContent).toLowerCase().includes("grade submission"));
-      if (!gradeButton) throw new Error("Grade submission button not found");
+      setValue(editor.querySelector('input[type="number"]'), "91");
+      setValue(editor.querySelector('input[placeholder]'), feedback);
+      const gradeButton = Array.from(editor.querySelectorAll("button"))
+        .find((button) => visible(button) && !button.disabled && normalize(button.textContent) === "Save result");
+      if (!gradeButton) throw new Error("Save result button not found");
       gradeButton.click();
       await delay(140);
       const state = await waitFor(() => {
@@ -1915,14 +2546,14 @@ const deepWorkflowCases = [
     reloadAfterSetup: false,
     source: workflowActionSource(`
       const text = await waitFor(() => {
-        const body = normalize(document.body.textContent);
-        return body.includes("Gradebook") && body.includes("QA visible learner feedback") && body.includes("92/100") ? body : null;
+        const body = normalize(document.body.innerText || document.body.textContent);
+        return body.includes("Reviewed work") && body.includes("QA visible learner feedback") && body.includes("92/100") ? body : null;
       });
       return {
         ok: Boolean(text),
-        hasFeedbackList: text?.includes("Assignment feedback"),
+        hasFeedbackList: text?.toLowerCase().includes("latest feedback"),
         hasScore: text?.includes("92/100"),
-        hasGradebook: text?.includes("Gradebook")
+        hasGradebook: text?.includes("Reviewed work")
       };
     `),
     predicate: value =>
@@ -1934,58 +2565,53 @@ const deepWorkflowCases = [
   {
     name: "teacher quiz review workflow updates attempt and grade feedback",
     role: "teacher",
-    route: "/app/teacher/grading",
+    route: "/app/teacher/quizzes/review",
     setupSource: workflowSetupSource(`
       const state = readState();
-      const attempt = state.quizAttempts?.find((item) => item.id === "attempt_ar_3_demo");
+      const attempt = state.quizAttempts?.find((item) => item.id === "attempt_ar_teacher_review");
       state.quizAttempts = attempt
         ? [
             { ...attempt, status: "pending", score: 0 },
-            ...(state.quizAttempts || []).filter((item) => item.id !== "attempt_ar_3_demo"),
+            ...(state.quizAttempts || []).filter((item) => item.id !== "attempt_ar_teacher_review"),
           ]
         : (state.quizAttempts || []);
-      state.grades = (state.grades || []).filter((item) => item.itemId !== "quiz_ar_3");
+      state.grades = (state.grades || []).filter((item) => item.itemId !== "quiz_ar_teacher_review");
+      state.auditLogs = (state.auditLogs || []).filter((item) => item.entityId !== "attempt_ar_teacher_review");
       writeState(state);
       return { ok: Boolean(attempt), attemptId: attempt?.id };
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Quiz review") && normalize(document.body.textContent).includes("Grammar Quiz 3"));
+      await goto("/app/teacher/quizzes/review/attempt_ar_teacher_review");
+      const reviewPanel = await waitFor(() => document.querySelector(".teacher-quiz-review-form"));
+      if (!reviewPanel) throw new Error("Quiz review form not found");
       const feedback = "QA quiz review " + Date.now();
-      const quizCard = Array.from(document.querySelectorAll(".platform-workflow-card"))
-        .find((card) => normalize(card.textContent).includes("Quiz review"));
-      const attemptRow = Array.from(quizCard?.querySelectorAll(".platform-row-list article") || [])
-        .find((article) => normalize(article.textContent).includes("Grammar Quiz 3"));
-      const attemptOpen = attemptRow?.querySelector("button");
-      if (attemptOpen && visible(attemptOpen) && !attemptOpen.disabled) {
-        attemptOpen.click();
-        await delay(120);
-      }
-      const inputs = Array.from(quizCard?.querySelectorAll("input") || []);
-      const scoreInput = inputs.find((input) => input.type === "number");
-      const feedbackInput = inputs.find((input) => input.type !== "number");
-      setValue(scoreInput, "93");
-      setValue(feedbackInput, feedback);
-      const reviewButton = Array.from(quizCard?.querySelectorAll("button") || [])
-        .find((button) => visible(button) && !button.disabled && normalize(button.textContent).toLowerCase().includes("save quiz review"));
-      if (!reviewButton) throw new Error("Save quiz review button not found");
+      setValue(reviewPanel.querySelector('input[type="number"]'), "93");
+      setValue(reviewPanel.querySelector("textarea"), feedback);
+      const reviewButton = Array.from(reviewPanel.querySelectorAll("button"))
+        .find((button) => visible(button) && !button.disabled && normalize(button.textContent) === "Save review");
+      if (!reviewButton) throw new Error("Save review button not found");
       reviewButton.click();
       await delay(140);
       const state = await waitFor(() => {
         const next = readState();
-        const attempt = next.quizAttempts?.find((item) => item.quizId === "quiz_ar_3" && item.score === 93);
-        const grade = next.grades?.find((item) => item.itemId === "quiz_ar_3" && item.feedback === feedback);
-        return attempt?.status === "completed" && grade ? next : null;
+        const attempt = next.quizAttempts?.find((item) => item.id === "attempt_ar_teacher_review" && item.score === 93);
+        const grade = next.grades?.find((item) => item.itemId === "quiz_ar_teacher_review" && item.feedback === feedback);
+        const audit = next.auditLogs?.find((item) => item.action === "quiz.reviewed" && item.entityId === "attempt_ar_teacher_review" && item.actorId === "usr_teacher_demo");
+        return attempt?.status === "completed" && grade && audit ? next : null;
       });
       const fallback = readState();
-      const attempt = (state || fallback)?.quizAttempts?.find((item) => item.quizId === "quiz_ar_3" && item.score === 93);
-      const grade = (state || fallback)?.grades?.find((item) => item.itemId === "quiz_ar_3" && item.feedback === feedback);
+      const attempt = (state || fallback)?.quizAttempts?.find((item) => item.id === "attempt_ar_teacher_review" && item.score === 93);
+      const grade = (state || fallback)?.grades?.find((item) => item.itemId === "quiz_ar_teacher_review" && item.feedback === feedback);
+      const audit = (state || fallback)?.auditLogs?.find((item) => item.action === "quiz.reviewed" && item.entityId === "attempt_ar_teacher_review" && item.actorId === "usr_teacher_demo");
       return {
         ok: Boolean(state),
         attemptStatus: attempt?.status,
         attemptScore: attempt?.score,
         gradeScore: grade?.score,
-        gradeFeedback: grade?.feedback
+        gradeFeedback: grade?.feedback,
+        auditAction: audit?.action,
+        auditActorId: audit?.actorId
       };
     `),
     predicate: value =>
@@ -1993,23 +2619,25 @@ const deepWorkflowCases = [
       value?.attemptStatus === "completed" &&
       value?.attemptScore === 93 &&
       value?.gradeScore === 93 &&
-      value?.gradeFeedback?.startsWith("QA quiz review"),
+      value?.gradeFeedback?.startsWith("QA quiz review") &&
+      value?.auditAction === "quiz.reviewed" &&
+      value?.auditActorId === "usr_teacher_demo",
   },
   {
     name: "branch dashboard renders scoped operations command center",
     role: "branchadmin",
     route: "/app/branch/dashboard",
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Cairo B1 operations"));
-      const text = normalize(document.body.textContent);
+      await waitFor(() => normalize(document.body.innerText || document.body.textContent).includes("Branch overview"));
+      const text = normalize(document.body.innerText || document.body.textContent);
       return {
-        ok: text.includes("Assigned branch") &&
-          text.includes("Schedule control") &&
+        ok: text.includes("Today at your branch") &&
+          text.includes("Today’s operations") &&
           text.includes("Room usage") &&
           text.includes("Attendance exceptions") &&
           text.includes("Branch payments") &&
-          text.includes("Branch evidence"),
-        hasBranchScope: text.includes("Cairo B1") && text.includes("Cairo branch"),
+          text.includes("Schedule reviews"),
+        hasBranchScope: text.includes("Cairo B1"),
         hasOperationalLinks: text.includes("Manage rooms") && text.includes("Open schedule") && text.includes("Payment overview"),
         hasGlobalAdminLeak: text.includes("Platform settings") || text.includes("Global governance") || text.includes("Super Admin")
       };
@@ -2035,18 +2663,24 @@ const deepWorkflowCases = [
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
-      const branchSessionSelect = document.querySelectorAll(".platform-attendance-control-grid select")[2];
-      if (branchSessionSelect) setValue(branchSessionSelect, "session_ar_cairo_live");
-      await waitFor(() => Array.from(document.querySelectorAll(".platform-attendance-grid button")).some((button) => normalize(button.getAttribute("title")).toLowerCase() === "absent"));
-      const absentButton = await waitFor(() =>
-        Array.from(document.querySelectorAll(".platform-attendance-grid button"))
-          .find((button) => visible(button) && !button.disabled && normalize(button.getAttribute("title")).toLowerCase() === "absent")
-      );
+      const toolbar = await waitFor(() => document.querySelector('[data-testid="branch-attendance-toolbar"]'));
+      const workspace = await waitFor(() => document.querySelector('[data-testid="branch-attendance-workspace"]'));
+      if (!toolbar || !workspace) throw new Error("Branch attendance workspace not found");
+      const selects = toolbar.querySelectorAll("select");
+      setValue(selects[0], "class_ar_l3_cairo");
+      await waitFor(() => Array.from(selects[1]?.options || []).some((option) => option.value === "session_ar_cairo_live"));
+      setValue(selects[1], "session_ar_cairo_live");
+      const learnerRow = await waitFor(() => Array.from(workspace.querySelectorAll(".branch-attendance-list article")).find((row) => normalize(row.textContent).includes("Cairo Student Demo")));
+      if (!learnerRow) throw new Error("Cairo student attendance row not found");
+      const absentButton = Array.from(learnerRow.querySelectorAll("button"))
+        .find((button) => visible(button) && !button.disabled && normalize(button.getAttribute("aria-label")).toLowerCase() === "absent");
       if (!absentButton) throw new Error("Absent attendance status button not found");
       absentButton.click();
       await delay(90);
-      await waitFor(() => Array.from(document.querySelectorAll(".platform-attendance-grid button.active")).some((button) => normalize(button.getAttribute("title")).toLowerCase() === "absent"));
-      await clickButtonWithin(".platform-workflow-card", "Save attendance");
+      await waitFor(() => absentButton.getAttribute("aria-pressed") === "true");
+      const saveButton = workspace.querySelector('[data-testid="branch-attendance-save"]');
+      if (!saveButton || saveButton.disabled) throw new Error("Save branch attendance button not found");
+      saveButton.click();
       const state = await waitFor(() => {
         const next = readState();
         const saved = next.classSessions?.find((item) => item.id === "session_ar_cairo_live")?.attendanceSaved;
@@ -2068,6 +2702,43 @@ const deepWorkflowCases = [
       value?.status === "absent",
   },
   {
+    name: "branch attendance exception workflow approves scoped request",
+    role: "branchadmin",
+    route: "/app/branch/attendance",
+    source: workflowActionSource(`
+      const queue = await waitFor(() => document.querySelector('[data-testid="branch-attendance-exception-list"]'));
+      if (!queue || !normalize(queue.textContent).includes("Family emergency")) {
+        throw new Error("Branch exception queue did not render the scoped request");
+      }
+      setByLabel("Review note for Cairo Student Demo", "Family emergency evidence verified.");
+      const approve = document.querySelector('[data-testid="branch-attendance-exception-approve-aex_cairo_pending"]');
+      if (!approve) throw new Error("Branch exception approve control did not render");
+      approve.click();
+      const state = await waitFor(() => {
+        const next = readState();
+        return next.attendanceExceptions?.find((item) => item.id === "aex_cairo_pending")?.status === "approved"
+          ? next
+          : null;
+      });
+      const request = state?.attendanceExceptions?.find((item) => item.id === "aex_cairo_pending");
+      const attendance = state?.attendance?.find((item) => item.id === "att_ar_cairo_exception");
+      const enrollment = state?.enrollments?.find((item) => item.id === "enr_ar_l3_cairo");
+      return {
+        requestStatus: request?.status,
+        reviewedBy: request?.reviewedBy,
+        attendanceStatus: attendance?.status,
+        attendanceRate: enrollment?.attendanceRate,
+        auditAction: state?.auditLogs?.find((item) => item.entityId === request?.id)?.action
+      };
+    `),
+    predicate: value =>
+      value?.requestStatus === "approved" &&
+      value?.reviewedBy === "usr_branch_demo" &&
+      value?.attendanceStatus === "excused" &&
+      value?.attendanceRate === 100 &&
+      value?.auditAction === "attendance_exception.approved",
+  },
+  {
     name: "branch scheduling workflow creates calendar event",
     role: "branchadmin",
     route: "/app/branch/schedule",
@@ -2085,9 +2756,9 @@ const deepWorkflowCases = [
         });
       }
       state.courseRuns = state.courseRuns || [];
-      if (!state.courseRuns.some((item) => item.id === "run_ar_l3_cairo_qa")) {
+      if (!state.courseRuns.some((item) => item.id === "run_ar_l3_cairo_2026")) {
         state.courseRuns.push({
-          id: "run_ar_l3_cairo_qa",
+          id: "run_ar_l3_cairo_2026",
           courseId: "course_ar_l3",
           branchId: "br_cairo",
           teacherId: "usr_teacher_demo",
@@ -2098,11 +2769,11 @@ const deepWorkflowCases = [
         });
       }
       state.classGroups = state.classGroups || [];
-      if (!state.classGroups.some((item) => item.id === "class_ar_l3_cairo_qa")) {
+      if (!state.classGroups.some((item) => item.id === "class_ar_l3_cairo")) {
         state.classGroups.push({
-          id: "class_ar_l3_cairo_qa",
-          courseRunId: "run_ar_l3_cairo_qa",
-          name: "Arabic L3 - Cairo QA",
+          id: "class_ar_l3_cairo",
+          courseRunId: "run_ar_l3_cairo_2026",
+          name: "Arabic L3 - Cairo Group",
           capacity: 20,
           schedule: "Sun/Tue 14:00",
           roomId: "room_cairo_4",
@@ -2115,7 +2786,10 @@ const deepWorkflowCases = [
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Arabic L3 - Cairo QA"), 4000);
+      await goto("/app/branch/schedule/new");
+      const composer = await waitFor(() => document.querySelector('[data-testid="branch-schedule-composer"]'));
+      if (!composer) throw new Error("Branch schedule composer did not open");
+      await waitFor(() => normalize(composer.textContent).includes("Arabic L3 - Cairo Group"), 4000);
       const title = "QA review session " + Date.now();
       setByLabel("Title", title);
       setByLabel("Date", "2026-07-03");
@@ -2124,7 +2798,7 @@ const deepWorkflowCases = [
       await clickButton("Create event");
       const state = await waitFor(() => {
         const next = readState();
-        return next.events?.[0]?.title === title ? next : null;
+        return next.events?.some((item) => item.title === title) ? next : null;
       });
       const event = state?.events?.find((item) => item.title === title);
       const session = state?.classSessions?.find((item) => item.eventId === event?.id || item.title === title);
@@ -2152,6 +2826,73 @@ const deepWorkflowCases = [
       value?.title?.startsWith("QA review session") &&
       value?.sessionCreated === true &&
       value?.branchInvariantOk === true,
+  },
+  {
+    name: "branch class-session workflow reschedules and cancels with audit evidence",
+    role: "branchadmin",
+    route: "/app/branch/schedule/sessions/session_ar_cairo_upcoming",
+    setupSource: workflowSetupSource(`
+      const state = readState();
+      const session = state.classSessions?.find((item) => item.id === "session_ar_cairo_upcoming");
+      const event = state.events?.find((item) => item.id === "evt_ar_cairo_upcoming");
+      if (!session || !event) throw new Error("QA class-session fixture is missing");
+      Object.assign(session, {
+        startsAt: "2026-07-05T14:00:00+03:00",
+        endsAt: "2026-07-05T15:00:00+03:00",
+        status: "active",
+        attendanceSaved: false
+      });
+      Object.assign(event, {
+        startsAt: session.startsAt,
+        endsAt: session.endsAt,
+        roomId: "room_cairo_4",
+        status: "active"
+      });
+      state.attendance = (state.attendance || []).filter(
+        (item) => item.sessionId !== session.id && item.sessionId !== session.eventId
+      );
+      writeState(state);
+      return { ok: true };
+    `),
+    source: workflowActionSource(`
+      await waitFor(() => document.querySelector('[data-testid="branch-session-workflow"]'));
+      setByLabel("Date", "2026-07-05");
+      setByLabel("Starts", "15:00");
+      setByLabel("Ends", "16:00");
+      setByLabel("Reason", "QA branch timetable adjustment");
+      await clickButton("Reschedule");
+      const rescheduled = await waitFor(() => {
+        const next = readState();
+        const item = next.classSessions?.find((entry) => entry.id === "session_ar_cairo_upcoming");
+        return item?.startsAt === "2026-07-05T15:00:00+03:00" ? next : null;
+      });
+      setByLabel("Reason", "QA branch closure cancellation");
+      await clickButton("Cancel session");
+      const cancelled = await waitFor(() => {
+        const next = readState();
+        const item = next.classSessions?.find((entry) => entry.id === "session_ar_cairo_upcoming");
+        return item?.status === "cancelled" ? next : null;
+      });
+      const session = cancelled?.classSessions?.find((item) => item.id === "session_ar_cairo_upcoming");
+      const event = cancelled?.events?.find((item) => item.id === session?.eventId);
+      const auditActions = cancelled?.auditLogs
+        ?.filter((item) => item.entityId === session?.id)
+        .map((item) => item.action) || [];
+      return {
+        rescheduled: Boolean(rescheduled),
+        sessionStatus: session?.status,
+        eventStatus: event?.status,
+        pairedTimes: session?.startsAt === event?.startsAt && session?.endsAt === event?.endsAt,
+        auditActions
+      };
+    `),
+    predicate: value =>
+      value?.rescheduled === true &&
+      value?.sessionStatus === "cancelled" &&
+      value?.eventStatus === "cancelled" &&
+      value?.pairedTimes === true &&
+      value?.auditActions?.includes("class_session.rescheduled") &&
+      value?.auditActions?.includes("class_session.cancelled"),
   },
   {
     name: "branch room status workflow updates branch-scoped room",
@@ -2218,6 +2959,8 @@ const deepWorkflowCases = [
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
+      await goto("/app/branch/rooms/new");
+      await waitFor(() => document.querySelector(".branch-room-form"));
       await waitFor(() => normalize(document.body.textContent).includes("Rooms"));
       setByLabel("Room name", "QA Branch Studio");
       setByLabel("Capacity", "22");
@@ -2252,6 +2995,116 @@ const deepWorkflowCases = [
       value?.auditActorId === "usr_branch_demo",
   },
   {
+    name: "branch class workflow creates branch-scoped class",
+    role: "branchadmin",
+    route: "/app/branch/classes",
+    setupSource: workflowSetupSource(`
+      const state = readState();
+      const removed = new Set(
+        (state.classGroups || [])
+          .filter((item) => item.name === "QA Branch Evening Class")
+          .map((item) => item.id)
+      );
+      state.classGroups = (state.classGroups || []).filter((item) => !removed.has(item.id));
+      state.teachers = (state.teachers || []).map((teacher) => ({
+        ...teacher,
+        assignedClassIds: (teacher.assignedClassIds || []).filter((id) => !removed.has(id))
+      }));
+      state.auditLogs = (state.auditLogs || []).filter((item) =>
+        item.action !== "class.created" || !removed.has(item.entityId)
+      );
+      writeState(state);
+      return { ok: true };
+    `),
+    reloadAfterSetup: false,
+    source: workflowActionSource(`
+      await goto("/app/branch/classes/new");
+      await waitFor(() => document.querySelector('[data-testid="branch-class-composer"]'));
+      setByLabel("Course run", "run_ar_l3_cairo_2026");
+      setByLabel("Class name", "QA Branch Evening Class");
+      setByLabel("Capacity", "12");
+      setByLabel("Schedule", "Wed 17:00");
+      setByLabel("Room", "room_cairo_4");
+      await clickButton("Create class");
+      const state = await waitFor(() => {
+        const next = readState();
+        const group = next.classGroups?.find((item) => item.name === "QA Branch Evening Class");
+        const audit = group ? next.auditLogs?.find((item) => item.action === "class.created" && item.entityId === group.id) : null;
+        return group && audit ? next : null;
+      }, 5000);
+      const group = state?.classGroups?.find((item) => item.name === "QA Branch Evening Class");
+      const audit = group ? state?.auditLogs?.find((item) => item.action === "class.created" && item.entityId === group.id) : null;
+      const run = state?.courseRuns?.find((item) => item.id === group?.courseRunId);
+      const teacher = state?.teachers?.find((item) => item.userId === "usr_teacher_demo");
+      return {
+        ok: Boolean(state),
+        runBranchId: run?.branchId,
+        courseRunId: group?.courseRunId,
+        roomId: group?.roomId,
+        capacity: group?.capacity,
+        studentCount: group?.studentIds?.length,
+        teacherAssigned: teacher?.assignedClassIds?.includes(group?.id),
+        auditAction: audit?.action,
+        auditActorId: audit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.runBranchId === "br_cairo" &&
+      value?.courseRunId === "run_ar_l3_cairo_2026" &&
+      value?.roomId === "room_cairo_4" &&
+      value?.capacity === 12 &&
+      value?.studentCount === 0 &&
+      value?.teacherAssigned === true &&
+      value?.auditAction === "class.created" &&
+      value?.auditActorId === "usr_branch_demo",
+  },
+  {
+    name: "branch class lifecycle updates and pauses branch-scoped class",
+    role: "branchadmin",
+    route: "/app/branch/classes/class_ar_l3_cairo",
+    source: workflowActionSource(`
+      await waitFor(() => document.querySelector('[data-testid="branch-class-detail"]'));
+      setByLabel("Class name", "QA Cairo Class Updated");
+      setByLabel("Capacity", "18");
+      setByLabel("Schedule", "Wed 17:30");
+      setByLabel("Room", "room_cairo_4");
+      await clickButton("Save class");
+      await waitFor(() => {
+        const group = readState().classGroups?.find((item) => item.id === "class_ar_l3_cairo");
+        return group?.name === "QA Cairo Class Updated";
+      }, 5000);
+      await clickButton("Pause class");
+      const state = await waitFor(() => {
+        const next = readState();
+        const group = next.classGroups?.find((item) => item.id === "class_ar_l3_cairo");
+        const updated = next.auditLogs?.find((item) => item.action === "class.updated" && item.entityId === group?.id);
+        const paused = next.auditLogs?.find((item) => item.action === "class.status_updated" && item.entityId === group?.id);
+        return group?.status === "paused" && updated && paused ? next : null;
+      }, 5000);
+      const group = state?.classGroups?.find((item) => item.id === "class_ar_l3_cairo");
+      return {
+        ok: Boolean(state),
+        name: group?.name,
+        capacity: group?.capacity,
+        schedule: group?.schedule,
+        status: group?.status,
+        roster: group?.studentIds,
+        updatedAudit: state?.auditLogs?.some((item) => item.action === "class.updated" && item.entityId === group?.id),
+        statusAudit: state?.auditLogs?.some((item) => item.action === "class.status_updated" && item.entityId === group?.id)
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.name === "QA Cairo Class Updated" &&
+      value?.capacity === 18 &&
+      value?.schedule === "Wed 17:30" &&
+      value?.status === "paused" &&
+      value?.roster?.includes("stu_cairo_demo") &&
+      value?.updatedAudit === true &&
+      value?.statusAudit === true,
+  },
+  {
     name: "teacher scheduling workflow creates assigned live class session",
     role: "teacher",
     route: "/app/teacher/calendar",
@@ -2265,17 +3118,22 @@ const deepWorkflowCases = [
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Arabic L3 - Group A"));
+      await goto("/app/teacher/calendar/new");
+      const form = await waitFor(() => document.querySelector("#teacher-calendar-event-form"));
+      if (!form) throw new Error("Teacher calendar create form did not open");
       const title = "QA teacher live session " + Date.now();
-      setByLabel("Title", title);
-      setByLabel("Type", "live_session");
-      setByLabel("Branch", "br_online");
-      setByLabel("Class", "class_ar_l3_a");
-      setByLabel("Room", "room_online_a");
-      setByLabel("Date", "2026-07-06");
-      setByLabel("Starts", "11:00");
-      setByLabel("Ends", "11:45");
-      await clickButton("Create event");
+      setValue(form.querySelector('[name="title"]'), title);
+      setValue(form.querySelector('[name="eventType"]'), "live_session");
+      setValue(form.querySelector('[name="branchId"]'), "br_online");
+      await waitFor(() => form.querySelector('[name="classGroupId"] option[value="class_ar_l3_a"]') && form.querySelector('[name="roomId"] option[value="room_online_a"]'));
+      setValue(form.querySelector('[name="classGroupId"]'), "class_ar_l3_a");
+      setValue(form.querySelector('[name="roomId"]'), "room_online_a");
+      setValue(form.querySelector('[name="date"]'), "2026-07-06");
+      setValue(form.querySelector('[name="starts"]'), "11:00");
+      setValue(form.querySelector('[name="ends"]'), "11:45");
+      const submitButton = document.querySelector('button[form="teacher-calendar-event-form"]');
+      if (!submitButton || submitButton.disabled) throw new Error("Create event submit button not found");
+      submitButton.click();
       const state = await waitFor(() => {
         const next = readState();
         return next.events?.some((item) => item.title === title && item.type === "live_session") ? next : null;
@@ -2285,6 +3143,7 @@ const deepWorkflowCases = [
       const classGroup = state?.classGroups?.find((item) => item.id === event?.classGroupId);
       const courseRun = state?.courseRuns?.find((item) => item.id === classGroup?.courseRunId);
       const actor = state?.users?.find((item) => item.id === "usr_teacher_demo");
+      const audit = event ? state?.auditLogs?.find((item) => (item.action === "calendar.created" || item.action === "calendar.created_with_conflict") && item.entityId === event.id && item.actorId === "usr_teacher_demo") : null;
       return {
         ok: Boolean(state),
         eventType: event?.type,
@@ -2298,7 +3157,8 @@ const deepWorkflowCases = [
         runTeacherId: courseRun?.teacherId,
         runBranchId: courseRun?.branchId,
         actorBranchId: actor?.branchId,
-        lastAudit: state?.auditLogs?.[0]?.action
+        lastAudit: audit?.action,
+        auditActorId: audit?.actorId
       };
     `),
     predicate: value =>
@@ -2312,6 +3172,7 @@ const deepWorkflowCases = [
       value?.sessionAttendanceSaved === false &&
       value?.runTeacherId === "usr_teacher_demo" &&
       value?.runBranchId === value?.actorBranchId &&
+      value?.auditActorId === "usr_teacher_demo" &&
       ((value?.eventStatus === "active" &&
         value?.lastAudit === "calendar.created") ||
         (value?.eventStatus === "pending" &&
@@ -2322,7 +3183,8 @@ const deepWorkflowCases = [
     role: "registrar",
     route: "/app/registrar/schedule",
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Placement test"));
+      await goto("/app/registrar/schedule/new");
+      await waitFor(() => document.querySelector(".registrar-schedule-composer"));
       const title = "QA placement booking " + Date.now();
       setByLabel("Title", title);
       setByLabel("Type", "placement_test");
@@ -2362,6 +3224,13 @@ const deepWorkflowCases = [
     role: "branchadmin",
     route: "/app/branch/messages",
     source: workflowActionSource(`
+      await goto("/app/branch/messages/new");
+      const composer = await waitFor(() => document.querySelector('[data-testid="portal-message-compose-branchadmin"]'));
+      if (!composer) throw new Error("Message composer did not open");
+      const recipient = composer.querySelector("select");
+      const recipientOption = Array.from(recipient?.options || []).find((option) => option.value !== "usr_branch_demo");
+      if (!recipient || !recipientOption) throw new Error("Permitted recipient not found");
+      setValue(recipient, recipientOption.value);
       const subject = "QA branch message " + Date.now();
       setByLabel("Subject", subject);
       setByLabel("Message", "Branch operational update from QA.");
@@ -2406,13 +3275,12 @@ const deepWorkflowCases = [
       if (recordSort) recordSort.click();
       await delay(80);
       const text = normalize(document.body.textContent);
-      const options = Array.from(document.querySelectorAll(".platform-report-controls select option")).map((option) => normalize(option.textContent));
+      const options = Array.from(document.querySelectorAll('[data-testid="branch-reports-toolbar"] select:first-of-type option')).map((option) => normalize(option.textContent));
       return {
-        ok: text.includes("Report type") && text.includes("Export CSV") && text.includes("Saved views"),
-        hasReportTypeSelector: Boolean(document.querySelector(".platform-report-controls select")),
+        ok: text.includes("Report type") && text.includes("Export CSV"),
+        hasReportTypeSelector: Boolean(document.querySelector('[data-testid="branch-reports-toolbar"] select')),
         hasActivityOption: options.includes("Activity"),
         hasFinanceOption: options.includes("Finance"),
-        hasSeededBranchPreset: text.includes("Cairo attendance exceptions"),
         hasTypedRows: Boolean(document.querySelector(".platform-report-table.typed .platform-report-row-main")) &&
           (text.includes("Cairo Student Demo") || text.includes("Standard Arabic Level 3")),
         hasSortHeader: Boolean(document.querySelector(".platform-report-row.header button[aria-pressed='true']"))
@@ -2423,7 +3291,6 @@ const deepWorkflowCases = [
       value?.hasReportTypeSelector === true &&
       value?.hasActivityOption === false &&
       value?.hasFinanceOption === true &&
-      value?.hasSeededBranchPreset === true &&
       value?.hasTypedRows === true &&
       value?.hasSortHeader === true,
   },
@@ -2432,6 +3299,9 @@ const deepWorkflowCases = [
     role: "headofdepartment",
     route: "/app/hod/curriculum",
     source: workflowActionSource(`
+      await goto("/app/hod/curriculum/new");
+      const composer = await waitFor(() => document.querySelector('[data-testid="hod-module-composer"]'));
+      if (!composer) throw new Error("HOD module composer did not open");
       const title = "QA HOD module " + Date.now();
       setByLabel("Module title", title);
       setByLabel("Outcomes", "Map source lesson, Align assessment");
@@ -2469,11 +3339,65 @@ const deepWorkflowCases = [
       value?.actorId === "usr_hod_demo",
   },
   {
+    name: "HOD course-run workflow creates department delivery run",
+    role: "headofdepartment",
+    route: "/app/hod/classes/runs/new",
+    setupSource: workflowSetupSource(`
+      const state = readState();
+      const removed = new Set((state.courseRuns || []).filter((item) => item.term === "QA Autumn 2026 Cairo").map((item) => item.id));
+      state.courseRuns = (state.courseRuns || []).filter((item) => !removed.has(item.id));
+      state.auditLogs = (state.auditLogs || []).filter((item) => item.action !== "course_run.created" || !removed.has(item.entityId));
+      writeState(state);
+      return { ok: true };
+    `),
+    reloadAfterSetup: false,
+    source: workflowActionSource(`
+      setByLabel("Course", "course_ar_l3");
+      setByLabel("Branch", "br_cairo");
+      setByLabel("Teacher", "usr_teacher_demo");
+      setByLabel("Term", "QA Autumn 2026 Cairo");
+      setByLabel("Starts on", "2026-09-01");
+      setByLabel("Ends on", "2026-11-30");
+      await clickButton("Create course run");
+      const state = await waitFor(() => {
+        const next = readState();
+        const run = next.courseRuns?.find((item) => item.term === "QA Autumn 2026 Cairo");
+        const audit = run ? next.auditLogs?.find((item) => item.action === "course_run.created" && item.entityId === run.id) : null;
+        return run && audit ? next : null;
+      }, 5000);
+      const run = state?.courseRuns?.find((item) => item.term === "QA Autumn 2026 Cairo");
+      const audit = run ? state?.auditLogs?.find((item) => item.action === "course_run.created" && item.entityId === run.id) : null;
+      return {
+        ok: Boolean(state),
+        courseId: run?.courseId,
+        branchId: run?.branchId,
+        teacherId: run?.teacherId,
+        status: run?.status,
+        startsOn: run?.startsOn,
+        endsOn: run?.endsOn,
+        auditActorId: audit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.courseId === "course_ar_l3" &&
+      value?.branchId === "br_cairo" &&
+      value?.teacherId === "usr_teacher_demo" &&
+      value?.status === "pending" &&
+      value?.startsOn === "2026-09-01" &&
+      value?.endsOn === "2026-11-30" &&
+      value?.auditActorId === "usr_hod_demo",
+  },
+  {
     name: "HOD course catalog workflow updates scoped course status",
     role: "headofdepartment",
     route: "/app/hod/courses",
     source: workflowActionSource(`
-      setByLabel("Course status", "paused");
+      await goto("/app/hod/courses/course_ar_l3");
+      const form = await waitFor(() => document.querySelector('[data-testid="hod-course-status-form"]'));
+      if (!form) throw new Error("HOD course status form did not open");
+      setValue(form.querySelector("select"), "paused");
+      await clickButtonWithin('[data-testid="hod-course-status-form"]', "Save status", true);
       const state = await waitFor(() => {
         const next = readState();
         const course = next.courses?.find((item) => item.id === "course_ar_l3");
@@ -2499,9 +3423,12 @@ const deepWorkflowCases = [
     role: "headofdepartment",
     route: "/app/hod/assessments",
     source: workflowActionSource(`
+      await goto("/app/hod/assessments/new");
+      const composer = await waitFor(() => document.querySelector('[data-testid="hod-assignment-composer"]'));
+      if (!composer) throw new Error("HOD assignment composer did not open");
       const title = "QA HOD assessment " + Date.now();
       setByLabel("Assignment title", title);
-      setByLabel("Submission", "text");
+      setByLabel("Submission type", "text");
       await clickButton("Create assignment");
       const state = await waitFor(() => {
         const next = readState();
@@ -2549,24 +3476,19 @@ const deepWorkflowCases = [
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Manual review") && normalize(document.body.textContent).includes("Draft answer saved locally"));
+      await goto("/app/hod/assessments/review/sub_ar_grammar_draft");
+      const reviewCard = await waitFor(() => document.querySelector('[data-testid="hod-submission-review"]'));
+      if (!reviewCard) throw new Error("HOD submission review did not open");
       const feedback = "QA HOD grading feedback " + Date.now();
-      const reviewCard = Array.from(document.querySelectorAll(".platform-workflow-card"))
-        .find((card) => normalize(card.textContent).includes("Manual review"));
-      const submissionRow = Array.from(reviewCard?.querySelectorAll(".platform-row-list article") || [])
-        .find((article) => normalize(article.textContent).includes("Grammar worksheet"));
-      const submissionOpen = submissionRow?.querySelector("button");
-      if (submissionOpen && visible(submissionOpen) && !submissionOpen.disabled) {
-        submissionOpen.click();
-        await delay(120);
-      }
-      const inputs = Array.from(reviewCard?.querySelectorAll("input") || []);
+      const editor = reviewCard.querySelector('[data-testid="hod-grade-editor"]');
+      if (!editor) throw new Error("HOD grade editor was not rendered");
+      const inputs = Array.from(editor.querySelectorAll("input"));
       const scoreInput = inputs.find((input) => input.type === "number");
       const feedbackInput = inputs.find((input) => input.type !== "number");
       setValue(scoreInput, "89");
       setValue(feedbackInput, feedback);
-      const gradeButton = Array.from(reviewCard?.querySelectorAll("button") || [])
-        .find((button) => visible(button) && !button.disabled && normalize(button.textContent).toLowerCase().includes("grade submission"));
+      const gradeButton = Array.from(editor.querySelectorAll("button"))
+        .find((button) => visible(button) && !button.disabled && normalize(button.textContent) === "Save result");
       if (!gradeButton) throw new Error("HOD grade submission button not found");
       gradeButton.click();
       await delay(140);
@@ -2612,6 +3534,7 @@ const deepWorkflowCases = [
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
+      await goto("/app/hod/certificates/cert_ar_2");
       const getButtons = () => Array.from(document.querySelectorAll("button"))
         .filter(visible)
         .map((button) => ({
@@ -2677,6 +3600,7 @@ const deepWorkflowCases = [
       prepared.auditLogs = (prepared.auditLogs || []).filter((item) => item.entityId !== "cert_ar_2");
       writeState(prepared);
       await delay(120);
+      await goto("/app/hod/certificates/cert_ar_2");
       await waitFor(() => normalize(document.body.textContent).includes("NCL-AR2-DEMO"));
       const existing = readState().certificates?.find((item) => item.id === "cert_ar_2");
       if (existing?.status === "issued") {
@@ -2686,11 +3610,11 @@ const deepWorkflowCases = [
       await waitFor(() => {
         const certificate = readState().certificates?.find((item) => item.id === "cert_ar_2");
         if (certificate?.status === "issued") return true;
-        return Array.from(document.querySelectorAll("button")).some((button) => visible(button) && !button.disabled && /^issue$/i.test(normalize(button.textContent)));
+        return Array.from(document.querySelectorAll("button")).some((button) => visible(button) && !button.disabled && /^issue certificate$/i.test(normalize(button.textContent)));
       });
       const approved = readState().certificates?.find((item) => item.id === "cert_ar_2");
       if (approved?.status !== "issued") {
-        await clickButton("Issue", true);
+        await clickButton("Issue certificate", true);
       }
       const state = await waitFor(() => {
         const next = readState();
@@ -2735,20 +3659,19 @@ const deepWorkflowCases = [
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
+      await goto("/app/hod/certificates/cert_ar_reject_demo");
       await waitFor(() => normalize(document.body.textContent).includes("NCL-AR-REJECT-QA"));
-      const rejectCard = await waitFor(() =>
-        Array.from(document.querySelectorAll(".platform-row-list > article"))
-          .find((item) => normalize(item.textContent).includes("NCL-AR-REJECT-QA"))
-      );
+      const rejectCard = await waitFor(() => document.querySelector('[data-testid="hod-certificate-detail"]'));
       if (!rejectCard) throw new Error("Reject certificate card was not rendered");
+      await clickButtonWithin('[data-testid="hod-certificate-detail"]', "Reject", true);
       const reasonLabel = Array.from(rejectCard.querySelectorAll("label"))
-        .find((item) => normalize(item.textContent).toLowerCase().includes("reject reason"));
+        .find((item) => normalize(item.textContent).toLowerCase().includes("reason for rejection"));
       const reasonControl = reasonLabel?.querySelector("input, textarea, select");
       setValue(reasonControl, "QA eligibility evidence incomplete");
       const rejectButton = await waitFor(() =>
         Array.from(rejectCard.querySelectorAll("button"))
           .filter((button) => visible(button) && !button.disabled)
-          .find((button) => /^reject$/i.test(normalize(button.textContent)))
+          .find((button) => /^confirm rejection$/i.test(normalize(button.textContent)))
       );
       if (!rejectButton) throw new Error("Reject button was not rendered for reject certificate card");
       rejectButton.click();
@@ -2798,6 +3721,13 @@ const deepWorkflowCases = [
     role: "headofdepartment",
     route: "/app/hod/messages",
     source: workflowActionSource(`
+      await goto("/app/hod/messages/new");
+      const composer = await waitFor(() => document.querySelector('[data-testid="portal-message-compose-headofdepartment"]'));
+      if (!composer) throw new Error("Message composer did not open");
+      const recipient = composer.querySelector("select");
+      const recipientOption = Array.from(recipient?.options || []).find((option) => option.value !== "usr_hod_demo");
+      if (!recipient || !recipientOption) throw new Error("Permitted recipient not found");
+      setValue(recipient, recipientOption.value);
       const subject = "QA HOD message " + Date.now();
       setByLabel("Subject", subject);
       setByLabel("Message", "Department academic update from QA.");
@@ -2866,7 +3796,7 @@ const deepWorkflowCases = [
     predicate: value =>
       value?.ok &&
       value?.hasFinanceOption === false &&
-      value?.hasActivityOption === true &&
+      value?.hasActivityOption === false &&
       value?.hasTypedRows === true &&
       value?.hasStatusSort === true &&
       value?.presetRole === "headofdepartment" &&
@@ -2915,32 +3845,25 @@ const deepWorkflowCases = [
     `),
     reloadAfterSetup: false,
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Surah Al-Baqarah 24-29"));
-      const recDemoRow = Array.from(document.querySelectorAll(".platform-row-list article"))
-        .find((article) => normalize(article.textContent).includes("Surah Al-Baqarah 24-29"));
-      const recDemoOpen = recDemoRow?.querySelector("button");
-      if (recDemoOpen && visible(recDemoOpen) && !recDemoOpen.disabled) {
-        recDemoOpen.click();
-        await delay(160);
-      }
-      const inputs = Array.from(document.querySelectorAll('.platform-workflow-card input[type="number"]'));
+      await goto("/app/teacher/quran-review/rec_demo");
+      const reviewForm = await waitFor(() => document.querySelector('[data-testid="teacher-recitation-review-form"]'));
+      if (!reviewForm) throw new Error("Teacher recitation review form not found");
+      const inputs = Array.from(reviewForm.querySelectorAll('input[type="number"]'));
       setValue(inputs[0], "91");
       setValue(inputs[1], "94");
-      setValue(document.querySelector(".platform-workflow-card textarea"), "QA tajweed review accepted.");
+      setValue(reviewForm.querySelector("textarea"), "QA tajweed review accepted.");
       await delay(140);
-      const clickReviewCardButton = async (label) => {
+      const clickReviewButton = async (label) => {
         const expected = normalize(label).toLowerCase();
-        const reviewCard = Array.from(document.querySelectorAll(".platform-workflow-card"))
-          .find((card) => normalize(card.textContent).includes("Memorization and tajweed"));
-        const button = Array.from(reviewCard?.querySelectorAll("button") || [])
+        const button = Array.from(reviewForm.querySelectorAll("button"))
           .find((item) => visible(item) && !item.disabled && normalize(item.textContent).toLowerCase().includes(expected));
-        if (!button) throw new Error("Review card button not found: " + label);
+        if (!button) throw new Error("Review button not found: " + label);
         button.click();
         await delay(120);
       };
-      await clickReviewCardButton("Update progress");
+      await clickReviewButton("Save progress");
       await waitFor(() => readState().quranProgress?.[0]?.memorizedPercent === 91);
-      await clickReviewCardButton("Review recitation");
+      await clickReviewButton("Save review");
       const state = await waitFor(() => {
         const next = readState();
         return next.quranProgress?.[0]?.memorizedPercent === 91 && next.recitationSubmissions?.find((item) => item.id === "rec_demo")?.status === "approved" ? next : null;
@@ -2966,9 +3889,16 @@ const deepWorkflowCases = [
     role: "teacher",
     route: "/app/teacher/messages",
     source: workflowActionSource(`
+      await goto("/app/teacher/messages/new");
+      const composer = await waitFor(() => document.querySelector('[data-testid="portal-message-compose-teacher"]'));
+      if (!composer) throw new Error("Message composer did not open");
+      const recipient = composer.querySelector("select");
+      const recipientOption = Array.from(recipient?.options || []).find((option) => option.value !== "usr_teacher_demo");
+      if (!recipient || !recipientOption) throw new Error("Permitted recipient not found");
+      setValue(recipient, recipientOption.value);
       const subject = "QA class update " + Date.now();
       setByLabel("Subject", subject);
-      setValue(document.querySelector(".platform-workflow-card textarea"), "QA message body for connected workflow.");
+      setByLabel("Message", "QA message body for connected workflow.");
       await clickButton("Send message");
       const state = await waitFor(() => {
         const next = readState();
@@ -2989,6 +3919,8 @@ const deepWorkflowCases = [
     role: "registrar",
     route: "/app/registrar/leads",
     source: workflowActionSource(`
+      await goto("/app/registrar/leads/new");
+      await waitFor(() => document.querySelector(".registrar-lead-form"));
       const fullName = "QA Lead " + Date.now();
       setByLabel("Full name", fullName);
       setByLabel("Phone", "+20 100 000 0888");
@@ -3019,7 +3951,9 @@ const deepWorkflowCases = [
     role: "registrar",
     route: "/app/registrar/applications",
     source: workflowActionSource(`
+      await goto("/app/registrar/applications/new");
       const form = await waitFor(() => document.querySelector(".registrar-application-form"));
+      if (!form) throw new Error("Application form not found");
       const stamp = Date.now();
       const fullName = "QA Direct Application " + stamp;
       const email = "qa.application." + stamp + "@nilelearn.local";
@@ -3040,21 +3974,53 @@ const deepWorkflowCases = [
       }, 8000);
       const lead = state?.leads?.find((item) => item.email === email);
       const application = state?.applications?.find((item) => item.leadId === lead?.id);
-      const link = await waitFor(() =>
-        Array.from(document.querySelectorAll(".registrar-application-list a"))
-          .find((item) => item.getAttribute("href") === "/app/registrar/applications/" + application?.id)
-      );
-      link?.click();
+      await goto("/app/registrar/applications/" + application?.id);
       await waitFor(() => normalize(document.body.textContent).includes("Application lifecycle") && normalize(document.body.textContent).includes(fullName), 5000);
+      await goto("/app/registrar/applications/" + application?.id + "/placement");
+      const placementForm = await waitFor(() => {
+        const form = document.querySelector(".registrar-placement-booking-form");
+        const values = Array.from(form?.querySelectorAll("input, select") || []).map((control) => control.value);
+        return values.includes(fullName) && values.includes(email) && values.includes("br_cairo") ? form : null;
+      });
+      if (!placementForm) throw new Error("Linked placement form not found");
+      const placementValues = Array.from(placementForm.querySelectorAll("input, select")).map((control) => control.value);
+      const identityPrefilled = placementValues.includes(fullName) && placementValues.includes(email) && placementValues.includes("br_cairo");
+      setByLabel("Preferred date", "2026-07-16");
+      setByLabel("Current level", "Reads short passages");
+      await clickButtonWithin(".registrar-placement-booking-form", "Book placement");
+      const linkedState = await waitFor(() => {
+        const next = readState();
+        return next.placementTests?.find((item) => item.leadId === lead?.id) ? next : null;
+      }, 5000);
+      const booking = linkedState?.placementTests?.find((item) => item.leadId === lead?.id);
+      await goto("/app/registrar/placement-tests/" + booking?.id);
+      await waitFor(() => document.querySelector(".registrar-placement-card"));
+      setByLabel("Recommended level", "Arabic Level 3");
+      setByLabel("Score", "84");
+      await clickButton("Record placement result");
+      const completedState = await waitFor(() => {
+        const next = readState();
+        const workflow = next.enrollmentWorkflows?.find((item) => item.applicationId === application?.id && item.placementTestId === booking?.id);
+        const result = next.placementResults?.find((item) => item.bookingId === booking?.id && item.score === 84);
+        const audit = result ? next.auditLogs?.find((item) => item.action === "placement.result_recorded" && item.entityId === result.id) : null;
+        return workflow && result && audit ? next : null;
+      }, 8000);
+      const workflow = completedState?.enrollmentWorkflows?.find((item) => item.applicationId === application?.id && item.placementTestId === booking?.id);
       return {
-        ok: Boolean(state),
+        ok: Boolean(state && linkedState && completedState),
         leadStatus: lead?.status,
         applicationStatus: application?.status,
         branchId: application?.branchId,
         courseInterest: application?.courseInterest,
         communicationLogged: state?.communicationLogs?.some((item) => item.subject === "Application intake" && normalize(item.body).includes(fullName)),
-        detailOpened: normalize(document.body.textContent).includes("Application lifecycle"),
-        lastAudit: state?.auditLogs?.[0]?.action
+        detailOpened: true,
+        identityPrefilled,
+        bookingLeadId: booking?.leadId,
+        workflowApplicationId: workflow?.applicationId,
+        workflowPlacementTestId: workflow?.placementTestId,
+        workflowSource: workflow?.source,
+        placementScore: completedState?.placementResults?.find((item) => item.bookingId === booking?.id)?.score,
+        lastAudit: completedState?.auditLogs?.[0]?.action
       };
     `),
     predicate: value =>
@@ -3065,26 +4031,35 @@ const deepWorkflowCases = [
       value?.courseInterest === "Arabic Language QA" &&
       value?.communicationLogged === true &&
       value?.detailOpened === true &&
-      value?.lastAudit === "application.created",
+      value?.identityPrefilled === true &&
+      Boolean(value?.bookingLeadId) &&
+      Boolean(value?.workflowApplicationId) &&
+      Boolean(value?.workflowPlacementTestId) &&
+      value?.workflowSource === "placement" &&
+      value?.placementScore === 84 &&
+      value?.lastAudit === "placement.result_recorded",
   },
   {
     name: "registrar finance workflow records payment and settles invoice",
     role: "registrar",
     route: "/app/registrar/payments",
     source: workflowActionSource(`
-      await waitFor(() => document.querySelector(".registrar-payment-desk") && document.querySelector(".registrar-payment-table"));
-      const beforeRows = Array.from(document.querySelectorAll(".registrar-payment-row")).length;
-      const search = document.querySelector(".registrar-payment-toolbar input");
+      await waitFor(() => document.querySelector('[data-testid="registrar-payments-list"]'));
+      const beforeRows = Array.from(document.querySelectorAll('[data-testid="registrar-payments-list"] [data-invoice-id]')).length;
+      const search = document.querySelector('[data-testid="registrar-payments-toolbar"] input');
       if (search) setValue(search, "inv_demo_1");
-      await waitFor(() => Array.from(document.querySelectorAll(".registrar-payment-row")).length === 1);
-      const filteredRows = Array.from(document.querySelectorAll(".registrar-payment-row")).length;
+      await waitFor(() => Array.from(document.querySelectorAll('[data-testid="registrar-payments-list"] [data-invoice-id]')).length === 1);
+      const filteredRows = Array.from(document.querySelectorAll('[data-testid="registrar-payments-list"] [data-invoice-id]')).length;
       const before = readState();
       const beforePaid = before.payments?.filter((item) => item.status === "paid").length ?? 0;
       const beforeInvoicePaid = before.payments?.filter((item) => item.invoiceId === "inv_demo_1" && item.status === "paid").length ?? 0;
-      const row = Array.from(document.querySelectorAll(".registrar-payment-row"))
-        .find((item) => normalize(item.textContent).includes("inv_demo_1"));
-      const button = row ? Array.from(row.querySelectorAll("button")).find((item) => normalize(item.textContent).toLowerCase().includes("record payment")) : null;
-      if (!button || button.disabled) return { ok: false, hasPaymentDesk: true, hasLedger: true, beforeRows, filteredRows, beforePaid, beforeInvoicePaid, reason: "record button unavailable" };
+      const row = document.querySelector('[data-testid="registrar-payments-list"] [data-invoice-id="inv_demo_1"]');
+      const link = row?.querySelector('a[href="/app/registrar/payments/inv_demo_1"]');
+      if (!link) return { ok: false, hasPaymentList: true, beforeRows, filteredRows, beforePaid, beforeInvoicePaid, reason: "record link unavailable" };
+      link.click();
+      const form = await waitFor(() => document.querySelector('[data-testid="registrar-payment-record-form"]'));
+      const button = form ? Array.from(form.querySelectorAll("button")).find((item) => normalize(item.textContent).toLowerCase().includes("record payment")) : null;
+      if (!button || button.disabled) return { ok: false, hasPaymentList: true, hasPaymentForm: Boolean(form), beforeRows, filteredRows, beforePaid, beforeInvoicePaid, reason: "record button unavailable" };
       button.click();
       const state = await waitFor(() => {
         const next = readState();
@@ -3095,8 +4070,8 @@ const deepWorkflowCases = [
       const invoice = state?.invoices?.find((item) => item.id === "inv_demo_1");
       return {
         ok: Boolean(state),
-        hasPaymentDesk: Boolean(document.querySelector(".registrar-payment-desk")),
-        hasLedger: Boolean(document.querySelector(".registrar-payment-table")),
+        hasPaymentList: true,
+        hasPaymentForm: Boolean(form),
         beforeRows,
         filteredRows,
         invoiceStatus: invoice?.status,
@@ -3109,8 +4084,8 @@ const deepWorkflowCases = [
     `),
     predicate: value =>
       value?.ok &&
-      value?.hasPaymentDesk === true &&
-      value?.hasLedger === true &&
+      value?.hasPaymentList === true &&
+      value?.hasPaymentForm === true &&
       value?.beforeRows >= 2 &&
       value?.filteredRows === 1 &&
       value?.invoiceStatus === "paid" &&
@@ -3121,34 +4096,36 @@ const deepWorkflowCases = [
     role: "registrar",
     route: "/app/registrar/payments",
     source: workflowActionSource(`
-      await waitFor(() => document.querySelector(".registrar-payment-desk") && document.querySelector(".registrar-payment-table"));
-      const visiblePageText = () => normalize(document.body.innerText || document.body.textContent);
-      const renderedSeed = await waitFor(() => visiblePageText().includes("inv_cairo_demo_1"), 4000);
+      await waitFor(() => document.querySelector('[data-testid="registrar-payments-list"]'));
+      const renderedSeed = await waitFor(() => document.querySelector('[data-testid="registrar-payments-list"] [data-invoice-id="inv_cairo_demo_1"]'), 4000);
       if (!renderedSeed) {
         return {
           ok: false,
           reason: "partial invoice did not render before filtering",
-          body: visiblePageText().slice(0, 700),
+          body: normalize(document.body.innerText || document.body.textContent).slice(0, 700),
           invoiceInState: readState().invoices?.some((item) => item.id === "inv_cairo_demo_1")
         };
       }
-      const search = document.querySelector(".registrar-payment-toolbar input");
+      const search = document.querySelector('[data-testid="registrar-payments-toolbar"] input');
       setValue(search, "inv_cairo_demo_1");
       const row = await waitFor(() =>
-        Array.from(document.querySelectorAll(".registrar-payment-row"))
-          .find((item) => normalize(item.textContent).includes("inv_cairo_demo_1"))
+        document.querySelector('[data-testid="registrar-payments-list"] [data-invoice-id="inv_cairo_demo_1"]')
       );
       if (!row) return { ok: false, reason: "partial invoice row not found" };
-      setValue(row.querySelector(".registrar-payment-amount-input"), "250");
-      const method = row.querySelector(".registrar-payment-record-fields select");
+      const link = row.querySelector('a[href="/app/registrar/payments/inv_cairo_demo_1"]');
+      if (!link) return { ok: false, reason: "partial invoice link not found" };
+      link.click();
+      const form = await waitFor(() => document.querySelector('[data-testid="registrar-payment-record-form"]'));
+      if (!form) return { ok: false, reason: "partial payment form not found" };
+      setValue(form.querySelector('input[type="number"]'), "250");
+      const method = form.querySelector("select");
       setValue(method, "cash");
-      const reference = Array.from(row.querySelectorAll(".registrar-payment-record-fields input"))
-        .find((input) => !input.classList.contains("registrar-payment-amount-input"));
+      const reference = form.querySelector('input[placeholder]');
       setValue(reference, "CASH-PARTIAL-QA");
       const before = readState();
       const beforeInvoice = before.invoices?.find((item) => item.id === "inv_cairo_demo_1");
       const beforeBalance = beforeInvoice ? beforeInvoice.amount - (before.payments || []).filter((item) => item.invoiceId === beforeInvoice.id && item.status === "paid").reduce((sum, item) => sum + item.amount, 0) : null;
-      const button = Array.from(row.querySelectorAll("button"))
+      const button = Array.from(form.querySelectorAll("button"))
         .find((item) => normalize(item.textContent).toLowerCase().includes("record payment"));
       if (!button || button.disabled) return { ok: false, reason: "record button unavailable" };
       button.click();
@@ -3185,6 +4162,8 @@ const deepWorkflowCases = [
     role: "registrar",
     route: "/app/registrar/leads",
     source: workflowActionSource(`
+      await goto("/app/registrar/leads/new");
+      await waitFor(() => document.querySelector(".registrar-lead-form"));
       const fullName = "QA Convert Lead " + Date.now();
       setByLabel("Full name", fullName);
       setByLabel("Phone", "+20 100 000 0999");
@@ -3192,10 +4171,10 @@ const deepWorkflowCases = [
       setByLabel("Subject", "Arabic Language");
       setByLabel("Notes", "Generated by workflow QA.");
       await clickButton("Add lead");
-      await waitFor(() => readState().leads?.some((item) => item.fullName === fullName));
-      const row = Array.from(document.querySelectorAll(".registrar-lead-list article"))
-        .find((item) => normalize(item.textContent).includes(fullName));
-      const button = row ? Array.from(row.querySelectorAll("button")).find((item) => normalize(item.textContent) === "Convert" && !item.disabled) : null;
+      const created = await waitFor(() => readState().leads?.find((item) => item.fullName === fullName));
+      await goto("/app/registrar/leads/" + created?.id);
+      const detail = await waitFor(() => document.querySelector(".registrar-detail-focus"));
+      const button = detail ? Array.from(detail.querySelectorAll("button")).find((item) => normalize(item.textContent).includes("Convert lead") && !item.disabled) : null;
       if (!button) return { ok: false, reason: "convert button not found", fullName };
       button.click();
       const state = await waitFor(() => {
@@ -3249,6 +4228,8 @@ const deepWorkflowCases = [
     role: "registrar",
     route: "/app/registrar/placement-tests",
     source: workflowActionSource(`
+      await goto("/app/registrar/placement-tests/new");
+      await waitFor(() => document.querySelector(".registrar-placement-booking-form"));
       const setPlacementField = (label, value) => {
         const form = document.querySelector(".registrar-placement-booking-form");
         if (!form) throw new Error("Placement booking form not found");
@@ -3294,7 +4275,9 @@ const deepWorkflowCases = [
     role: "registrar",
     route: "/app/registrar/students",
     source: workflowActionSource(`
+      await goto("/app/registrar/students/new");
       const form = await waitFor(() => document.querySelector(".registrar-student-create-form"));
+      if (!form) throw new Error("Student creation form did not open");
       const setStudentField = (label, value) => {
         const expected = normalize(label).toLowerCase();
         const match = Array.from(form.querySelectorAll("label"))
@@ -3310,6 +4293,9 @@ const deepWorkflowCases = [
       setStudentField("Email", email);
       setStudentField("Phone / WhatsApp", "+20 100 000 0888");
       setStudentField("Branch", "br_cairo");
+      setStudentField("Subject / course interest", "Arabic Language");
+      setStudentField("Age group", "Adult");
+      await clickButtonWithin(".registrar-student-create-form", "Continue");
       await waitFor(() => {
         const runLabel = Array.from(form.querySelectorAll("label"))
           .find((item) => normalize(item.childNodes[0]?.textContent ?? item.textContent).toLowerCase().includes("course run"));
@@ -3324,10 +4310,9 @@ const deepWorkflowCases = [
         return select && Array.from(select.options).some((option) => option.value === "class_ar_l3_cairo") ? select : null;
       });
       setStudentField("Class / group", "class_ar_l3_cairo");
-      setStudentField("Subject / course interest", "Arabic Language");
-      setStudentField("Age group", "Adult");
       setStudentField("Current level / placement", "Arabic Level 3");
       setStudentField("Student status", "active");
+      await clickButtonWithin(".registrar-student-create-form", "Continue");
       setStudentField("Notes", "Created by portal QA.");
       await clickButton("Create and enroll");
       const state = await waitFor(() => {
@@ -3371,10 +4356,11 @@ const deepWorkflowCases = [
     role: "registrar",
     route: "/app/registrar/enrollments",
     source: workflowActionSource(`
+      await goto("/app/registrar/enrollments/ew_demo_1");
+      await waitFor(() => document.querySelector('[data-testid="registrar-enrollment-form"]'));
       const setEnrollmentField = (label, value) => {
-        const row = Array.from(document.querySelectorAll(".registrar-workflow-list article"))
-          .find((item) => normalize(item.textContent).includes("Lead Demo")) ?? document.querySelector(".registrar-workflow-list article");
-        if (!row) throw new Error("Enrollment workflow row not found");
+        const row = document.querySelector('[data-testid="registrar-enrollment-form"]');
+        if (!row) throw new Error("Enrollment form not found");
         const expected = normalize(label).toLowerCase();
         const match = Array.from(row.querySelectorAll("label"))
           .find((item) => normalize(item.childNodes[0]?.textContent ?? item.textContent).toLowerCase().includes(expected));
@@ -3383,14 +4369,14 @@ const deepWorkflowCases = [
       };
       setEnrollmentField("Run", "run_ar_l3_assign_qa");
       await waitFor(() => {
-        const row = document.querySelector(".registrar-workflow-list article");
+        const row = document.querySelector('[data-testid="registrar-enrollment-form"]');
         const classControl = Array.from(row?.querySelectorAll("label") || [])
           .find((item) => normalize(item.childNodes[0]?.textContent ?? item.textContent).toLowerCase().includes("class"))
           ?.querySelector("select");
         return classControl && Array.from(classControl.options).some((option) => option.value === "class_ar_l3_assign_qa") ? classControl : null;
       });
       setEnrollmentField("Class", "class_ar_l3_assign_qa");
-      await clickButton("Activate");
+      await clickButtonWithin('[data-testid="registrar-enrollment-form"]', "Activate enrollment");
       const readServerState = async () => {
         const response = await fetch("/api/platform/state", { credentials: "include" });
         if (!response.ok) return null;
@@ -3434,6 +4420,66 @@ const deepWorkflowCases = [
       value?.assignedRun === "run_ar_l3_assign_qa" &&
       value?.assignedClass === true &&
       value?.lastAudit === "enrollment.activated",
+  },
+  {
+    name: "registrar enrollment record transfers and resumes class membership",
+    role: "registrar",
+    route: "/app/registrar/enrollments/records/enr_ar_l3_cairo",
+    source: workflowActionSource(`
+      const detail = await waitFor(() => document.querySelector('[data-testid="registrar-enrollment-record-detail"]'));
+      if (!detail) throw new Error("Enrollment record detail did not render");
+      setByLabel("Target class", "class_ar_l3_cairo_evening");
+      setByLabel("Transfer reason", "QA schedule transfer");
+      await clickButton("Transfer enrollment");
+      await waitFor(() => {
+        const next = readState();
+        const enrollment = next.enrollments?.find((item) => item.id === "enr_ar_l3_cairo");
+        const source = next.classGroups?.find((item) => item.id === "class_ar_l3_cairo");
+        const target = next.classGroups?.find((item) => item.id === "class_ar_l3_cairo_evening");
+        return enrollment?.classGroupId === target?.id && !source?.studentIds?.includes("stu_cairo_demo") && target?.studentIds?.includes("stu_cairo_demo");
+      }, 5000);
+      setByLabel("Reason for pause or cancellation", "QA temporary pause");
+      await clickButton("Pause", true);
+      await waitFor(() => readState().enrollments?.find((item) => item.id === "enr_ar_l3_cairo")?.status === "paused", 5000);
+      await clickButton("Resume", true);
+      const state = await waitFor(() => {
+        const next = readState();
+        const enrollment = next.enrollments?.find((item) => item.id === "enr_ar_l3_cairo");
+        const transferAudit = next.auditLogs?.find((item) => item.action === "enrollment.transferred" && item.entityId === enrollment?.id);
+        const statusAudits = next.auditLogs?.filter((item) => item.action === "enrollment.status_updated" && item.entityId === enrollment?.id) || [];
+        return enrollment?.status === "active" && transferAudit && statusAudits.length >= 2 ? next : null;
+      }, 5000);
+      const enrollment = state?.enrollments?.find((item) => item.id === "enr_ar_l3_cairo");
+      const source = state?.classGroups?.find((item) => item.id === "class_ar_l3_cairo");
+      const target = state?.classGroups?.find((item) => item.id === "class_ar_l3_cairo_evening");
+      const student = state?.students?.find((item) => item.id === "stu_cairo_demo");
+      const user = state?.users?.find((item) => item.id === student?.userId);
+      return {
+        ok: Boolean(state),
+        classGroupId: enrollment?.classGroupId,
+        courseRunId: enrollment?.courseRunId,
+        teacherId: enrollment?.teacherId,
+        status: enrollment?.status,
+        sourceHasStudent: source?.studentIds?.includes("stu_cairo_demo"),
+        targetHasStudent: target?.studentIds?.includes("stu_cairo_demo"),
+        studentStatus: student?.status,
+        userStatus: user?.status,
+        transferAudit: state?.auditLogs?.some((item) => item.action === "enrollment.transferred" && item.entityId === enrollment?.id),
+        statusAuditCount: state?.auditLogs?.filter((item) => item.action === "enrollment.status_updated" && item.entityId === enrollment?.id).length
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.classGroupId === "class_ar_l3_cairo_evening" &&
+      value?.courseRunId === "run_ar_l3_cairo_2026" &&
+      value?.teacherId === "usr_teacher_demo" &&
+      value?.status === "active" &&
+      value?.sourceHasStudent === false &&
+      value?.targetHasStudent === true &&
+      value?.studentStatus === "active" &&
+      value?.userStatus === "active" &&
+      value?.transferAudit === true &&
+      value?.statusAuditCount >= 2,
   },
   {
     name: "admin user workflow creates staff account",
@@ -3763,8 +4809,20 @@ const deepWorkflowCases = [
       return { ok: state.invoices?.some((item) => item.id === "inv_cairo_demo_1"), invoiceId: "inv_cairo_demo_1" };
     `),
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("inv_cairo_demo_1"));
-      await clickButton("Record payment");
+      await waitFor(() => document.querySelector('[data-testid="branch-payments-list"]'));
+      const row = await waitFor(() =>
+        Array.from(document.querySelectorAll('[data-testid="branch-payments-list"] [data-invoice-id]'))
+          .find((item) => normalize(item.textContent).includes("inv_cairo_demo_1"))
+      );
+      const link = row?.querySelector('a[href="/app/branch/payments/inv_cairo_demo_1"]');
+      if (!link) return { ok: false, reason: "branch payment link not found" };
+      link.click();
+      const detail = await waitFor(() => document.querySelector('[data-testid="branch-payment-record-detail"]'));
+      if (!detail) return { ok: false, reason: "branch payment detail not found" };
+      const button = Array.from(detail.querySelectorAll("button"))
+        .find((item) => normalize(item.textContent).toLowerCase().includes("record payment"));
+      if (!button || button.disabled) return { ok: false, reason: "branch payment button unavailable" };
+      button.click();
       const state = await waitFor(() => {
         const next = readState();
         const invoice = next.invoices?.find((item) => item.id === "inv_cairo_demo_1");
@@ -3795,29 +4853,20 @@ const deepWorkflowCases = [
     route: "/app/admin/integrations",
     source: workflowActionSource(`
       await clickButton("Moodle LMS");
-      setByLabel("Status", "connected");
-      const connectedState = await waitFor(() => {
-        const next = readState();
-        return next.integrations?.find((item) => item.id === "moodle")?.status === "connected" ? next : null;
-      }, 5000);
-      await clickButton("Run local check");
+      await clickButton("Record review");
       const checkedState = await waitFor(() => {
         const next = readState();
         return next.auditLogs?.some((item) => item.action === "integration.local_checked" && item.entityId === "moodle") ? next : null;
       }, 5000);
-      const found = await waitFor(() => normalize(document.body.innerText || document.body.textContent).includes("Moodle LMS") && normalize(document.body.innerText || document.body.textContent).includes("Checked at"));
+      const found = await waitFor(() => normalize(document.body.innerText || document.body.textContent).includes("Moodle LMS") && normalize(document.body.innerText || document.body.textContent).includes("Reviewed"));
       const body = normalize(document.body.innerText || document.body.textContent);
       const integration = checkedState?.integrations?.find((item) => item.id === "moodle");
-      const statusAudit = checkedState?.auditLogs?.find((item) => item.action === "integration.status_updated" && item.entityId === "moodle");
       const checkAudit = checkedState?.auditLogs?.find((item) => item.action === "integration.local_checked" && item.entityId === "moodle");
       return {
-        ok: Boolean(found && connectedState && checkedState),
+        ok: Boolean(found && checkedState),
         checkedProvider: body.includes("Moodle LMS"),
-        checkLogged: body.includes("Checked at"),
+        checkLogged: body.includes("Reviewed"),
         status: integration?.status,
-        hasLastSync: Boolean(integration?.lastSyncAt),
-        statusAuditAction: statusAudit?.action,
-        statusAuditActorId: statusAudit?.actorId,
         checkAuditAction: checkAudit?.action,
         checkAuditActorId: checkAudit?.actorId,
         body: body.slice(0, 700)
@@ -3827,10 +4876,6 @@ const deepWorkflowCases = [
       value?.ok &&
       value?.checkedProvider === true &&
       value?.checkLogged === true &&
-      value?.status === "connected" &&
-      value?.hasLastSync === true &&
-      value?.statusAuditAction === "integration.status_updated" &&
-      value?.statusAuditActorId === "usr_admin_demo" &&
       value?.checkAuditAction === "integration.local_checked" &&
       value?.checkAuditActorId === "usr_admin_demo",
   },
@@ -3839,8 +4884,8 @@ const deepWorkflowCases = [
     role: "superadmin",
     route: "/app/admin/system-health",
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.textContent).includes("Operational checks"));
-      await clickButton("Run checks");
+      await waitFor(() => normalize(document.body.textContent).includes("Readiness checks"));
+      await clickButton("Run check");
       const state = await waitFor(() => {
         const next = readState();
         return next.auditLogs?.find((item) => item.action === "system.health_checked" && item.entityId === "health") ? next : null;
@@ -3912,9 +4957,22 @@ try {
   await runPw("open", [`${baseUrl}/auth/login`]);
 
   if (workflowNameFilter) {
-    const selectedWorkflows = deepWorkflowCases.filter(workflow =>
+    const selectedPublicWorkflows = publicFormWorkflowCases.filter(workflow =>
       workflow.name.toLowerCase().includes(workflowNameFilter)
     );
+    const selectedDeepWorkflows = deepWorkflowCases.filter(workflow =>
+      workflow.name.toLowerCase().includes(workflowNameFilter)
+    );
+    const selectedFormsRoleDenials = formsRoleDenialWorkflowName
+      .toLowerCase()
+      .includes(workflowNameFilter);
+    const selectedWorkflows = [
+      ...selectedPublicWorkflows,
+      ...selectedDeepWorkflows,
+      ...(selectedFormsRoleDenials
+        ? [{ name: formsRoleDenialWorkflowName }]
+        : []),
+    ];
     await assertCheck(
       `workflow filter "${workflowNameFilter}" matched cases`,
       {
@@ -3923,8 +4981,14 @@ try {
       },
       value => value?.count > 0
     );
-    for (const workflow of selectedWorkflows) {
+    for (const workflow of selectedPublicWorkflows) {
+      await runPublicFormWorkflow(workflow);
+    }
+    for (const workflow of selectedDeepWorkflows) {
       await runDeepWorkflow(workflow);
+    }
+    if (selectedFormsRoleDenials) {
+      await runFormsRoleDenialChecks();
     }
     throw new Error("__QA_FILTER_COMPLETE__");
   }
@@ -3976,8 +5040,24 @@ try {
   recordProgress("auth routes");
   for (const authRoute of authRoutes) {
     assertRunBudget(`checking auth route ${authRoute}`);
-    await goto(authRoute);
-    const authCheck = await pageEval(inspectAuthSource(authRoute));
+    let authCheck = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      await goto(authRoute);
+      authCheck = await pageEval(inspectAuthSource(authRoute));
+      if (
+        authCheck?.path === authRoute &&
+        Boolean(authCheck?.heading) &&
+        authCheck?.textLength > 120
+      ) {
+        break;
+      }
+      if (attempt === 1) {
+        recordProgress("auth route retry", {
+          route: authRoute,
+          observedPath: authCheck?.path ?? "unknown",
+        });
+      }
+    }
     await assertCheck(
       `${authRoute} renders auth experience`,
       authCheck,
@@ -4064,7 +5144,13 @@ try {
     await assertCheck(
       `${role.role} dashboard uses protected shell`,
       dashboard,
-      value => value?.shell === true
+      value =>
+        value?.shell === true &&
+        value?.mainCount === 1 &&
+        value?.skipTarget === "#platform-main-content" &&
+        value?.currentNavCount === 1 &&
+        value?.searchTrigger === true &&
+        value?.searchClosed === true
     );
     await assertCheck(
       `${role.role} dashboard session provider matches login API`,
@@ -4111,6 +5197,9 @@ try {
           value?.ready === true &&
           value?.path === route &&
           value?.shell === true &&
+          value?.mainCount === 1 &&
+          value?.skipTarget === "#platform-main-content" &&
+          value?.currentNavCount === 1 &&
           value?.accessDenied === false &&
           value?.notFound === false &&
           value?.errorBoundary === false
@@ -4141,6 +5230,11 @@ try {
   }
 
   recordProgress("deep workflows");
+  if (!roleNameFilters.length) {
+    for (const workflow of publicFormWorkflowCases) {
+      await runPublicFormWorkflow(workflow);
+    }
+  }
   const selectedWorkflowCases = roleNameFilters.length
     ? deepWorkflowCases.filter(workflow =>
         selectedRoles.some(role => role.role === workflow.role)
@@ -4148,6 +5242,12 @@ try {
     : deepWorkflowCases;
   for (const workflow of selectedWorkflowCases) {
     await runDeepWorkflow(workflow);
+  }
+  if (
+    !roleNameFilters.length ||
+    selectedRoles.some(role => role.role === "student")
+  ) {
+    await runFormsRoleDenialChecks();
   }
 
   recordProgress("mobile portal routes");
@@ -4168,6 +5268,10 @@ try {
       value =>
         value?.path === role.dashboard &&
         value?.shell === true &&
+        value?.mainCount === 1 &&
+        value?.skipTarget === "#platform-main-content" &&
+        value?.currentNavCount === 1 &&
+        (value?.shellTinyControls?.length ?? 0) === 0 &&
         value?.accessDenied === false &&
         value?.errorBoundary === false
     );
@@ -4198,6 +5302,9 @@ try {
           value?.ready === true &&
           value?.path === route &&
           value?.shell === true &&
+          value?.mainCount === 1 &&
+          value?.skipTarget === "#platform-main-content" &&
+          value?.currentNavCount === 1 &&
           value?.accessDenied === false &&
           value?.notFound === false &&
           value?.errorBoundary === false

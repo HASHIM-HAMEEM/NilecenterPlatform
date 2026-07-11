@@ -84,6 +84,37 @@ afterEach(() => {
 });
 
 describe("server platform action scope gates", () => {
+  it("rejects legacy snapshot mutations only for normalized durable sessions", async () => {
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "profile.update",
+          name: "Must not reach the snapshot store",
+        },
+        sessionFor("teacher", {
+          provider: "supabase",
+          authorizationModel: "normalized",
+          authUserId: "10000000-0000-4000-8000-000000000002",
+          activeRoleGrantId: "50000000-0000-4000-8000-000000000002",
+          branchIds: ["20000000-0000-4000-8000-000000000001"],
+          departmentIds: ["30000000-0000-4000-8000-000000000001"],
+        })
+      )
+    ).rejects.toThrow(
+      "Normalized workflow persistence is not active for durable sessions."
+    );
+
+    await expect(
+      applyPlatformWorkflowAction(
+        { type: "profile.update", name: "Memory Supabase profile" },
+        sessionFor("teacher", {
+          provider: "supabase",
+          authorizationModel: "snapshot",
+        })
+      )
+    ).resolves.toMatchObject({ result: { action: "profile.updated" } });
+  });
+
   it("overwrites spoofed student and actor ids with the authenticated student session", async () => {
     const result = await applyPlatformWorkflowAction(
       {
@@ -110,6 +141,25 @@ describe("server platform action scope gates", () => {
       action: "assignment.resubmitted",
       actorId: "usr_student_demo",
     });
+  });
+
+  it("rejects snapshot student writes when the session has no mapped student profile", async () => {
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "assignment.submit",
+          assignmentId: "asg_ar_grammar",
+          response: "Must not fall back to the seeded student.",
+        },
+        sessionFor("student", {
+          userId: "10000000-0000-4000-8000-000000000099",
+          provider: "supabase",
+          authorizationModel: "snapshot",
+        })
+      )
+    ).rejects.toThrow(
+      "Student profile is not mapped to this session identity."
+    );
   });
 
   it("allows only super admins to create staff users and writes audit with the session actor", async () => {
@@ -328,9 +378,9 @@ describe("server platform action scope gates", () => {
 
   it("blocks unassigned teachers from class attendance actions", async () => {
     const spareTeacher = sessionFor("teacher", {
-      userId: "usr_teacher_spare",
-      email: "teacher.spare@nilelearn.local",
-      name: "Teacher Spare",
+      userId: "usr_teacher_alex_demo",
+      email: "alex.teacher.demo@nilelearn.local",
+      name: "Alex Teacher Demo",
     });
 
     await expect(
@@ -502,10 +552,10 @@ describe("server platform action scope gates", () => {
     const allowed = await applyPlatformWorkflowAction(
       {
         type: "application.create",
-        fullName: "Online Scope Applicant",
-        email: "online.scope.applicant@nilelearn.local",
+        fullName: "Cairo Scope Applicant",
+        email: "cairo.scope.applicant@nilelearn.local",
         phone: "+20 100 000 4141",
-        branchId: "br_online",
+        branchId: "br_cairo",
         courseInterest: "Arabic Language",
         schedulePreference: "Evening",
       },
@@ -516,7 +566,7 @@ describe("server platform action scope gates", () => {
       application: { branchId: string };
     };
 
-    expect(application.application.branchId).toBe("br_online");
+    expect(application.application.branchId).toBe("br_cairo");
     expect(allowed.state.auditLogs[0]).toMatchObject({
       action: "application.created",
       actorId: "usr_registrar_demo",
@@ -537,6 +587,45 @@ describe("server platform action scope gates", () => {
     ).rejects.toThrow(
       "Registrar can only create applications inside admissions branches."
     );
+  });
+
+  it("rejects missing admissions targets and invalid placement scores at the server gate", async () => {
+    const registrar = sessionFor("registrar");
+
+    await expect(
+      applyPlatformWorkflowAction(
+        { type: "lead.convert", leadId: "lead_missing_exact_target" },
+        registrar
+      )
+    ).rejects.toThrow("Lead lead_missing_exact_target was not found.");
+
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "placement.result.record",
+          bookingId: "placement_missing_exact_target",
+          recommendedLevel: "Arabic Level 3",
+          score: 80,
+          notes: "Must not update another booking.",
+        },
+        registrar
+      )
+    ).rejects.toThrow(
+      "Registrar can only record placement results inside admissions branches."
+    );
+
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "placement.result.record",
+          bookingId: "pt_demo_1",
+          recommendedLevel: "Arabic Level 3",
+          score: 101,
+          notes: "Invalid score must fail.",
+        },
+        registrar
+      )
+    ).rejects.toThrow("Placement score must be between 0 and 100.");
   });
 
   it("blocks registrars from student creation and payments outside admissions scope", async () => {

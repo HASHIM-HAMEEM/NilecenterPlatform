@@ -9,6 +9,8 @@ describe("RBAC page permission mapping", () => {
     expect(getRequiredPermissionForPage("headofdepartment", "certificates")).toBe("certificates:approve");
     expect(getRequiredPermissionForPage("superadmin", "audit-logs")).toBe("audit:read");
     expect(getRequiredPermissionForPage("superadmin", "users")).toBe("settings:write");
+    expect(getRequiredPermissionForPage("registrar", "forms-manage")).toBe("forms:write");
+    expect(getRequiredPermissionForPage("superadmin", "forms-review")).toBe("form_submissions:read");
   });
 
   it("denies role pages when the role lacks the mapped capability", () => {
@@ -24,6 +26,9 @@ describe("RBAC page permission mapping", () => {
     expect(canOpenPage("registrar", "settings")).toBe(true);
     expect(canOpenPage("headofdepartment", "classes")).toBe(true);
     expect(canOpenPage("superadmin", "permissions")).toBe(true);
+    expect(canOpenPage("student", "forms")).toBe(true);
+    expect(canOpenPage("student", "forms-manage")).toBe(false);
+    expect(canOpenPage("registrar", "forms-manage")).toBe(true);
   });
 
   it("filters sidebar entries using the same permission map", () => {
@@ -34,5 +39,7 @@ describe("RBAC page permission mapping", () => {
     expect(studentSidebar).toContain("/app/student/profile");
     expect(superAdminSidebar).toContain("/app/admin/users");
     expect(superAdminSidebar).toContain("/app/admin/audit-logs");
+    expect(studentSidebar).toContain("/app/student/forms");
+    expect(superAdminSidebar).toContain("/app/admin/forms");
   });
 });

@@ -3,15 +3,11 @@ import {
   ReportLayout,
   WorkspaceLayout,
 } from "@/components/platform/PlatformLayouts";
-import StatefulWorkflowExperience from "@/components/platform/WorkflowExperiences";
-import { getPageConfig } from "@/lib/platformData";
+import StudentRecordWorkspace, {
+  type StudentRecordView,
+} from "./StudentRecordWorkspace";
 
-type StudentRecordPageId =
-  | "grades"
-  | "attendance"
-  | "certificates"
-  | "reports"
-  | "quran-progress";
+type StudentRecordPageId = StudentRecordView;
 
 const pageCopy: Record<
   StudentRecordPageId,
@@ -50,7 +46,6 @@ export default function StudentRecordsPage({
   pageId: StudentRecordPageId;
 }) {
   const copy = pageCopy[pageId];
-  const config = getPageConfig("student", pageId);
   const Layout = pageId === "reports" ? ReportLayout : WorkspaceLayout;
 
   return (
@@ -60,13 +55,7 @@ export default function StudentRecordsPage({
         title={copy.title}
         description={copy.description}
         context={copy.context}
-        main={
-          <StatefulWorkflowExperience
-            config={config}
-            role="student"
-            pageId={pageId}
-          />
-        }
+        main={<StudentRecordWorkspace view={pageId} />}
       />
     </PlatformShell>
   );

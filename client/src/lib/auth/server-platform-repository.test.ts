@@ -89,6 +89,22 @@ describe("platform repository boundary", () => {
     );
   });
 
+  it("defaults legacy class groups without a status to active", () => {
+    const legacyClassGroup = { ...seedPlatformState.classGroups[0] } as {
+      id: string;
+      status?: PlatformState["classGroups"][number]["status"];
+    };
+    delete legacyClassGroup.status;
+
+    const state = normalizePlatformState({
+      classGroups: [legacyClassGroup],
+    });
+
+    expect(
+      state.classGroups.find(item => item.id === legacyClassGroup.id)?.status
+    ).toBe("active");
+  });
+
   it("reads platform snapshots through the configured repository", async () => {
     const state = cloneSeed();
     state.users = state.users.filter(user => user.id === "usr_admin_demo");

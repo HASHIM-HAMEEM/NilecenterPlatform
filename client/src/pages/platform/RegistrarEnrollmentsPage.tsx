@@ -1,8 +1,16 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
-import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
+import {
+  DetailLayout,
+  WorkspaceLayout,
+} from "@/components/platform/PlatformLayouts";
+import {
+  DataTableCard,
+  StatusBadge,
+} from "@/components/platform/PlatformPrimitives";
 import { runPlatformWorkflowActionRequest } from "@/lib/backend/api";
 import { platformStore } from "@/lib/domain/store";
 import { getDemoUser } from "@/lib/platformData";
@@ -12,12 +20,34 @@ type AssignmentDraft = {
   classGroupId: string;
 };
 
-export default function RegistrarEnrollmentsPage() {
+type RegistrarEnrollmentsPageProps = {
+  workflowId?: string;
+};
+
+function statusTone(status: string): "green" | "amber" | "red" | "slate" {
+  if (["active", "enrolled", "completed"].includes(status)) return "green";
+  if (["ready_to_enroll", "pending", "placement_booked"].includes(status)) {
+    return "amber";
+  }
+  if (["cancelled", "rejected", "paused"].includes(status)) return "red";
+  return "slate";
+}
+
+function humanize(value: string) {
+  return value
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, character => character.toUpperCase());
+}
+
+export default function RegistrarEnrollmentsPage({
+  workflowId,
+}: RegistrarEnrollmentsPageProps) {
   const [version, setVersion] = useState(0);
   const [assignmentDrafts, setAssignmentDrafts] = useState<
     Record<string, AssignmentDraft>
   >({});
   const [pendingAction, setPendingAction] = useState("");
+  const [activationSaved, setActivationSaved] = useState(false);
 
   const state = useMemo(() => platformStore.getState(), [version]);
   const actorId = getDemoUser("registrar").id;
@@ -27,9 +57,6 @@ export default function RegistrarEnrollmentsPage() {
   const readyWorkflows = state.enrollmentWorkflows.filter(
     workflow => workflow.status === "ready_to_enroll"
   );
-  const activeWorkflowCount = state.enrollmentWorkflows.filter(
-    workflow => workflow.studentId
-  ).length;
 
   const activateEnrollment = async (
     workflowId: string,
@@ -55,8 +82,11 @@ export default function RegistrarEnrollmentsPage() {
       platformStore.setState(response.data.state);
       refresh();
       toast.success("Student portal activated", {
-        description: "The student, enrollment, class, teacher, and invoice are connected.",
+        description:
+          "The student, enrollment, class, teacher, and invoice are connected.",
       });
+      setActivationSaved(true);
+      return true;
     } catch (error) {
       toast.error("Enrollment could not be activated", {
         description:
@@ -64,218 +94,296 @@ export default function RegistrarEnrollmentsPage() {
             ? error.message
             : "Check the selected class and try again.",
       });
+      return false;
     } finally {
       setPendingAction("");
     }
   };
 
-  return (
-    <PlatformShell role="registrar" title="Registrar enrollments">
-      <WorkspaceLayout
-        title="Enrollments"
-        description="Activate prepared students into a course run and class."
-        context="Registrar"
-        main={
-          <section className="registrar-panel">
-            <div className="registrar-panel-head">
-              <div>
-                <span>Enrollment handoff</span>
-                <strong>{readyWorkflows.length} ready</strong>
-              </div>
-              <UserPlus size={18} />
-            </div>
+  const workflow = workflowId
+    ? state.enrollmentWorkflows.find(item => item.id === workflowId)
+    : undefined;
+  const lead = state.leads.find(item => item.id === workflow?.leadId);
+  const student = state.students.find(item => item.id === workflow?.studentId);
+  const user = state.users.find(item => item.id === student?.userId);
+  const course = state.courses.find(item => item.id === workflow?.targetCourseId);
+  const courseRuns = state.courseRuns.filter(
+    item => item.courseId === workflow?.targetCourseId
+  );
+  const defaultCourseRun =
+    courseRuns.find(item => item.status === "active") ?? courseRuns[0];
+  const draft = workflow ? assignmentDrafts[workflow.id] : undefined;
+  const selectedCourseRun =
+    courseRuns.find(item => item.id === draft?.courseRunId) ?? defaultCourseRun;
+  const classGroups = state.classGroups.filter(
+    item => item.courseRunId === selectedCourseRun?.id
+  );
+  const defaultClassGroup =
+    classGroups.find(item => item.studentIds.length < item.capacity) ??
+    classGroups[0];
+  const selectedClassGroup =
+    classGroups.find(item => item.id === draft?.classGroupId) ??
+    defaultClassGroup;
+  const invoice = state.invoices.find(item => item.studentId === student?.id);
+  const isActivated = Boolean(workflow?.studentId && student);
+  const canActivate =
+    Boolean(workflow) &&
+    !isActivated &&
+    workflow?.status === "ready_to_enroll" &&
+    Boolean(selectedCourseRun && selectedClassGroup);
+  const assignment = {
+    courseRunId: selectedCourseRun?.id ?? "",
+    classGroupId: selectedClassGroup?.id ?? "",
+  };
 
-            <div className="registrar-workflow-list">
-              {state.enrollmentWorkflows.map(workflow => {
-                const lead = state.leads.find(
-                  item => item.id === workflow.leadId
-                );
-                const student = state.students.find(
-                  item => item.id === workflow.studentId
-                );
-                const user = state.users.find(
-                  item => item.id === student?.userId
-                );
-                const course = state.courses.find(
-                  item => item.id === workflow.targetCourseId
-                );
-                const courseRuns = state.courseRuns.filter(
-                  item => item.courseId === workflow.targetCourseId
-                );
-                const defaultCourseRun =
-                  courseRuns.find(item => item.status === "active") ??
-                  courseRuns[0];
-                const draft = assignmentDrafts[workflow.id];
-                const selectedCourseRun =
-                  courseRuns.find(item => item.id === draft?.courseRunId) ??
-                  defaultCourseRun;
-                const classGroups = state.classGroups.filter(
-                  item => item.courseRunId === selectedCourseRun?.id
-                );
-                const defaultClassGroup =
-                  classGroups.find(
-                    item => item.studentIds.length < item.capacity
-                  ) ?? classGroups[0];
-                const selectedClassGroup =
-                  classGroups.find(item => item.id === draft?.classGroupId) ??
-                  defaultClassGroup;
-                const invoice = state.invoices.find(
-                  item => item.studentId === student?.id
-                );
-                const isActivated = Boolean(workflow.studentId && student);
-                const canActivate =
-                  !isActivated &&
-                  workflow.status === "ready_to_enroll" &&
-                  Boolean(selectedCourseRun && selectedClassGroup);
-                const assignment = {
-                  courseRunId: selectedCourseRun?.id ?? "",
-                  classGroupId: selectedClassGroup?.id ?? "",
-                };
-
-                return (
-                  <article key={workflow.id}>
+  if (workflowId) {
+    return (
+      <PlatformShell role="registrar" title="Enroll learner">
+        <DetailLayout
+          className="registrar-enrollment-detail-page"
+          title="Enroll learner"
+          description="Choose the class, then activate the learner's school record."
+          context="Registrar"
+          actions={
+            <Link className="platform-secondary-button" href="/app/registrar/enrollments">
+              Back to enrollments
+            </Link>
+          }
+          main={
+            workflow ? (
+              activationSaved ? (
+                <section className="registrar-enrollment-success" data-testid="registrar-enrollment-success">
+                  <CheckCircle2 aria-hidden="true" size={20} />
+                  <div>
+                    <strong>Learner enrolled</strong>
+                    <span>The learner, class, teacher, and invoice are now connected.</span>
+                  </div>
+                  <Link className="platform-primary-button" href="/app/registrar/enrollments">
+                    View enrollments
+                  </Link>
+                </section>
+              ) : (
+                <section
+                  className="registrar-enrollment-detail"
+                  data-testid="registrar-enrollment-detail"
+                >
+                  <header className="registrar-enrollment-detail-head">
                     <div>
-                      <strong>{lead?.fullName ?? user?.name ?? workflow.id}</strong>
-                      <small>
-                        {course?.title ?? "Course"} ·{" "}
-                        {selectedClassGroup?.name ?? "Class pending"} ·{" "}
-                        {workflow.nextStep}
-                      </small>
+                      <span>Enrollment handoff</span>
+                      <h2>{lead?.fullName ?? user?.name ?? "Learner"}</h2>
+                      <p>{course?.title ?? "Course not set"}</p>
                     </div>
-                    <span>{isActivated ? "active" : workflow.status}</span>
-                    {!isActivated ? (
-                      <div className="registrar-workflow-assignment">
-                        <label>
-                          Run
-                          <select
-                            value={selectedCourseRun?.id ?? ""}
-                            disabled={isAnyActionPending || !courseRuns.length}
-                            onChange={event => {
-                              const nextRunId = event.target.value;
-                              const nextClassGroup =
-                                state.classGroups.find(
-                                  item =>
-                                    item.courseRunId === nextRunId &&
-                                    item.studentIds.length < item.capacity
-                                ) ??
-                                state.classGroups.find(
-                                  item => item.courseRunId === nextRunId
-                                );
-                              setAssignmentDrafts(current => ({
-                                ...current,
-                                [workflow.id]: {
-                                  courseRunId: nextRunId,
-                                  classGroupId: nextClassGroup?.id ?? "",
-                                },
-                              }));
-                            }}
-                          >
-                            {courseRuns.length ? (
-                              courseRuns.map(run => {
-                                const branch = state.branches.find(
-                                  item => item.id === run.branchId
-                                );
-                                return (
-                                  <option key={run.id} value={run.id}>
-                                    {run.term} · {branch?.name ?? run.branchId}
-                                  </option>
-                                );
-                              })
-                            ) : (
-                              <option value="">No course run</option>
-                            )}
-                          </select>
-                        </label>
-                        <label>
-                          Class
-                          <select
-                            value={selectedClassGroup?.id ?? ""}
-                            disabled={
-                              isAnyActionPending || !classGroups.length
-                            }
-                            onChange={event =>
-                              setAssignmentDrafts(current => ({
-                                ...current,
-                                [workflow.id]: {
-                                  courseRunId: selectedCourseRun?.id ?? "",
-                                  classGroupId: event.target.value,
-                                },
-                              }))
-                            }
-                          >
-                            {classGroups.length ? (
-                              classGroups.map(group => (
-                                <option key={group.id} value={group.id}>
-                                  {group.name} · {group.studentIds.length}/
-                                  {group.capacity}
+                    <StatusBadge tone={statusTone(isActivated ? "active" : workflow.status)}>
+                      {humanize(isActivated ? "active" : workflow.status)}
+                    </StatusBadge>
+                  </header>
+                  <dl className="registrar-enrollment-facts">
+                    <div>
+                      <dt>Next step</dt>
+                      <dd>{workflow.nextStep}</dd>
+                    </div>
+                    <div>
+                      <dt>Placement</dt>
+                      <dd>{workflow.recommendedLevel ?? "Not set"}</dd>
+                    </div>
+                    <div>
+                      <dt>Invoice</dt>
+                      <dd>{invoice ? humanize(invoice.status) : "Created on activation"}</dd>
+                    </div>
+                  </dl>
+                  {isActivated ? (
+                    <section className="registrar-enrollment-complete">
+                      <div>
+                        <span>Enrollment active</span>
+                        <strong>{selectedClassGroup?.name ?? "Class assigned"}</strong>
+                        <p>The learner is ready for their assigned class.</p>
+                      </div>
+                      <StatusBadge tone="green">Active</StatusBadge>
+                    </section>
+                  ) : (
+                    <form
+                      className="registrar-enrollment-form"
+                      data-testid="registrar-enrollment-form"
+                      onSubmit={event => {
+                        event.preventDefault();
+                        void activateEnrollment(workflow.id, assignment);
+                      }}
+                    >
+                      <div className="registrar-enrollment-form-head">
+                        <div>
+                          <span>Class placement</span>
+                          <strong>Choose the right run and class.</strong>
+                        </div>
+                      </div>
+                      <label>
+                        Course run
+                        <select
+                          value={selectedCourseRun?.id ?? ""}
+                          disabled={isAnyActionPending || !courseRuns.length}
+                          onChange={event => {
+                            const nextRunId = event.target.value;
+                            const nextClassGroup =
+                              state.classGroups.find(
+                                item =>
+                                  item.courseRunId === nextRunId &&
+                                  item.studentIds.length < item.capacity
+                              ) ??
+                              state.classGroups.find(
+                                item => item.courseRunId === nextRunId
+                              );
+                            setActivationSaved(false);
+                            setAssignmentDrafts(current => ({
+                              ...current,
+                              [workflow.id]: {
+                                courseRunId: nextRunId,
+                                classGroupId: nextClassGroup?.id ?? "",
+                              },
+                            }));
+                          }}
+                        >
+                          {courseRuns.length ? (
+                            courseRuns.map(run => {
+                              const branch = state.branches.find(
+                                item => item.id === run.branchId
+                              );
+                              return (
+                                <option key={run.id} value={run.id}>
+                                  {run.term} · {branch?.name ?? run.branchId}
                                 </option>
-                              ))
-                            ) : (
-                              <option value="">No class</option>
-                            )}
-                          </select>
-                        </label>
+                              );
+                            })
+                          ) : (
+                            <option value="">No course run</option>
+                          )}
+                        </select>
+                      </label>
+                      <label>
+                        Class
+                        <select
+                          value={selectedClassGroup?.id ?? ""}
+                          disabled={isAnyActionPending || !classGroups.length}
+                          onChange={event => {
+                            setActivationSaved(false);
+                            setAssignmentDrafts(current => ({
+                              ...current,
+                              [workflow.id]: {
+                                courseRunId: selectedCourseRun?.id ?? "",
+                                classGroupId: event.target.value,
+                              },
+                            }));
+                          }}
+                        >
+                          {classGroups.length ? (
+                            classGroups.map(group => (
+                              <option key={group.id} value={group.id}>
+                                {group.name} · {group.studentIds.length}/
+                                {group.capacity}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="">No class</option>
+                          )}
+                        </select>
+                      </label>
+                      <p className="registrar-enrollment-availability">
+                        {selectedClassGroup
+                          ? `${selectedClassGroup.schedule} · ${Math.max(0, selectedClassGroup.capacity - selectedClassGroup.studentIds.length)} seats available`
+                          : "Create a class before activating this learner."}
+                      </p>
+                      <div className="registrar-enrollment-actions">
+                        <button
+                          type="submit"
+                          className="platform-primary-button"
+                          disabled={!canActivate || isAnyActionPending}
+                        >
+                          <UserPlus size={15} />
+                          {isActionPending(`enrollment.activate:${workflow.id}`)
+                            ? "Activating learner"
+                            : "Activate enrollment"}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </section>
+              )
+            ) : (
+              <section className="platform-empty-state">
+                <strong>This enrollment handoff is not available.</strong>
+                <span>Return to the enrollment list and choose another learner.</span>
+              </section>
+            )
+          }
+        />
+      </PlatformShell>
+    );
+  }
+
+  return (
+    <PlatformShell role="registrar" title="Enrollments">
+      <WorkspaceLayout
+        className="registrar-enrollments-page"
+        title="Enrollments"
+        description="Open one prepared learner and complete their class placement."
+        context="Registrar"
+        actions={
+          <Link className="platform-secondary-button" href="/app/registrar/enrollments/records">
+            Manage active enrollments
+          </Link>
+        }
+        main={
+          <DataTableCard
+            title="Enrollment handoffs"
+            subtitle={`${readyWorkflows.length} ready to enroll`}
+          >
+            <div
+              className="platform-row-list registrar-enrollment-list"
+              data-testid="registrar-enrollment-list"
+            >
+              {state.enrollmentWorkflows.length ? (
+                state.enrollmentWorkflows.map(item => {
+                  const workflowLead = state.leads.find(
+                    leadItem => leadItem.id === item.leadId
+                  );
+                  const workflowStudent = state.students.find(
+                    studentItem => studentItem.id === item.studentId
+                  );
+                  const workflowUser = state.users.find(
+                    userItem => userItem.id === workflowStudent?.userId
+                  );
+                  const workflowCourse = state.courses.find(
+                    courseItem => courseItem.id === item.targetCourseId
+                  );
+                  const active = Boolean(item.studentId && workflowStudent);
+                  return (
+                    <Link
+                      key={item.id}
+                      className="registrar-enrollment-row-link"
+                      href={`/app/registrar/enrollments/${item.id}`}
+                    >
+                      <div>
+                        <strong>
+                          {workflowLead?.fullName ?? workflowUser?.name ?? "Learner"}
+                        </strong>
                         <small>
-                          {selectedClassGroup
-                            ? `${selectedClassGroup.schedule} · ${Math.max(0, selectedClassGroup.capacity - selectedClassGroup.studentIds.length)} seats left`
-                            : "Create a class before activation."}
+                          {workflowCourse?.title ?? "Course not set"} · {item.nextStep}
                         </small>
                       </div>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={!canActivate || isAnyActionPending}
-                      onClick={() => activateEnrollment(workflow.id, assignment)}
-                    >
-                      {isActionPending(`enrollment.activate:${workflow.id}`)
-                        ? "Activating..."
-                        : isActivated
-                          ? `Invoice ${invoice?.status ?? "pending"}`
-                          : "Activate"}
-                    </button>
-                  </article>
-                );
-              })}
-              {state.enrollmentWorkflows.length === 0 ? (
-                <article className="registrar-empty-row">
+                      <StatusBadge tone={statusTone(active ? "active" : item.status)}>
+                        {humanize(active ? "active" : item.status)}
+                      </StatusBadge>
+                    </Link>
+                  );
+                })
+              ) : (
+                <article>
                   <div>
                     <strong>No enrollment handoffs</strong>
-                    <small>
-                      Convert a lead or record placement to prepare enrollment.
-                    </small>
+                    <small>Convert a lead or record placement to prepare enrollment.</small>
                   </div>
                 </article>
-              ) : null}
+              )}
             </div>
-          </section>
-        }
-        side={
-          <section className="registrar-panel">
-            <div className="registrar-panel-head">
-              <div>
-                <span>Status</span>
-                <strong>Activation queue</strong>
-              </div>
-              <CheckCircle2 size={18} />
-            </div>
-            <div className="registrar-operations-list">
-              <article>
-                <strong>{state.enrollmentWorkflows.length} handoffs</strong>
-                <small>Prepared from leads, applications, or placement tests.</small>
-                <span>total</span>
-              </article>
-              <article>
-                <strong>{readyWorkflows.length} ready</strong>
-                <small>Waiting for course run and class confirmation.</small>
-                <span>ready</span>
-              </article>
-              <article>
-                <strong>{activeWorkflowCount} active</strong>
-                <small>Already connected to student portals.</small>
-                <span>active</span>
-              </article>
-            </div>
-          </section>
+          </DataTableCard>
         }
       />
     </PlatformShell>

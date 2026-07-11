@@ -3,13 +3,40 @@ import type { ServerRole, ServerSession } from "../../../../server/auth";
 import { scopePlatformStateForSession } from "../../../../server/routes";
 import { seedPlatformState } from "../domain/seed";
 
-const sessionUsers: Record<ServerRole, { userId: string; email: string; name: string }> = {
-  student: { userId: "usr_student_demo", email: "student.demo@nilelearn.local", name: "Student Demo" },
-  teacher: { userId: "usr_teacher_demo", email: "teacher.demo@nilelearn.local", name: "Teacher Demo" },
-  registrar: { userId: "usr_registrar_demo", email: "registrar.demo@nilelearn.local", name: "Registrar Demo" },
-  headofdepartment: { userId: "usr_hod_demo", email: "hod.demo@nilelearn.local", name: "HOD Demo" },
-  branchadmin: { userId: "usr_branch_demo", email: "branch.demo@nilelearn.local", name: "Branch Demo" },
-  superadmin: { userId: "usr_admin_demo", email: "admin.demo@nilelearn.local", name: "Admin Demo" },
+const sessionUsers: Record<
+  ServerRole,
+  { userId: string; email: string; name: string }
+> = {
+  student: {
+    userId: "usr_student_demo",
+    email: "student.demo@nilelearn.local",
+    name: "Student Demo",
+  },
+  teacher: {
+    userId: "usr_teacher_demo",
+    email: "teacher.demo@nilelearn.local",
+    name: "Teacher Demo",
+  },
+  registrar: {
+    userId: "usr_registrar_demo",
+    email: "registrar.demo@nilelearn.local",
+    name: "Registrar Demo",
+  },
+  headofdepartment: {
+    userId: "usr_hod_demo",
+    email: "hod.demo@nilelearn.local",
+    name: "HOD Demo",
+  },
+  branchadmin: {
+    userId: "usr_branch_demo",
+    email: "branch.demo@nilelearn.local",
+    name: "Branch Demo",
+  },
+  superadmin: {
+    userId: "usr_admin_demo",
+    email: "admin.demo@nilelearn.local",
+    name: "Admin Demo",
+  },
 };
 
 function sessionFor(role: ServerRole): ServerSession {
@@ -28,15 +55,63 @@ function sessionFor(role: ServerRole): ServerSession {
 }
 
 function ids<T extends { id: string }>(items: T[]) {
-  return items.map((item) => item.id).sort();
+  return items.map(item => item.id).sort();
 }
 
 describe("server platform state read scopes", () => {
+  it("returns a data-minimal fallback for identities not mapped to the snapshot", () => {
+    const scoped = scopePlatformStateForSession(seedPlatformState, {
+      ...sessionFor("superadmin"),
+      userId: "40000000-0000-4000-8000-000000000001",
+      provider: "supabase",
+      authorizationModel: "normalized",
+      authUserId: "10000000-0000-4000-8000-000000000001",
+      activeRoleGrantId: "50000000-0000-4000-8000-000000000001",
+      branchIds: [],
+      departmentIds: [],
+    });
+
+    expect(scoped.users).toEqual([]);
+    expect(scoped.courses).toEqual([]);
+    expect(scoped.messages).toEqual([]);
+    expect(scoped.invoices).toEqual([]);
+    expect(scoped.integrations).toEqual([]);
+    expect(scoped.auditLogs).toEqual([]);
+    expect(scoped.permissions.superadmin).toEqual([]);
+    expect(scoped.settings).toEqual({
+      organization: "Nile Learn",
+      defaultLanguage: "English",
+      academicTerm: "",
+      retentionDays: 0,
+    });
+  });
+
+  it("keeps memory-backed Supabase Auth sessions on the snapshot compatibility path", () => {
+    const scoped = scopePlatformStateForSession(seedPlatformState, {
+      ...sessionFor("teacher"),
+      provider: "supabase",
+      authorizationModel: "snapshot",
+    });
+
+    expect(ids(scoped.teachers)).toEqual(["tch_demo"]);
+    expect(scoped.courseRuns.length).toBeGreaterThan(0);
+    expect(
+      scoped.courseRuns.every(item => item.teacherId === "usr_teacher_demo")
+    ).toBe(true);
+  });
+
   it("returns only the student's own learning records and assigned teachers", () => {
-    const scoped = scopePlatformStateForSession(seedPlatformState, sessionFor("student"));
+    const scoped = scopePlatformStateForSession(
+      seedPlatformState,
+      sessionFor("student")
+    );
 
     expect(ids(scoped.students)).toEqual(["stu_demo"]);
-    expect(ids(scoped.users)).toEqual(["usr_registrar_online_demo", "usr_student_demo", "usr_teacher_demo"]);
+    expect(ids(scoped.users)).toEqual([
+      "usr_registrar_online_demo",
+      "usr_student_demo",
+      "usr_teacher_demo",
+    ]);
     expect(ids(scoped.courseRuns)).toEqual(["run_ar_l3_2026", "run_qt_1_2026"]);
     expect(ids(scoped.classGroups)).toEqual(["class_ar_l3_a", "class_qt_1_b"]);
     expect(ids(scoped.branches)).toEqual(["br_online"]);
@@ -44,35 +119,67 @@ describe("server platform state read scopes", () => {
     expect(scoped.leads).toEqual([]);
     expect(scoped.applications).toEqual([]);
     expect(scoped.questionBankItems).toEqual([]);
-    expect(scoped.attendance.every((item) => item.studentId === "stu_demo")).toBe(true);
-    expect(scoped.invoices.every((item) => item.studentId === "stu_demo")).toBe(true);
+    expect(scoped.attendance.every(item => item.studentId === "stu_demo")).toBe(
+      true
+    );
+    expect(scoped.invoices.every(item => item.studentId === "stu_demo")).toBe(
+      true
+    );
     expect(scoped.auditLogs).toEqual([]);
   });
 
   it("returns only classes, students, and assessment work assigned to the teacher", () => {
-    const scoped = scopePlatformStateForSession(seedPlatformState, sessionFor("teacher"));
+    const scoped = scopePlatformStateForSession(
+      seedPlatformState,
+      sessionFor("teacher")
+    );
 
     expect(ids(scoped.teachers)).toEqual(["tch_demo"]);
-    expect(scoped.courseRuns.every((item) => item.teacherId === "usr_teacher_demo")).toBe(true);
+    expect(
+      scoped.courseRuns.every(item => item.teacherId === "usr_teacher_demo")
+    ).toBe(true);
     expect(ids(scoped.students)).toEqual(["stu_cairo_demo", "stu_demo"]);
-    expect(ids(scoped.users)).toEqual(expect.arrayContaining(["usr_admin_demo", "usr_hod_demo", "usr_student_demo", "usr_teacher_demo"]));
-    expect(scoped.students.every((item) => ["usr_student_demo", "usr_student_cairo_demo"].includes(item.userId))).toBe(true);
+    expect(ids(scoped.users)).toEqual(
+      expect.arrayContaining([
+        "usr_admin_demo",
+        "usr_hod_demo",
+        "usr_student_demo",
+        "usr_teacher_demo",
+      ])
+    );
+    expect(
+      scoped.students.every(item =>
+        ["usr_student_demo", "usr_student_cairo_demo"].includes(item.userId)
+      )
+    ).toBe(true);
     expect(scoped.staffProfiles).toHaveLength(1);
-    expect(scoped.staffProfiles[0]).toMatchObject({ userId: "usr_teacher_demo", role: "teacher" });
+    expect(scoped.staffProfiles[0]).toMatchObject({
+      userId: "usr_teacher_demo",
+      role: "teacher",
+    });
     expect(scoped.leads).toEqual([]);
     expect(scoped.applications).toEqual([]);
     expect(scoped.invoices).toEqual([]);
     expect(scoped.payments).toEqual([]);
     expect(scoped.questionBankItems.length).toBeGreaterThan(0);
-    expect(scoped.questionBankItems.every((item) => scoped.courseRuns.some((run) => run.id === item.courseRunId))).toBe(true);
+    expect(
+      scoped.questionBankItems.every(item =>
+        scoped.courseRuns.some(run => run.id === item.courseRunId)
+      )
+    ).toBe(true);
   });
 
   it("limits branch admins to their branch operations and payment records", () => {
-    const scoped = scopePlatformStateForSession(seedPlatformState, sessionFor("branchadmin"));
+    const scoped = scopePlatformStateForSession(
+      seedPlatformState,
+      sessionFor("branchadmin")
+    );
 
     expect(ids(scoped.branches)).toEqual(["br_cairo"]);
-    expect(scoped.courseRuns.every((item) => item.branchId === "br_cairo")).toBe(true);
-    expect(scoped.rooms.every((item) => item.branchId === "br_cairo")).toBe(true);
+    expect(scoped.courseRuns.every(item => item.branchId === "br_cairo")).toBe(
+      true
+    );
+    expect(scoped.rooms.every(item => item.branchId === "br_cairo")).toBe(true);
     expect(ids(scoped.students)).toEqual(["stu_cairo_demo"]);
     expect(ids(scoped.invoices)).toEqual(["inv_cairo_demo_1"]);
     expect(scoped.payments).toEqual([]);
@@ -81,12 +188,23 @@ describe("server platform state read scopes", () => {
     expect(scoped.certificates).toEqual([]);
   });
 
-  it("uses registrar branch plus department scope without exposing academic mutation data", () => {
-    const scoped = scopePlatformStateForSession(seedPlatformState, sessionFor("registrar"));
+  it("uses explicit registrar staff-profile branch scope without exposing academic mutation data", () => {
+    const scoped = scopePlatformStateForSession(
+      seedPlatformState,
+      sessionFor("registrar")
+    );
 
     expect(ids(scoped.branches)).toEqual(["br_cairo", "br_online"]);
-    expect(scoped.courseRuns.every((item) => ["br_cairo", "br_online"].includes(item.branchId))).toBe(true);
-    expect(ids(scoped.students)).toEqual(["stu_cairo_demo", "stu_demo"]);
+    expect(
+      scoped.courseRuns.every(item =>
+        ["br_cairo", "br_online"].includes(item.branchId)
+      )
+    ).toBe(true);
+    expect(ids(scoped.students)).toEqual([
+      "stu_cairo_demo",
+      "stu_demo",
+      "stu_ready_demo",
+    ]);
     expect(ids(scoped.applications)).toEqual(["app_demo_1"]);
     expect(ids(scoped.placementTests)).toEqual(["pt_demo_1"]);
     expect(scoped.attendance).toEqual([]);
@@ -97,11 +215,20 @@ describe("server platform state read scopes", () => {
   });
 
   it("limits HODs to department academic data and excludes finance/admissions queues", () => {
-    const scoped = scopePlatformStateForSession(seedPlatformState, sessionFor("headofdepartment"));
+    const scoped = scopePlatformStateForSession(
+      seedPlatformState,
+      sessionFor("headofdepartment")
+    );
 
     expect(ids(scoped.departments)).toEqual(["dep_arabic"]);
-    expect(scoped.programs.every((item) => item.departmentId === "dep_arabic")).toBe(true);
-    expect(ids(scoped.students)).toEqual(["stu_cairo_demo", "stu_demo"]);
+    expect(
+      scoped.programs.every(item => item.departmentId === "dep_arabic")
+    ).toBe(true);
+    expect(ids(scoped.students)).toEqual([
+      "stu_cairo_demo",
+      "stu_demo",
+      "stu_ready_demo",
+    ]);
     expect(scoped.courses.length).toBeGreaterThan(0);
     expect(scoped.certificates.length).toBeGreaterThan(0);
     expect(scoped.invoices).toEqual([]);
@@ -111,13 +238,18 @@ describe("server platform state read scopes", () => {
     expect(scoped.placementTests).toEqual([]);
   });
 
-  it("keeps super admin globally scoped while preserving own saved report views", () => {
-    const scoped = scopePlatformStateForSession(seedPlatformState, sessionFor("superadmin"));
+  it("keeps super admin globally scoped including all saved report views", () => {
+    const scoped = scopePlatformStateForSession(
+      seedPlatformState,
+      sessionFor("superadmin")
+    );
 
     expect(scoped.users).toHaveLength(seedPlatformState.users.length);
     expect(scoped.students).toHaveLength(seedPlatformState.students.length);
     expect(scoped.branches).toHaveLength(seedPlatformState.branches.length);
     expect(scoped.auditLogs).toHaveLength(seedPlatformState.auditLogs.length);
-    expect(ids(scoped.reportPresets)).toEqual(["rptpreset_admin_finance"]);
+    expect(ids(scoped.reportPresets)).toEqual(
+      ids(seedPlatformState.reportPresets)
+    );
   });
 });

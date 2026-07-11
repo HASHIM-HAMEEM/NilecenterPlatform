@@ -2,10 +2,10 @@
 
 ## Purpose
 
-This document records the first evidence-based pass over the legacy Nile EMS at
-`register.nilecenter.org`. It is a functional reference only. The new Nile
-Learn portal must preserve valid school workflows, but must not copy legacy UI,
-security weaknesses, invalid data states, or integration assumptions.
+This document records the read-only evidence gathered from the legacy Nile EMS
+and Moodle. It is a functional reference only. The new Nile Learn portal must
+preserve valid school workflows, but must not copy legacy UI, security
+weaknesses, invalid data states, or integration assumptions.
 
 This is a discovery artifact. It does not authorize a production sync, data
 migration, schema change, or live provider connection.
@@ -14,31 +14,60 @@ migration, schema change, or live provider connection.
 
 - Logged into the supplied test accounts without creating, editing, deleting,
   or submitting any record.
-- Observed one Registrar account and two Supervisor-routed accounts. More
-  role-specific test accounts are required before calling any other role
-  workflow manually verified.
+- Verified Registrar, Teacher, HOD, Supervisor-routed, and Branch Administrator
+  navigation and representative read-only workflow surfaces.
+- Verified a Moodle teacher account, course workspace, course sections,
+  activities, participants, grades, and attendance-related identifiers.
 - Inspected the public Angular route configuration and loaded role modules.
 - Inspected the current Nile Learn routes, domain model, server action gates,
   persistence adapter, Moodle boundary, and integration UI.
 
 ## Legacy Role And Feature Map
 
-| Legacy area     | Confirmed workflows                                                                                                    | New portal owner                                      |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Registrar       | Student list/search/detail, direct student registration, pending-course queue, daily payments, messages                | Registrar                                             |
-| Teacher         | Schedule, exams, attendance, classes, grades, notes, messages                                                          | Teacher                                               |
-| Supervisor      | Attendance overview by branch, today's classes, user detail, messages                                                  | HOD or operations supervisor policy                   |
-| Guidance        | Applications, guidance groups, student records, registration reports                                                   | Registrar with guidance permissions                   |
-| Accountant      | Accounting entries, categories, fees, debts, payments, wages, reports, archive                                         | Finance role or tightly scoped Super Admin capability |
-| Branch admin    | Local home, files, messages, branch operations module                                                                  | Branch Admin                                          |
-| Department head | Department-head workspace module                                                                                       | HOD                                                   |
-| Admin           | Users, students, courses, classes, classrooms, branches, accounting, files, logs, reports, and Moodle category mapping | Super Admin with delegated permissions                |
+| Legacy area     | Confirmed workflows                                                                                                    | New portal owner                                    |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Registrar       | Student list/search/detail, direct student registration, pending-course queue, daily payments, messages                | Registrar                                           |
+| Teacher         | Schedule, exams, attendance, classes, grades, notes, messages                                                          | Teacher                                             |
+| Supervisor      | Attendance overview by branch, today's classes, user detail, messages                                                  | HOD or Branch Admin permissions                     |
+| Guidance        | Applications, guidance groups, student records, registration reports                                                   | Registrar with guidance permissions                 |
+| Accountant      | Accounting entries, categories, fees, debts, payments, wages, reports, archive                                         | Registrar, Branch Admin, or Super Admin permissions |
+| Branch admin    | Local home, files, messages, branch operations module                                                                  | Branch Admin                                        |
+| Department head | Department-head workspace module                                                                                       | HOD                                                 |
+| Admin           | Users, students, courses, classes, classrooms, branches, accounting, files, logs, reports, and Moodle category mapping | Super Admin with delegated permissions              |
 
 The legacy route roots are `admin`, `registrar`, `teacher`, `supervisor`,
 `headofdepartment`, `branchadmin`, `guidance`, `accountant`, plus shared and
 session routes. This confirms the replacement needs more than a student LMS:
 it is an LMS, admissions desk, school operations system, and finance-adjacent
 EMS.
+
+Supervisor, Guidance, and Accountant are legacy capability bundles, not target
+Nile Learn roles. No observed legacy label is sufficient evidence for a new
+role. Super Admin behavior must be designed from global authority requirements,
+not guessed from a Supervisor session.
+
+## Role-Specific Evidence
+
+### Teacher
+
+The Teacher workspace exposes schedule, classes, attendance, exams, grades,
+notes, and messages. These are class-scoped operations. The replacement must
+derive teacher access through effective-dated class assignments and class
+membership, never through a broad directory role alone.
+
+### HOD
+
+The HOD route exposes academic and department-level oversight rather than
+global administration. The replacement must scope HOD reads and approvals by
+department and allowed branches, with separate audit evidence for approvals
+and rejections.
+
+### Branch Administrator And Supervisor
+
+Branch administration and Supervisor views expose local classes, attendance,
+users, messages, and branch operations. The legacy route behavior is not a
+safe authorization model. Nile Learn must implement these as explicit branch
+permissions and deny cross-branch access at the server and RLS layers.
 
 ## Registrar Workflow Observed
 
@@ -82,6 +111,16 @@ The admin course list exposes both `Moodle Code` and `Moodle Id`, and the
 legacy app has a top-level Moodle category mapping screen. New Nile Learn must
 retain external IDs and mapping history; a course title alone is not a safe
 sync key.
+
+The verified Moodle course contract includes user ID, course ID, short name,
+start/end dates, enrollment, sections, pages, video resources, quizzes,
+gradebook data, completion, attendance activity IDs, and attendance sessions.
+These identifiers belong in provider-neutral external mapping records.
+
+One EMS-linked Moodle course resolved correctly while another observed mapping
+did not resolve to an available Moodle course. This is direct evidence that a
+connector needs stale/missing mapping states and a reconciliation queue; it
+must not assume every stored external ID is valid.
 
 The current Nile Learn Moodle client is a deliberate mock. Its Integration
 screen can record a status but does not execute a live connector, and the
@@ -137,8 +176,11 @@ screens.
 ### 1. Canonical Nile Learn Data
 
 Nile Learn owns identities, roles, branch/department scopes, admissions
-workflow state, enrollment, attendance, grades, invoices, certificates,
-messages, audit logs, and portal behavior. Browser state is never authority.
+workflow state, enrollment, course delivery, classes, schedules, attendance,
+Nile-native assessments and grades, invoices, certificates, messages, audit
+logs, and portal behavior. Moodle initially owns Moodle-managed course content,
+activities, completion, attempts, grades, and feedback. Browser state is never
+authority.
 
 ### 2. External Reference Layer
 
@@ -160,18 +202,20 @@ retry classification, dead-letter handling, reconciliation reports, and audit
 events. Admin UI should show observed state from those runs, never allow a
 manual status selector to claim a live connection exists.
 
-### 4. Safe Rollout Order
+### 4. Provider Dependency Model
 
-1. Stabilize the current role workflows and normalized data authority in a
-   development environment.
-2. Build read-only Moodle and legacy EMS discovery/import adapters against
-   test credentials.
-3. Store external references and run reconciliation without changing Nile
-   Learn data.
-4. Compare counts and sampled records with human approval.
-5. Enable narrow, reversible imports for one entity family at a time.
-6. Only then consider controlled outbound writeback, and only where there is a
-   documented source-of-truth rule.
+This is a dependency record, not a rollout order. Phase ordering and approval
+live only in `docs/NILE_LEARN_MASTER_PLAN.md`.
+
+- Normalized Nile Learn identity and workflow authority must exist before any
+  provider projection or migration.
+- Moodle begins as a read-only projection against dedicated test credentials.
+- Legacy EMS uses a finite migration reader, never recurring synchronization or
+  writeback.
+- External references and reconciliation evidence precede any accepted import.
+- Counts, relationships, balances, and sampled records require human approval.
+- EMS access is retired after cutover. Moodle writes require a separately
+  approved phase with explicit field authority.
 
 ### 5. UI Direction
 
@@ -184,13 +228,18 @@ human approval gates.
 
 ## Remaining Discovery Inputs
 
-To complete manual, role-by-role validation, provide non-production accounts
-for Student, Teacher, HOD, Branch Admin, Super Admin, Guidance, and Accounting
-roles. Use dedicated test records only.
+The read-only role audit is sufficient to design the target role model. Useful
+additional evidence, when available, is limited to:
+
+- a dedicated single-branch administrator account to prove isolation;
+- a direct Super Admin account to compare global legacy coverage without
+  inferring it from Supervisor;
+- an official API, database export, or approved service account for repeatable
+  provider discovery.
 
 Before live integration work begins, provide:
 
-- the old EMS API/documentation or an approved read-only integration account;
+- the old EMS API/documentation or an approved immutable export;
 - Moodle service-account documentation and a dedicated server-only token with
   the minimum required functions;
 - a dev/test Supabase project and a written source-of-truth decision for each
@@ -198,10 +247,13 @@ Before live integration work begins, provide:
 - an approved data-retention and migration policy for identity, guardian,
   residence, payment, and academic records.
 
-## Immediate Next Slice
+## Modernization Sequence Authority
 
-Complete the discovery matrix with the missing role accounts, then implement
-only the first bounded foundation: normalized identity, role/scope, audit, and
-external-reference tables in development. No live EMS/Moodle sync or UI-wide
-redesign should begin before that slice has passing scope, RLS, migration,
-build, and browser workflow checks.
+The current checkpoint and only approved next slice live in
+`docs/NILE_LEARN_MASTER_PLAN.md` under **Current Modernization Checkpoint**.
+This discovery record does not define implementation order.
+
+Legacy-specific guardrails remain unchanged: no live EMS or Moodle connection,
+credential-based integration, writeback, or UI-wide redesign may begin without
+the provider-specific phase, immutable source evidence, reconciliation design,
+rollback, denial, build, and workflow evidence.

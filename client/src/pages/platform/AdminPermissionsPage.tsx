@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, KeyRound, ShieldCheck, X } from "lucide-react";
+import { CheckCircle2, KeyRound, X } from "lucide-react";
 import PlatformShell from "@/components/platform/PlatformShell";
 import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
-import { StatusBadge } from "@/components/platform/PlatformPrimitives";
 import { runPlatformWorkflowActionRequest } from "@/lib/backend/api";
 import { platformStore } from "@/lib/domain/store";
 import {
@@ -48,7 +47,10 @@ function permissionTestId(role: Role, permission: Permission) {
 
 function getAllPermissions(statePermissions: Record<Role, Permission[]>) {
   return Array.from(
-    new Set([...Object.values(rolePermissions).flat(), ...Object.values(statePermissions).flat()])
+    new Set([
+      ...Object.values(rolePermissions).flat(),
+      ...Object.values(statePermissions).flat(),
+    ])
   ).sort((a, b) => a.localeCompare(b)) as Permission[];
 }
 
@@ -56,14 +58,19 @@ export default function AdminPermissionsPage() {
   const [version, setVersion] = useState(0);
   const [selectedRole, setSelectedRole] = useState<Role>("teacher");
   const [selectedModule, setSelectedModule] = useState("payments");
-  const [savingPermission, setSavingPermission] = useState<Permission | null>(null);
+  const [savingPermission, setSavingPermission] = useState<Permission | null>(
+    null
+  );
   const [result, setResult] = useState<{
     tone: "success" | "error";
     title: string;
     detail: string;
   } | null>(null);
   const state = useMemo(() => platformStore.getState(), [version]);
-  const allPermissions = useMemo(() => getAllPermissions(state.permissions), [state.permissions]);
+  const allPermissions = useMemo(
+    () => getAllPermissions(state.permissions),
+    [state.permissions]
+  );
   const modules = useMemo(
     () =>
       Array.from(new Set(allPermissions.map(permissionModule))).sort((a, b) =>
@@ -72,16 +79,14 @@ export default function AdminPermissionsPage() {
     [allPermissions]
   );
   const filteredPermissions = allPermissions.filter(
-    permission => selectedModule === "all" || permissionModule(permission) === selectedModule
+    permission =>
+      selectedModule === "all" ||
+      permissionModule(permission) === selectedModule
   );
   const selectedRolePermissions = state.permissions[selectedRole] ?? [];
   const grantedCount = filteredPermissions.filter(permission =>
     selectedRolePermissions.includes(permission)
   ).length;
-  const recentPermissionAudit = state.auditLogs.find(
-    audit => audit.action === "permission.updated" && audit.entityId === selectedRole
-  );
-
   const togglePermission = async (permission: Permission) => {
     if (savingPermission) return;
     const currentlyGranted = selectedRolePermissions.includes(permission);
@@ -124,7 +129,10 @@ export default function AdminPermissionsPage() {
             className="admin-permissions-workspace"
             data-testid="admin-permissions-page"
           >
-            <div className="admin-permissions-heading" data-testid="access-rules-section">
+            <div
+              className="admin-permissions-heading"
+              data-testid="access-rules-section"
+            >
               <span>
                 <KeyRound size={15} />
                 Access rules
@@ -136,7 +144,7 @@ export default function AdminPermissionsPage() {
               </p>
             </div>
 
-            <div className="admin-permissions-toolbar">
+            <div className="admin-compact-toolbar admin-permissions-toolbar">
               <label>
                 Role
                 <select
@@ -210,48 +218,18 @@ export default function AdminPermissionsPage() {
                     disabled={Boolean(savingPermission)}
                     onClick={() => void togglePermission(permission)}
                   >
-                    <span>{granted ? <CheckCircle2 size={14} /> : <X size={14} />}</span>
+                    <span>
+                      {granted ? <CheckCircle2 size={14} /> : <X size={14} />}
+                    </span>
                     <strong>{formatPermission(permission)}</strong>
-                    <small>{saving ? "Saving" : granted ? "Allowed" : "Blocked"}</small>
+                    <small>
+                      {saving ? "Saving" : granted ? "Allowed" : "Blocked"}
+                    </small>
                   </button>
                 );
               })}
             </div>
           </section>
-        }
-        side={
-          <aside className="admin-permissions-side">
-            <div className="admin-permissions-side-head">
-              <span>
-                <ShieldCheck size={16} />
-              </span>
-              <div>
-                <strong>Change carefully</strong>
-                <p>
-                  Updates are saved through the protected workflow action and
-                  recorded in Activity.
-                </p>
-              </div>
-            </div>
-            <div className="admin-permissions-side-stat">
-              <span>Selected role</span>
-              <strong>{roleMeta[selectedRole].label}</strong>
-              <StatusBadge tone="slate">{roleMeta[selectedRole].shortLabel}</StatusBadge>
-            </div>
-            <div className="admin-permissions-side-stat">
-              <span>Current area</span>
-              <strong>
-                {selectedModule === "all" ? "All areas" : moduleLabels[selectedModule] ?? selectedModule}
-              </strong>
-              <StatusBadge tone={grantedCount === filteredPermissions.length ? "green" : "amber"}>
-                {grantedCount} allowed
-              </StatusBadge>
-            </div>
-            <div className="admin-permissions-side-note">
-              <span>Last access change</span>
-              <p>{recentPermissionAudit?.summary ?? "No recent change for this role."}</p>
-            </div>
-          </aside>
         }
       />
     </PlatformShell>

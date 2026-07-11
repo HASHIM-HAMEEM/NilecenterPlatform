@@ -1,0 +1,254 @@
+/*
+  Shared role insight surface.
+  Charts stay small, actionable, and derived from existing local state. They
+  are intentionally not a new analytics dashboard or a replacement for the
+  primary task on a page.
+*/
+
+.portal-insight {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.72fr) minmax(300px, 1.28fr);
+  gap: 24px;
+  align-items: center;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 97%, var(--role-tint));
+  box-shadow: 0 14px 36px rgba(26, 26, 26, 0.035);
+  padding: 22px 24px;
+}
+
+.portal-insight-copy {
+  min-width: 0;
+}
+
+.portal-insight-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted-foreground);
+}
+
+.portal-insight-heading span {
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.portal-insight-heading svg {
+  color: var(--portal-insight-color);
+}
+
+.portal-insight h2 {
+  margin: 8px 0 6px;
+  color: var(--foreground);
+  font-size: 20px;
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1.18;
+}
+
+.portal-insight p {
+  max-width: 38ch;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.portal-insight-value {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 18px;
+}
+
+.portal-insight-value strong {
+  color: var(--foreground);
+  font-size: 28px;
+  font-weight: 780;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.portal-insight-value span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.portal-insight-chart {
+  min-width: 0;
+  margin: 0;
+}
+
+.portal-insight-chart svg {
+  display: block;
+  width: 100%;
+  height: 150px;
+  overflow: visible;
+}
+
+.portal-insight-grid {
+  fill: none;
+  stroke: color-mix(in srgb, var(--border) 80%, transparent);
+  stroke-dasharray: 3 5;
+  stroke-width: 1;
+}
+
+.portal-insight-area {
+  fill: color-mix(in srgb, var(--portal-insight-color) 12%, transparent);
+}
+
+.portal-insight-line {
+  fill: none;
+  stroke: var(--portal-insight-color);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.portal-insight-point {
+  fill: var(--card);
+  stroke: var(--portal-insight-color);
+  stroke-width: 2.5;
+}
+
+.portal-insight-bar {
+  fill: color-mix(in srgb, var(--portal-insight-color) 85%, var(--foreground));
+}
+
+.portal-insight-chart figcaption {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.portal-insight-chart figcaption span {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.portal-insight-chart figcaption b {
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-insight-chart figcaption em {
+  flex: 0 0 auto;
+  color: var(--foreground);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.portal-insight.compact {
+  display: block;
+  min-height: 0;
+  padding: 18px;
+}
+
+.portal-insight.compact h2 {
+  font-size: 18px;
+}
+
+.portal-insight.compact p {
+  font-size: 12px;
+}
+
+.portal-insight.compact .portal-insight-value {
+  margin-top: 14px;
+}
+
+.portal-insight.compact .portal-insight-chart {
+  margin-top: 14px;
+}
+
+.portal-insight.compact .portal-insight-chart svg {
+  height: 126px;
+}
+
+.portal-insight.compact .portal-insight-chart figcaption {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.platform-shell[data-role="student"] .portal-insight {
+  background: color-mix(in srgb, var(--card) 97%, #e9f2ec);
+}
+
+.platform-shell[data-role="teacher"] .portal-insight {
+  background: color-mix(in srgb, var(--card) 97%, #e9f1f7);
+}
+
+@media (min-width: 1080px) {
+  .platform-shell[data-role="student"] .portal-insight,
+  .platform-shell[data-role="teacher"] .portal-insight,
+  .platform-shell[data-role="registrar"] .portal-insight,
+  .platform-shell[data-role="headofdepartment"] .portal-insight,
+  .platform-shell[data-role="branchadmin"] .portal-insight,
+  .platform-shell[data-role="superadmin"] .portal-insight {
+    max-width: 1560px;
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 1260px) {
+  .teacher-reports-page .platform-v2-layout-grid,
+  .admin-reports-page .platform-v2-layout-grid,
+  .hod-report-page .platform-v2-layout-grid,
+  .branch-reports-page .platform-v2-layout-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+  }
+
+  .teacher-reports-page .platform-v2-layout-side,
+  .admin-reports-page .platform-v2-layout-side,
+  .hod-report-page .platform-v2-layout-side,
+  .branch-reports-page .platform-v2-layout-side {
+    position: sticky;
+    top: 18px;
+  }
+}
+
+@media (max-width: 720px) {
+  .portal-insight {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .portal-insight h2 {
+    font-size: 19px;
+  }
+
+  .portal-insight-chart svg {
+    height: 134px;
+  }
+
+  .portal-insight-chart figcaption {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-insight *,
+  .portal-insight *::before,
+  .portal-insight *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

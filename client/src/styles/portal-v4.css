@@ -1,0 +1,167 @@
+/*
+  Portal V4 control system.
+  One shared rail keeps filters and route tabs compact, predictable, and usable
+  across normal desktop, large display, tablet, and phone widths.
+*/
+
+.platform-v2-layout {
+  gap: 18px;
+}
+
+.platform-v2-layout-toolbar {
+  min-inline-size: 0;
+}
+
+.portal-simple-page .platform-v2-layout-toolbar,
+.simple-portal-page .platform-v2-layout-toolbar,
+.portal-ia-page .platform-v2-layout-toolbar,
+.admin-ia-page .platform-v2-layout-toolbar {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.platform-v2-layout-toolbar > .portal-simple-toolbar,
+.platform-v2-layout-toolbar > .simple-portal-toolbar,
+.platform-v2-layout-toolbar > .portal-ia-toolbar {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.portal-simple-toolbar,
+.simple-portal-toolbar,
+.portal-ia-toolbar {
+  min-height: 50px;
+  border-color: color-mix(in srgb, var(--border) 88%, var(--foreground));
+  background: color-mix(in srgb, var(--card) 96%, var(--muted));
+  padding: 4px;
+  gap: 4px;
+}
+
+.portal-simple-toolbar label,
+.simple-portal-toolbar label,
+.portal-ia-toolbar label {
+  min-height: 40px;
+  border-color: transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding-inline: 12px;
+  font-weight: 720;
+}
+
+.portal-simple-toolbar label + label,
+.simple-portal-toolbar label + label,
+.portal-ia-toolbar label + label {
+  border-inline-start-color: var(--border);
+}
+
+.portal-simple-toolbar label:focus-within,
+.simple-portal-toolbar label:focus-within,
+.portal-ia-toolbar label:focus-within {
+  background: color-mix(in srgb, var(--role-tint) 34%, var(--card));
+}
+
+.portal-simple-tabs,
+.portal-ia-subnav,
+.platform-segmented {
+  min-height: 50px;
+  padding: 4px;
+  gap: 4px;
+  border-color: color-mix(in srgb, var(--border) 88%, var(--foreground));
+  background: color-mix(in srgb, var(--card) 96%, var(--muted));
+}
+
+.portal-simple-tabs a,
+.portal-simple-tabs button,
+.portal-ia-subnav a,
+.platform-segmented button {
+  min-height: 40px;
+  padding-inline: 15px;
+  font-weight: 760;
+}
+
+.portal-simple-tabs a.active,
+.portal-simple-tabs button.active,
+.portal-ia-subnav a.active,
+.platform-segmented button.active {
+  background: var(--foreground);
+  box-shadow: 0 1px 2px rgba(26, 26, 26, 0.14);
+}
+
+.platform-status,
+.platform-chip-row > span,
+.platform-calendar-scope span,
+.platform-row-list article > span,
+.platform-row-actions span,
+.platform-inbox-tabs span,
+.profile-chip-row span {
+  min-height: 23px;
+  padding-inline: 8px;
+  font-size: 10.5px;
+  font-weight: 760;
+}
+
+@media (min-width: 1600px) {
+  .platform-v2-layout {
+    gap: 22px;
+  }
+}
+
+@media (max-width: 760px) {
+  .platform-v2-layout {
+    gap: 14px;
+  }
+
+  .portal-simple-page .platform-v2-layout-toolbar,
+  .simple-portal-page .platform-v2-layout-toolbar,
+  .portal-ia-page .platform-v2-layout-toolbar,
+  .admin-ia-page .platform-v2-layout-toolbar {
+    align-items: stretch;
+  }
+
+  .platform-v2-layout-toolbar > .portal-simple-toolbar,
+  .platform-v2-layout-toolbar > .simple-portal-toolbar,
+  .platform-v2-layout-toolbar > .portal-ia-toolbar,
+  .portal-simple-tabs,
+  .portal-ia-subnav,
+  .platform-segmented {
+    width: 100%;
+  }
+
+  .portal-simple-toolbar,
+  .simple-portal-toolbar,
+  .portal-ia-toolbar {
+    min-height: 48px;
+    flex-wrap: wrap;
+  }
+
+  .portal-simple-toolbar label,
+  .simple-portal-toolbar label,
+  .portal-ia-toolbar label {
+    min-width: 0;
+    flex: 1 1 148px;
+  }
+
+  .portal-simple-toolbar label + label,
+  .simple-portal-toolbar label + label,
+  .portal-ia-toolbar label + label {
+    border-inline-start-color: transparent;
+  }
+
+  .portal-ia-toolbar .portal-ia-subnav,
+  .portal-simple-toolbar .portal-simple-tabs {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .platform-v2-layout *,
+  .platform-v2-layout *::before,
+  .platform-v2-layout *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

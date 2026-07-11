@@ -2,7 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { supabaseAdminRestFetch } from "./supabase.js";
 
-const DATA_DIR = process.env.VERCEL ? "/tmp" : path.resolve(process.cwd(), ".local-data");
+const DATA_DIR = process.env.NILE_LOCAL_DATA_DIR?.trim()
+  ? path.resolve(process.env.NILE_LOCAL_DATA_DIR.trim())
+  : process.env.VERCEL
+    ? "/tmp"
+    : path.resolve(process.cwd(), ".local-data");
 const DATA_FILE = path.join(DATA_DIR, "platform-records.json");
 
 type PlatformBackendRecord = {
@@ -19,7 +23,8 @@ type PlatformBackendState = {
 };
 
 function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+  if (!fs.existsSync(DATA_DIR))
+    fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
 }
 
 function createId(prefix: string) {
@@ -29,7 +34,9 @@ function createId(prefix: string) {
 function readState(): PlatformBackendState {
   try {
     if (!fs.existsSync(DATA_FILE)) return { records: [] };
-    return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8")) as PlatformBackendState;
+    return JSON.parse(
+      fs.readFileSync(DATA_FILE, "utf-8")
+    ) as PlatformBackendState;
   } catch {
     return { records: [] };
   }
@@ -45,7 +52,8 @@ export function getPlatformBackendState() {
 }
 
 async function saveSupabaseRecord(record: PlatformBackendRecord) {
-  const table = process.env.SUPABASE_PLATFORM_RECORDS_TABLE || "platform_records";
+  const table =
+    process.env.SUPABASE_PLATFORM_RECORDS_TABLE || "platform_records";
   const response = await supabaseAdminRestFetch(table, {
     method: "POST",
     headers: { Prefer: "return=representation" },
@@ -57,7 +65,8 @@ async function saveSupabaseRecord(record: PlatformBackendRecord) {
       created_at: record.createdAt,
     }),
   });
-  if (!response.ok) throw new Error(`Supabase record insert failed with ${response.status}`);
+  if (!response.ok)
+    throw new Error(`Supabase record insert failed with ${response.status}`);
   return { ...record, persistence: "supabase" as const };
 }
 
@@ -69,7 +78,11 @@ function saveLocalRecord(record: PlatformBackendRecord) {
   return localRecord;
 }
 
-export async function savePlatformBackendRecord(type: PlatformBackendRecord["type"], payload: Record<string, unknown>, actorId?: string) {
+export async function savePlatformBackendRecord(
+  type: PlatformBackendRecord["type"],
+  payload: Record<string, unknown>,
+  actorId?: string
+) {
   const record: PlatformBackendRecord = {
     id: createId(type),
     type,

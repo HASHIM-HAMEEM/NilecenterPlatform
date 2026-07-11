@@ -45,6 +45,13 @@ function typeLabel(type: CalendarEventType) {
   return type.replace(/_/g, " ");
 }
 
+function humanize(value: string) {
+  return value
+    .replace(/[_-]/g, " ")
+    .replace(/\./g, " ")
+    .replace(/\b\w/g, character => character.toUpperCase());
+}
+
 function statusTone(status: EntityStatus): "green" | "amber" | "slate" {
   if (status === "active") return "green";
   if (status === "pending" || status === "paused") return "amber";
@@ -60,10 +67,7 @@ function includesQuery(values: Array<string | undefined>, query: string) {
     .includes(query.trim().toLowerCase());
 }
 
-function hasScheduleConflict(
-  event: CalendarEvent,
-  events: CalendarEvent[]
-) {
+function hasScheduleConflict(event: CalendarEvent, events: CalendarEvent[]) {
   if (!event.roomId || event.status !== "pending") return false;
   const start = new Date(event.startsAt).getTime();
   const end = new Date(event.endsAt).getTime();
@@ -151,7 +155,9 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
     );
   });
   const filteredSessions = sessions.filter(session => {
-    const group = state.classGroups.find(item => item.id === session.classGroupId);
+    const group = state.classGroups.find(
+      item => item.id === session.classGroupId
+    );
     const run = state.courseRuns.find(item => item.id === group?.courseRunId);
     const course = state.courses.find(item => item.id === run?.courseId);
     const branch = state.branches.find(item => item.id === run?.branchId);
@@ -159,7 +165,8 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
       includesQuery(
         [session.title, group?.name, course?.title, branch?.name],
         search
-      ) && (status === "all" || session.status === status)
+      ) &&
+      (status === "all" || session.status === status)
     );
   });
   const filteredRooms = state.rooms.filter(room => {
@@ -168,67 +175,54 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
       includesQuery(
         [room.name, branch?.name, room.equipment.join(" "), room.status],
         search
-      ) && (status === "all" || room.status === status)
+      ) &&
+      (status === "all" || room.status === status)
     );
   });
   const filteredActivityRows = scheduleAuditRows.filter(row =>
-    includesQuery([row.action, row.entityType, row.summary, row.actorId], search)
+    includesQuery(
+      [row.action, row.entityType, row.summary, row.actorId],
+      search
+    )
   );
 
   const calendarTable = (
     <DataTableCard
       title="Calendar events"
       subtitle={`${filteredEvents.length} scheduled item(s)`}
-      className="admin-ia-table-card admin-schedule-calendar-table"
+      className="admin-ia-table-card admin-schedule-calendar-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Event</th>
-              <th>Type</th>
-              <th>Date</th>
-              <th>Branch</th>
-              <th>Room</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredEvents.map(event => {
-              const branch = state.branches.find(
-                item => item.id === event.branchId
-              );
-              const room = state.rooms.find(item => item.id === event.roomId);
-              return (
-                <tr key={event.id}>
-                  <td>
-                    <strong>{event.title}</strong>
-                    <small>{formatDateTime(event.endsAt)}</small>
-                  </td>
-                  <td>{typeLabel(event.type)}</td>
-                  <td>{formatDateTime(event.startsAt)}</td>
-                  <td>{branch?.name ?? "No branch"}</td>
-                  <td>{room?.name ?? "No room"}</td>
-                  <td>
-                    <StatusBadge tone={statusTone(event.status)}>
-                      {event.status}
-                    </StatusBadge>
-                  </td>
-                </tr>
-              );
-            })}
-            {!filteredEvents.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No events found</strong>
-                    <span>Try a different search or filter.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-schedule-calendar-records">
+        {filteredEvents.map(event => {
+          const branch = state.branches.find(
+            item => item.id === event.branchId
+          );
+          const room = state.rooms.find(item => item.id === event.roomId);
+          return (
+            <article key={event.id}>
+              <div className="admin-record-list-copy">
+                <span>{typeLabel(event.type)}</span>
+                <strong>{event.title}</strong>
+                <p>
+                  {formatDateTime(event.startsAt)} ·{" "}
+                  {branch?.name ?? "No branch"} · {room?.name ?? "No room"}
+                </p>
+              </div>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={statusTone(event.status)}>
+                  {event.status}
+                </StatusBadge>
+                <small>Ends {formatDateTime(event.endsAt)}</small>
+              </div>
+            </article>
+          );
+        })}
+        {!filteredEvents.length ? (
+          <div className="platform-empty-state">
+            <strong>No events found</strong>
+            <span>Try a different search or filter.</span>
+          </div>
+        ) : null}
       </div>
     </DataTableCard>
   );
@@ -237,57 +231,40 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
     <DataTableCard
       title="Schedule conflicts"
       subtitle={`${pendingEvents.length} item(s) need review`}
-      className="admin-ia-table-card admin-schedule-conflicts-table"
+      className="admin-ia-table-card admin-schedule-conflicts-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Date</th>
-              <th>Issue</th>
-              <th>Branch</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pendingEvents.map(event => {
-              const branch = state.branches.find(
-                item => item.id === event.branchId
-              );
-              const room = state.rooms.find(item => item.id === event.roomId);
-              const conflict = hasScheduleConflict(event, events);
-              return (
-                <tr key={event.id}>
-                  <td>
-                    <strong>{event.title}</strong>
-                    <small>{room?.name ?? "Room not set"}</small>
-                  </td>
-                  <td>{formatDateTime(event.startsAt)}</td>
-                  <td>
-                    {conflict
-                      ? "Room time needs review"
-                      : "Waiting for schedule approval"}
-                  </td>
-                  <td>{branch?.name ?? "No branch"}</td>
-                  <td>
-                    <StatusBadge tone="amber">{event.status}</StatusBadge>
-                  </td>
-                </tr>
-              );
-            })}
-            {!pendingEvents.length ? (
-              <tr>
-                <td colSpan={5}>
-                  <div className="platform-empty-state">
-                    <strong>No schedule conflicts</strong>
-                    <span>Pending schedule reviews will appear here.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-schedule-conflict-records">
+        {pendingEvents.map(event => {
+          const branch = state.branches.find(
+            item => item.id === event.branchId
+          );
+          const room = state.rooms.find(item => item.id === event.roomId);
+          const conflict = hasScheduleConflict(event, events);
+          return (
+            <article key={event.id}>
+              <div className="admin-record-list-copy">
+                <span>{branch?.name ?? "Branch not set"}</span>
+                <strong>{event.title}</strong>
+                <p>
+                  {conflict
+                    ? "Room time needs review"
+                    : "Waiting for schedule approval"}
+                  {room ? ` · ${room.name}` : ""}
+                </p>
+              </div>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone="amber">{event.status}</StatusBadge>
+                <small>{formatDateTime(event.startsAt)}</small>
+              </div>
+            </article>
+          );
+        })}
+        {!pendingEvents.length ? (
+          <div className="platform-empty-state">
+            <strong>No schedule conflicts</strong>
+            <span>Pending schedule reviews will appear here.</span>
+          </div>
+        ) : null}
       </div>
     </DataTableCard>
   );
@@ -296,62 +273,48 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
     <DataTableCard
       title="Class sessions"
       subtitle={`${filteredSessions.length} session(s)`}
-      className="admin-ia-table-card admin-schedule-sessions-table"
+      className="admin-ia-table-card admin-schedule-sessions-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Session</th>
-              <th>Class</th>
-              <th>Course</th>
-              <th>Time</th>
-              <th>Attendance</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredSessions.map(session => {
-              const group = state.classGroups.find(
-                item => item.id === session.classGroupId
-              );
-              const run = state.courseRuns.find(
-                item => item.id === group?.courseRunId
-              );
-              const course = state.courses.find(item => item.id === run?.courseId);
-              return (
-                <tr key={session.id}>
-                  <td>
-                    <strong>{session.title}</strong>
-                    <small>{session.id}</small>
-                  </td>
-                  <td>{group?.name ?? "No class"}</td>
-                  <td>{course?.title ?? "No course"}</td>
-                  <td>
-                    <strong>{formatDateTime(session.startsAt)}</strong>
-                    <small>Ends {formatDateTime(session.endsAt)}</small>
-                  </td>
-                  <td>{session.attendanceSaved ? "Saved" : "Not saved"}</td>
-                  <td>
-                    <StatusBadge tone={statusTone(session.status)}>
-                      {session.status}
-                    </StatusBadge>
-                  </td>
-                </tr>
-              );
-            })}
-            {!filteredSessions.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No sessions found</strong>
-                    <span>Try a different search or status filter.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-schedule-session-records">
+        {filteredSessions.map(session => {
+          const group = state.classGroups.find(
+            item => item.id === session.classGroupId
+          );
+          const run = state.courseRuns.find(
+            item => item.id === group?.courseRunId
+          );
+          const course = state.courses.find(item => item.id === run?.courseId);
+          return (
+            <article key={session.id}>
+              <div className="admin-record-list-copy">
+                <span>{course?.title ?? "Course not set"}</span>
+                <strong>{session.title}</strong>
+                <p>{group?.name ?? "Class not set"}</p>
+              </div>
+              <dl className="admin-record-list-facts">
+                <div>
+                  <dt>Starts</dt>
+                  <dd>{formatDateTime(session.startsAt)}</dd>
+                </div>
+                <div>
+                  <dt>Attendance</dt>
+                  <dd>{session.attendanceSaved ? "Saved" : "Not saved"}</dd>
+                </div>
+              </dl>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={statusTone(session.status)}>
+                  {session.status}
+                </StatusBadge>
+              </div>
+            </article>
+          );
+        })}
+        {!filteredSessions.length ? (
+          <div className="platform-empty-state">
+            <strong>No sessions found</strong>
+            <span>Try a different search or status filter.</span>
+          </div>
+        ) : null}
       </div>
     </DataTableCard>
   );
@@ -360,64 +323,50 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
     <DataTableCard
       title="Room availability"
       subtitle={`${filteredRooms.length} room(s)`}
-      className="admin-ia-table-card admin-schedule-rooms-table"
+      className="admin-ia-table-card admin-schedule-rooms-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Room</th>
-              <th>Branch</th>
-              <th>Capacity</th>
-              <th>Equipment</th>
-              <th>Bookings</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredRooms.map(room => {
-              const branch = state.branches.find(item => item.id === room.branchId);
-              const roomEvents = events.filter(event => event.roomId === room.id);
-              const nextBooking = roomEvents.find(
-                event => new Date(event.startsAt).getTime() >= Date.now()
-              );
-              return (
-                <tr key={room.id}>
-                  <td>
-                    <strong>{room.name}</strong>
-                    <small>{room.id}</small>
-                  </td>
-                  <td>{branch?.name ?? "No branch"}</td>
-                  <td>{room.capacity}</td>
-                  <td>{room.equipment.join(", ") || "Standard classroom"}</td>
-                  <td>
-                    <strong>{roomEvents.length} item(s)</strong>
-                    <small>
-                      {nextBooking
-                        ? `Next ${formatDateTime(nextBooking.startsAt)}`
-                        : "No upcoming booking"}
-                    </small>
-                  </td>
-                  <td>
-                    <StatusBadge tone={statusTone(room.status)}>
-                      {room.status}
-                    </StatusBadge>
-                  </td>
-                </tr>
-              );
-            })}
-            {!filteredRooms.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No rooms found</strong>
-                    <span>Try a different search or status filter.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-schedule-room-records">
+        {filteredRooms.map(room => {
+          const branch = state.branches.find(item => item.id === room.branchId);
+          const roomEvents = events.filter(event => event.roomId === room.id);
+          const nextBooking = roomEvents.find(
+            event => new Date(event.startsAt).getTime() >= Date.now()
+          );
+          return (
+            <article key={room.id}>
+              <div className="admin-record-list-copy">
+                <span>{branch?.name ?? "Branch not set"}</span>
+                <strong>{room.name}</strong>
+                <p>{room.equipment.join(" · ") || "Standard classroom"}</p>
+              </div>
+              <dl className="admin-record-list-facts">
+                <div>
+                  <dt>Capacity</dt>
+                  <dd>{room.capacity}</dd>
+                </div>
+                <div>
+                  <dt>Bookings</dt>
+                  <dd>
+                    {nextBooking
+                      ? `Next ${formatDateTime(nextBooking.startsAt)}`
+                      : "No upcoming booking"}
+                  </dd>
+                </div>
+              </dl>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={statusTone(room.status)}>
+                  {room.status}
+                </StatusBadge>
+              </div>
+            </article>
+          );
+        })}
+        {!filteredRooms.length ? (
+          <div className="platform-empty-state">
+            <strong>No rooms found</strong>
+            <span>Try a different search or status filter.</span>
+          </div>
+        ) : null}
       </div>
     </DataTableCard>
   );
@@ -426,47 +375,31 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
     <DataTableCard
       title="Schedule activity"
       subtitle={`${filteredActivityRows.length} activity row(s)`}
-      className="admin-ia-table-card admin-schedule-activity-table"
+      className="admin-ia-table-card admin-schedule-activity-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Action</th>
-              <th>Target</th>
-              <th>Summary</th>
-              <th>Actor</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredActivityRows.map(row => (
-              <tr key={row.id}>
-                <td>
-                  <strong>{row.action}</strong>
-                  <small>{row.id}</small>
-                </td>
-                <td>
-                  <strong>{row.entityType}</strong>
-                  <small>{row.entityId}</small>
-                </td>
-                <td>{row.summary}</td>
-                <td>{row.actorId}</td>
-                <td>{formatDateTime(row.createdAt)}</td>
-              </tr>
-            ))}
-            {!filteredActivityRows.length ? (
-              <tr>
-                <td colSpan={5}>
-                  <div className="platform-empty-state">
-                    <strong>No schedule activity</strong>
-                    <span>Schedule changes and reviews will appear here.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-schedule-activity-records">
+        {filteredActivityRows.map(row => (
+          <article key={row.id}>
+            <div className="admin-record-list-copy">
+              <span>{humanize(row.action)}</span>
+              <strong>{humanize(row.entityType)}</strong>
+              <p>{row.summary}</p>
+            </div>
+            <div className="admin-record-list-meta">
+              <small>
+                {state.users.find(user => user.id === row.actorId)?.name ??
+                  "System"}
+              </small>
+              <small>{formatDateTime(row.createdAt)}</small>
+            </div>
+          </article>
+        ))}
+        {!filteredActivityRows.length ? (
+          <div className="platform-empty-state">
+            <strong>No schedule activity</strong>
+            <span>Schedule changes and reviews will appear here.</span>
+          </div>
+        ) : null}
       </div>
     </DataTableCard>
   );
@@ -487,7 +420,9 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
               view === "activity" ? "Search activity" : "Search schedule"
             }
             aria-label={
-              view === "activity" ? "Search schedule activity" : "Search schedule"
+              view === "activity"
+                ? "Search schedule activity"
+                : "Search schedule"
             }
           />
         </label>
@@ -530,7 +465,12 @@ export default function AdminSchedulePage({ view }: AdminSchedulePageProps) {
     ) : null;
   const pageCopy: Record<
     AdminSchedulePageProps["view"],
-    { title: string; description: string; actionHref: string; actionLabel: string }
+    {
+      title: string;
+      description: string;
+      actionHref: string;
+      actionLabel: string;
+    }
   > = {
     calendar: {
       title: "Schedule calendar",

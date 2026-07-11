@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Download, Search, ScrollText, ShieldCheck } from "lucide-react";
+import { Download, Search } from "lucide-react";
 import { toast } from "sonner";
 import PlatformShell from "@/components/platform/PlatformShell";
 import { ReportLayout } from "@/components/platform/PlatformLayouts";
@@ -26,13 +26,22 @@ function actionGroup(action: string) {
   return action.split(".")[0] || "activity";
 }
 
+function humanize(value: string) {
+  return value
+    .replace(/[_-]/g, " ")
+    .replace(/\./g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, character => character.toUpperCase());
+}
+
 function actionTone(
   action: string
 ): "green" | "amber" | "red" | "purple" | "slate" {
   if (action.includes("created") || action.includes("saved")) return "green";
   if (action.includes("updated") || action.includes("changed")) return "amber";
   if (action.includes("rejected") || action.includes("revoked")) return "red";
-  if (action.includes("exported") || action.includes("checked")) return "purple";
+  if (action.includes("exported") || action.includes("checked"))
+    return "purple";
   return "slate";
 }
 
@@ -62,7 +71,9 @@ export default function AdminAuditLogsPage() {
 
   const groups = useMemo(
     () =>
-      Array.from(new Set(state.auditLogs.map(audit => actionGroup(audit.action))))
+      Array.from(
+        new Set(state.auditLogs.map(audit => actionGroup(audit.action)))
+      )
         .sort((a, b) => a.localeCompare(b))
         .slice(0, 12),
     [state.auditLogs]
@@ -70,11 +81,6 @@ export default function AdminAuditLogsPage() {
   const filteredAudits = state.auditLogs.filter(audit =>
     matchesAudit(audit, query, group)
   );
-  const latestAudit = state.auditLogs[0];
-  const actorCount = new Set(state.auditLogs.map(audit => audit.actorId)).size;
-  const entityCount = new Set(
-    state.auditLogs.map(audit => `${audit.entityType}:${audit.entityId}`)
-  ).size;
 
   const exportAuditCsv = () => {
     const rows = filteredAudits.map(audit => ({
@@ -131,15 +137,21 @@ export default function AdminAuditLogsPage() {
           </button>
         }
         toolbar={
-          <div className="admin-system-filters">
+          <div
+            className="admin-compact-toolbar admin-audit-toolbar"
+            data-testid="admin-activity-toolbar"
+          >
             <label>
-              Search activity
-              <input
-                value={query}
-                onInput={event => setQuery(event.currentTarget.value)}
-                onChange={event => setQuery(event.currentTarget.value)}
-                placeholder="Actor, action, entity, summary"
-              />
+              Search
+              <span>
+                <Search size={15} />
+                <input
+                  value={query}
+                  onInput={event => setQuery(event.currentTarget.value)}
+                  onChange={event => setQuery(event.currentTarget.value)}
+                  placeholder="Search activity"
+                />
+              </span>
             </label>
             <label>
               Action group
@@ -150,7 +162,7 @@ export default function AdminAuditLogsPage() {
                 <option value="All">All groups</option>
                 {groups.map(item => (
                   <option key={item} value={item}>
-                    {item}
+                    {humanize(item)}
                   </option>
                 ))}
               </select>
@@ -159,42 +171,44 @@ export default function AdminAuditLogsPage() {
         }
         main={
           <DataTableCard
-            title="Audit events"
-            subtitle={`${filteredAudits.length} matching row(s)`}
+            title="Recent activity"
+            subtitle={`${filteredAudits.length} matching events`}
           >
             {filteredAudits.length ? (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Action</th>
-                    <th>Summary</th>
-                    <th>Entity</th>
-                    <th>Actor</th>
-                    <th>Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAudits.slice(0, 30).map(audit => (
-                    <tr key={audit.id}>
-                      <td>
-                        <StatusBadge tone={actionTone(audit.action)}>
-                          {audit.action}
-                        </StatusBadge>
-                      </td>
-                      <td>
-                        <strong>{audit.summary}</strong>
-                      </td>
-                      <td>
-                        {audit.entityType}
-                        <br />
-                        <small>{audit.entityId}</small>
-                      </td>
-                      <td>{audit.actorId}</td>
-                      <td>{formatDateTime(audit.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div
+                className="admin-record-list admin-audit-record-list"
+                data-testid="admin-activity-list"
+              >
+                {filteredAudits.slice(0, 30).map(audit => (
+                  <article key={audit.id}>
+                    <div className="admin-record-list-copy">
+                      <span>{humanize(audit.entityType)}</span>
+                      <strong>{humanize(audit.action)}</strong>
+                      <p>{audit.summary}</p>
+                    </div>
+                    <dl className="admin-record-list-facts">
+                      <div>
+                        <dt>By</dt>
+                        <dd>
+                          {state.users.find(user => user.id === audit.actorId)
+                            ?.name ?? "System"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>When</dt>
+                        <dd>{formatDateTime(audit.createdAt)}</dd>
+                      </div>
+                    </dl>
+                    <div className="admin-record-list-meta">
+                      <StatusBadge tone={actionTone(audit.action)}>
+                        {humanize(
+                          audit.action.split(".").at(-1) ?? audit.action
+                        )}
+                      </StatusBadge>
+                    </div>
+                  </article>
+                ))}
+              </div>
             ) : (
               <div className="platform-empty-state">
                 <Search size={18} />
@@ -203,43 +217,6 @@ export default function AdminAuditLogsPage() {
               </div>
             )}
           </DataTableCard>
-        }
-        side={
-          <div className="portal-simple-stack">
-            <section className="portal-simple-side-card">
-              <span>
-                <ScrollText size={15} />
-                Audit scope
-              </span>
-              <strong>{state.auditLogs.length} total events</strong>
-              <p>
-                Internal workflow actions, user lifecycle changes, settings,
-                exports, and system checks are recorded here.
-              </p>
-              <div className="portal-simple-mini-list">
-                <span>Actors</span>
-                <strong>{actorCount}</strong>
-                <span>Entities</span>
-                <strong>{entityCount}</strong>
-              </div>
-            </section>
-
-            <section className="portal-simple-side-card">
-              <span>
-                <ShieldCheck size={15} />
-                Latest event
-              </span>
-              {latestAudit ? (
-                <>
-                  <strong>{latestAudit.action}</strong>
-                  <p>{latestAudit.summary}</p>
-                  <small>{formatDateTime(latestAudit.createdAt)}</small>
-                </>
-              ) : (
-                <p>No audit events recorded yet.</p>
-              )}
-            </section>
-          </div>
         }
       />
     </PlatformShell>

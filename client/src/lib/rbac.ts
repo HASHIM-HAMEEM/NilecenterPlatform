@@ -68,6 +68,10 @@ export function getRequiredPermissionForPage(role: Role, pageId: string): Permis
   if (pageId === "dashboard") return "dashboard:read";
   if (pageId === "reports") return "reports:read";
   if (pageId === "messages" || pageId === "support") return "messages:write";
+  if (pageId === "forms") return "forms:read";
+  if (pageId === "forms-manage" || pageId === "form-builder") return "forms:write";
+  if (pageId === "form-publish") return "forms:publish";
+  if (pageId === "forms-review" || pageId === "form-submission") return "form_submissions:read";
   if (pageId === "profile") return "dashboard:read";
   if (pageId === "settings" || pageId === "integrations" || pageId === "system-health") return "settings:write";
   if (pageId === "audit-logs" || pageId === "platform-blueprint") return "audit:read";

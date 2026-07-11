@@ -3,9 +3,10 @@ import { Download, Search } from "lucide-react";
 import PlatformShell from "@/components/platform/PlatformShell";
 import { ReportLayout } from "@/components/platform/PlatformLayouts";
 import {
-  DataTableCard,
-  StatusBadge,
-} from "@/components/platform/PlatformPrimitives";
+  PortalInsight,
+  countInsightPoints,
+} from "@/components/platform/PortalInsights";
+import { DataTableCard } from "@/components/platform/PlatformPrimitives";
 import { platformStore } from "@/lib/domain/store";
 import type { ReportType } from "@/lib/domain/types";
 import { getDemoUser } from "@/lib/platformData";
@@ -41,6 +42,12 @@ function statusTone(status: string): "green" | "amber" | "red" | "slate" {
   return "slate";
 }
 
+function humanize(value: string) {
+  return value
+    .replace(/[_-]/g, " ")
+    .replace(/\b\w/g, character => character.toUpperCase());
+}
+
 function formatDate(value?: string) {
   if (!value) return "No date";
   const date = new Date(value);
@@ -74,8 +81,9 @@ export default function BranchReportsPage() {
   const branchClasses = state.classGroups.filter(classGroup =>
     classGroup.studentIds.some(studentId => branchStudentIds.has(studentId))
   );
-  const branchClassIds = new Set(branchClasses.map(classGroup => classGroup.id));
-  const branchRooms = state.rooms.filter(room => room.branchId === branch?.id);
+  const branchClassIds = new Set(
+    branchClasses.map(classGroup => classGroup.id)
+  );
   const branchInvoices = state.invoices.filter(invoice =>
     branchStudentIds.has(invoice.studentId)
   );
@@ -84,14 +92,12 @@ export default function BranchReportsPage() {
       branchClassIds.has(record.classGroupId) ||
       branchStudentIds.has(record.studentId)
   );
-  const branchPresets = state.reportPresets.filter(
-    preset => preset.role === "branchadmin" && preset.ownerUserId === actorId
-  );
-
   const rows: BranchReportRow[] =
     reportType === "finance"
       ? branchInvoices.map(invoice => {
-          const student = state.students.find(item => item.id === invoice.studentId);
+          const student = state.students.find(
+            item => item.id === invoice.studentId
+          );
           const user = state.users.find(item => item.id === student?.userId);
           const paid = state.payments
             .filter(
@@ -102,7 +108,7 @@ export default function BranchReportsPage() {
           return {
             id: invoice.id,
             record: user?.name ?? invoice.studentId,
-            detail: `Invoice ${invoice.id} · due ${formatDate(invoice.dueAt)}`,
+            detail: `Payment due ${formatDate(invoice.dueAt)}`,
             status: invoice.status,
             metric: `${invoice.currency} ${Math.max(0, invoice.amount - paid)} balance`,
             scope: branch?.name ?? "Branch",
@@ -115,7 +121,9 @@ export default function BranchReportsPage() {
               const student = state.students.find(
                 item => item.id === enrollment.studentId
               );
-              const user = state.users.find(item => item.id === student?.userId);
+              const user = state.users.find(
+                item => item.id === student?.userId
+              );
               const classGroup = state.classGroups.find(
                 item => item.id === enrollment.classGroupId
               );
@@ -135,12 +143,16 @@ export default function BranchReportsPage() {
               };
             })
         : branchAttendance.map(record => {
-            const student = state.students.find(item => item.id === record.studentId);
+            const student = state.students.find(
+              item => item.id === record.studentId
+            );
             const user = state.users.find(item => item.id === student?.userId);
             const classGroup = state.classGroups.find(
               item => item.id === record.classGroupId
             );
-            const session = state.events.find(item => item.id === record.sessionId);
+            const session = state.events.find(
+              item => item.id === record.sessionId
+            );
             return {
               id: record.id,
               record: user?.name ?? record.studentId,
@@ -163,6 +175,12 @@ export default function BranchReportsPage() {
       return matchesSearch && matchesStatus;
     })
     .sort((first, second) => first[sortKey].localeCompare(second[sortKey]));
+  const reportInsightPoints = countInsightPoints(
+    filteredRows.map(row => row.status)
+  );
+  const activeReportLabel =
+    reportOptions.find(option => option.value === reportType)?.label ??
+    "Branch";
 
   const exportCsv = () => {
     const csv = platformStore.buildCsv(
@@ -187,6 +205,7 @@ export default function BranchReportsPage() {
   return (
     <PlatformShell role="branchadmin" title="Reports">
       <ReportLayout
+        className="branch-reports-page"
         title="Branch reports"
         description="Inspect branch attendance, finance, and enrollment rows."
         context={branch?.name ?? "Branch access"}
@@ -202,7 +221,10 @@ export default function BranchReportsPage() {
           </button>
         }
         toolbar={
-          <div className="platform-report-controls">
+          <div
+            className="branch-compact-toolbar branch-report-controls-v3"
+            data-testid="branch-reports-toolbar"
+          >
             <label>
               Report type
               <select
@@ -221,11 +243,14 @@ export default function BranchReportsPage() {
             </label>
             <label>
               Search
-              <input
-                value={search}
-                onChange={event => setSearch(event.target.value)}
-                placeholder="Search branch rows"
-              />
+              <span>
+                <Search size={15} />
+                <input
+                  value={search}
+                  onChange={event => setSearch(event.target.value)}
+                  placeholder="Search branch rows"
+                />
+              </span>
             </label>
             <label>
               Status
@@ -249,7 +274,10 @@ export default function BranchReportsPage() {
             subtitle={`${filteredRows.length} visible row(s)`}
             className="branch-report-card"
           >
-            <div className="platform-report-table typed">
+            <div
+              className="platform-report-table typed"
+              data-testid="branch-reports-list"
+            >
               <div className="platform-report-row header" role="row">
                 {[
                   ["record", "Record"],
@@ -277,11 +305,10 @@ export default function BranchReportsPage() {
                     <span
                       className={`platform-report-status status-${row.status.replace(/[_\s]/g, "-")}`}
                     >
-                      {row.status}
+                      {humanize(row.status)}
                     </span>
                     <div className="platform-report-row-metric">
                       <strong>{row.metric}</strong>
-                      <span>{row.id}</span>
                     </div>
                   </article>
                 ))
@@ -297,64 +324,18 @@ export default function BranchReportsPage() {
           </DataTableCard>
         }
         side={
-          <>
-            <section className="branch-panel">
-              <div className="branch-panel-head">
-                <div>
-                  <span>Saved views</span>
-                  <strong>{branchPresets.length} view(s)</strong>
-                </div>
-                <StatusBadge tone="slate">{filteredRows.length} rows</StatusBadge>
-              </div>
-              <div className="branch-class-list compact">
-                {branchPresets.length ? (
-                  branchPresets.map(preset => (
-                    <article key={preset.id}>
-                      <div>
-                        <strong>{preset.label}</strong>
-                        <small>
-                          {preset.reportType} · {preset.rowCount} saved row(s)
-                        </small>
-                      </div>
-                      <span>{preset.status}</span>
-                    </article>
-                  ))
-                ) : (
-                  <article>
-                    <div>
-                      <strong>No saved views</strong>
-                      <small>Save branch report filters from the reports area.</small>
-                    </div>
-                    <span>0</span>
-                  </article>
-                )}
-              </div>
-            </section>
-            <section className="branch-panel">
-              <div className="branch-panel-head">
-                <div>
-                  <span>Branch scope</span>
-                  <strong>{branch?.name ?? "Branch"}</strong>
-                </div>
-                <StatusBadge tone="green">Scoped</StatusBadge>
-              </div>
-              <div className="branch-settings-list">
-                {[
-                  ["Classes", `${branchClasses.length} group(s)`],
-                  ["Rooms", `${branchRooms.length} room(s)`],
-                  ["Students", `${branchStudents.length} learner(s)`],
-                  ["Invoices", `${branchInvoices.length} invoice(s)`],
-                ].map(([label, value]) => (
-                  <article key={label}>
-                    <div>
-                      <strong>{label}</strong>
-                      <small>{value}</small>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </>
+          <PortalInsight
+            compact
+            eyebrow="Branch signal"
+            title={`${activeReportLabel} status`}
+            value={filteredRows.length}
+            valueLabel="visible records"
+            description="Use the current branch status mix to decide the next local follow-up."
+            points={reportInsightPoints}
+            variant="bars"
+            tone="green"
+            testId="branch-reports-insight"
+          />
         }
       />
     </PlatformShell>

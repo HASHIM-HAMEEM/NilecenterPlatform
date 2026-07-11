@@ -1,8 +1,12 @@
 import { useMemo, useState } from "react";
-import { CalendarDays, CheckCircle2, Plus, ShieldCheck } from "lucide-react";
+import { CalendarDays, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
-import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
+import {
+  FormFlowLayout,
+  WorkspaceLayout,
+} from "@/components/platform/PlatformLayouts";
 import { StatusBadge } from "@/components/platform/PlatformPrimitives";
 import { runPlatformWorkflowActionRequest } from "@/lib/backend/api";
 import { platformStore } from "@/lib/domain/store";
@@ -41,8 +45,15 @@ function statusTone(status: EntityStatus): "green" | "amber" | "red" | "slate" {
   return "slate";
 }
 
-export default function RegistrarSchedulePage() {
+type RegistrarSchedulePageProps = {
+  view?: "list" | "create";
+};
+
+export default function RegistrarSchedulePage({
+  view = "list",
+}: RegistrarSchedulePageProps) {
   const [version, setVersion] = useState(0);
+  const [eventResult, setEventResult] = useState<string | null>(null);
   const [eventDraft, setEventDraft] = useState({
     title: "Placement test",
     type: "placement_test" as CalendarEventType,
@@ -78,18 +89,6 @@ export default function RegistrarSchedulePage() {
     )
     .slice()
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
-  const pendingEvents = admissionsEvents.filter(
-    event => event.status === "pending"
-  );
-  const activityRows = state.auditLogs
-    .filter(
-      audit =>
-        (audit.action === "calendar.created" ||
-          audit.action === "calendar.created_with_conflict") &&
-        admissionsEvents.some(event => event.id === audit.entityId)
-    )
-    .slice(0, 4);
-
   const createEvent = async (event: React.FormEvent) => {
     event.preventDefault();
     if (
@@ -105,7 +104,9 @@ export default function RegistrarSchedulePage() {
     }
 
     const needsRoom = eventDraft.type === "room_booking";
-    const selectedRoom = branchRooms.find(room => room.id === eventDraft.roomId);
+    const selectedRoom = branchRooms.find(
+      room => room.id === eventDraft.roomId
+    );
     if (needsRoom && !selectedRoom) {
       toast.error("Choose a branch room before creating a room booking");
       return;
@@ -130,9 +131,8 @@ export default function RegistrarSchedulePage() {
 
       platformStore.setState(response.data.state);
       setVersion(value => value + 1);
-      toast.success("Event scheduled", {
-        description: response.data.persistence,
-      });
+      setEventResult("The event is now visible on the admissions schedule.");
+      toast.success("Event scheduled");
     } catch (error) {
       toast.error("Event could not be scheduled", {
         description:
@@ -145,204 +145,193 @@ export default function RegistrarSchedulePage() {
     }
   };
 
+  const scheduleList = (
+    <section className="registrar-panel registrar-schedule-list">
+      <div className="registrar-panel-head">
+        <div>
+          <span>{branch?.name ?? "Admissions calendar"}</span>
+          <strong>{admissionsEvents.length} scheduled event(s)</strong>
+        </div>
+        <CalendarDays size={18} />
+      </div>
+      <div className="registrar-operations-list">
+        {admissionsEvents.length ? (
+          admissionsEvents.map(event => {
+            const room = state.rooms.find(item => item.id === event.roomId);
+            return (
+              <article key={event.id}>
+                <div>
+                  <strong>{event.title}</strong>
+                  <small>
+                    {humanize(event.type)} · {formatDateTime(event.startsAt)}
+                    {room ? ` · ${room.name}` : ""}
+                  </small>
+                </div>
+                <StatusBadge tone={statusTone(event.status)}>
+                  {humanize(event.status)}
+                </StatusBadge>
+              </article>
+            );
+          })
+        ) : (
+          <article className="registrar-empty-row">
+            <div>
+              <strong>No admissions events</strong>
+              <small>Create a placement test or trial lesson to start the calendar.</small>
+            </div>
+          </article>
+        )}
+      </div>
+    </section>
+  );
+
+  const eventForm = (
+    <section className="registrar-panel registrar-schedule-composer">
+      <div className="registrar-panel-head">
+        <div>
+          <span>New admissions event</span>
+          <strong>Book one time slot</strong>
+        </div>
+        <Link className="registrar-inline-close" href="/app/registrar/schedule">
+          Cancel
+        </Link>
+      </div>
+      <form className="branch-room-form stacked" onSubmit={createEvent}>
+        <label>
+          Title
+          <input
+            value={eventDraft.title}
+            disabled={eventSaving}
+            onChange={event =>
+              setEventDraft(value => ({ ...value, title: event.target.value }))
+            }
+            placeholder="Placement test"
+          />
+        </label>
+        <label>
+          Type
+          <select
+            value={eventDraft.type}
+            disabled={eventSaving}
+            onChange={event =>
+              setEventDraft(value => ({
+                ...value,
+                type: event.target.value as CalendarEventType,
+              }))
+            }
+          >
+            {registrarEventTypes.map(type => (
+              <option key={type} value={type}>
+                {humanize(type)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Date
+          <input
+            type="date"
+            value={eventDraft.date}
+            disabled={eventSaving}
+            onChange={event =>
+              setEventDraft(value => ({ ...value, date: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          Starts
+          <input
+            type="time"
+            value={eventDraft.starts}
+            disabled={eventSaving}
+            onChange={event =>
+              setEventDraft(value => ({ ...value, starts: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          Ends
+          <input
+            type="time"
+            value={eventDraft.ends}
+            disabled={eventSaving}
+            onChange={event =>
+              setEventDraft(value => ({ ...value, ends: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          Room
+          <select
+            value={eventDraft.roomId}
+            disabled={eventSaving || !branchRooms.length}
+            onChange={event =>
+              setEventDraft(value => ({ ...value, roomId: event.target.value }))
+            }
+          >
+            <option value="">No room needed</option>
+            {branchRooms.map(room => (
+              <option key={room.id} value={room.id}>
+                {room.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" disabled={eventSaving}>
+          <Plus size={15} />
+          {eventSaving ? "Saving event" : "Create event"}
+        </button>
+      </form>
+    </section>
+  );
+
+  if (view === "create") {
+    return (
+      <PlatformShell role="registrar" title="Create event">
+        <FormFlowLayout
+          className="registrar-workspace registrar-schedule-page registrar-create-page registrar-schedule-create-page"
+          title="Create event"
+          description="Book one placement, trial, room, or reminder event."
+          context="Registrar"
+          actions={
+            eventResult ? (
+              <Link className="platform-primary-button" href="/app/registrar/schedule">
+                View schedule
+              </Link>
+            ) : undefined
+          }
+          main={
+            eventResult ? (
+              <section className="registrar-create-success" role="status">
+                <CalendarDays size={20} />
+                <div>
+                  <strong>Event scheduled</strong>
+                  <span>{eventResult}</span>
+                </div>
+              </section>
+            ) : (
+              eventForm
+            )
+          }
+        />
+      </PlatformShell>
+    );
+  }
+
   return (
     <PlatformShell role="registrar" title="Registrar schedule">
       <WorkspaceLayout
+        className="registrar-workspace registrar-schedule-page"
         title="Schedule"
         description="Book placement, trial, and admissions events."
         context="Registrar"
-        main={
-          <section className="registrar-panel">
-            <div className="registrar-panel-head">
-              <div>
-                <span>Admissions calendar</span>
-                <strong>{admissionsEvents.length} events</strong>
-              </div>
-              <CalendarDays size={18} />
-            </div>
-
-            <form className="branch-room-form stacked" onSubmit={createEvent}>
-              <label>
-                Title
-                <input
-                  value={eventDraft.title}
-                  disabled={eventSaving}
-                  onChange={event =>
-                    setEventDraft(value => ({
-                      ...value,
-                      title: event.target.value,
-                    }))
-                  }
-                  placeholder="Placement test"
-                />
-              </label>
-              <label>
-                Type
-                <select
-                  value={eventDraft.type}
-                  disabled={eventSaving}
-                  onChange={event =>
-                    setEventDraft(value => ({
-                      ...value,
-                      type: event.target.value as CalendarEventType,
-                    }))
-                  }
-                >
-                  {registrarEventTypes.map(type => (
-                    <option key={type} value={type}>
-                      {humanize(type)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Date
-                <input
-                  type="date"
-                  value={eventDraft.date}
-                  disabled={eventSaving}
-                  onChange={event =>
-                    setEventDraft(value => ({
-                      ...value,
-                      date: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Starts
-                <input
-                  type="time"
-                  value={eventDraft.starts}
-                  disabled={eventSaving}
-                  onChange={event =>
-                    setEventDraft(value => ({
-                      ...value,
-                      starts: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Ends
-                <input
-                  type="time"
-                  value={eventDraft.ends}
-                  disabled={eventSaving}
-                  onChange={event =>
-                    setEventDraft(value => ({
-                      ...value,
-                      ends: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Room
-                <select
-                  value={eventDraft.roomId}
-                  disabled={eventSaving || !branchRooms.length}
-                  onChange={event =>
-                    setEventDraft(value => ({
-                      ...value,
-                      roomId: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="">No room needed</option>
-                  {branchRooms.map(room => (
-                    <option key={room.id} value={room.id}>
-                      {room.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button type="submit" disabled={eventSaving}>
-                <Plus size={15} />
-                {eventSaving ? "Saving event" : "Create event"}
-              </button>
-            </form>
-
-            <div className="registrar-operations-list">
-              {admissionsEvents.length ? (
-                admissionsEvents.map(event => {
-                  const room = state.rooms.find(item => item.id === event.roomId);
-                  return (
-                    <article key={event.id}>
-                      <div>
-                        <strong>{event.title}</strong>
-                        <small>
-                          {humanize(event.type)} · {formatDateTime(event.startsAt)}
-                          {room ? ` · ${room.name}` : ""}
-                        </small>
-                      </div>
-                      <StatusBadge tone={statusTone(event.status)}>
-                        {humanize(event.status)}
-                      </StatusBadge>
-                    </article>
-                  );
-                })
-              ) : (
-                <article className="registrar-empty-row">
-                  <div>
-                    <strong>No admissions events</strong>
-                    <small>
-                      Create a placement test or trial lesson to start the
-                      calendar.
-                    </small>
-                  </div>
-                </article>
-              )}
-            </div>
-          </section>
+        actions={
+          <Link className="platform-primary-button" href="/app/registrar/schedule/new">
+            <Plus size={15} />
+            Create event
+          </Link>
         }
-        side={
-          <section className="registrar-panel">
-            <div className="registrar-panel-head">
-              <div>
-                <span>Branch</span>
-                <strong>{branch?.name ?? "No branch"}</strong>
-              </div>
-              <ShieldCheck size={18} />
-            </div>
-            <div className="registrar-operations-list">
-              <article>
-                <div>
-                  <strong>Placement test</strong>
-                  <small>Book student level checks for admissions.</small>
-                </div>
-                <span>{eventDraft.type === "placement_test" ? "selected" : "ready"}</span>
-              </article>
-              <article>
-                <div>
-                  <strong>Trial lesson</strong>
-                  <small>Schedule a short introductory class.</small>
-                </div>
-                <span>ready</span>
-              </article>
-              <article>
-                <div>
-                  <strong>Pending review</strong>
-                  <small>Events waiting after conflict detection.</small>
-                </div>
-                <span>{pendingEvents.length}</span>
-              </article>
-            </div>
-            {activityRows.length ? (
-              <div className="registrar-operations-list">
-                {activityRows.map(audit => (
-                  <article key={audit.id}>
-                    <CheckCircle2 size={15} />
-                    <div>
-                      <strong>{humanize(audit.action)}</strong>
-                      <small>{audit.summary}</small>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        }
+        main={scheduleList}
       />
     </PlatformShell>
   );

@@ -4,6 +4,10 @@ import { toast } from "sonner";
 import PlatformShell from "@/components/platform/PlatformShell";
 import { ReportLayout } from "@/components/platform/PlatformLayouts";
 import {
+  PortalInsight,
+  countInsightPoints,
+} from "@/components/platform/PortalInsights";
+import {
   DataTableCard,
   StatusBadge,
 } from "@/components/platform/PlatformPrimitives";
@@ -38,7 +42,9 @@ function humanize(value?: string) {
 }
 
 function statusTone(status: string): "green" | "amber" | "red" | "slate" {
-  if (["active", "completed", "present", "approved", "issued"].includes(status)) {
+  if (
+    ["active", "completed", "present", "approved", "issued"].includes(status)
+  ) {
     return "green";
   }
   if (["pending", "late", "overdue", "draft"].includes(status)) {
@@ -74,9 +80,13 @@ function getHodScope(state: PlatformState) {
     departmentIds.has(program.departmentId)
   );
   const programIds = new Set(programs.map(program => program.id));
-  const courses = state.courses.filter(course => programIds.has(course.programId));
+  const courses = state.courses.filter(course =>
+    programIds.has(course.programId)
+  );
   const courseIds = new Set(courses.map(course => course.id));
-  const courseRuns = state.courseRuns.filter(run => courseIds.has(run.courseId));
+  const courseRuns = state.courseRuns.filter(run =>
+    courseIds.has(run.courseId)
+  );
   const courseRunIds = new Set(courseRuns.map(run => run.id));
   const classGroups = state.classGroups.filter(group =>
     courseRunIds.has(group.courseRunId)
@@ -96,11 +106,15 @@ function getHodScope(state: PlatformState) {
 
 function findStudentName(state: PlatformState, studentId?: string) {
   const student = state.students.find(item => item.id === studentId);
-  return state.users.find(user => user.id === student?.userId)?.name ?? "Student";
+  return (
+    state.users.find(user => user.id === student?.userId)?.name ?? "Student"
+  );
 }
 
 function findCourseTitle(state: PlatformState, courseId?: string) {
-  return state.courses.find(course => course.id === courseId)?.title ?? "Course";
+  return (
+    state.courses.find(course => course.id === courseId)?.title ?? "Course"
+  );
 }
 
 function makeReportRows(
@@ -152,7 +166,9 @@ function makeReportRows(
   return state.enrollments
     .filter(enrollment => scope.courseRunIds.has(enrollment.courseRunId))
     .map(enrollment => {
-      const run = state.courseRuns.find(item => item.id === enrollment.courseRunId);
+      const run = state.courseRuns.find(
+        item => item.id === enrollment.courseRunId
+      );
       const classGroup = state.classGroups.find(
         item => item.id === enrollment.classGroupId
       );
@@ -191,6 +207,12 @@ export default function HodReportsPage() {
       );
     })
     .sort((first, second) => first[sortKey].localeCompare(second[sortKey]));
+  const reportInsightPoints = countInsightPoints(
+    filteredRows.map(row => row.status)
+  );
+  const activeReportLabel =
+    reportOptions.find(option => option.value === reportType)?.label ??
+    "Academic";
 
   const saveView = async () => {
     setSaving(true);
@@ -253,7 +275,10 @@ export default function HodReportsPage() {
           </button>
         }
         toolbar={
-          <div className="platform-report-controls hod-report-controls">
+          <div
+            className="hod-compact-toolbar hod-report-controls-v3"
+            data-testid="hod-reports-toolbar"
+          >
             <label>
               Report type
               <select
@@ -305,7 +330,10 @@ export default function HodReportsPage() {
             title={`${reportOptions.find(option => option.value === reportType)?.label ?? "Academic"} report`}
             subtitle={`${filteredRows.length} row(s)`}
           >
-            <div className="platform-report-table typed">
+            <div
+              className="platform-report-table typed hod-report-table-v3"
+              data-testid="hod-reports-list"
+            >
               <div className="platform-report-row header" role="row">
                 <button
                   type="button"
@@ -342,7 +370,6 @@ export default function HodReportsPage() {
                     </StatusBadge>
                     <div className="platform-report-row-metric">
                       <strong>{row.metric}</strong>
-                      <span>{row.id}</span>
                     </div>
                   </article>
                 ))
@@ -358,26 +385,18 @@ export default function HodReportsPage() {
           </DataTableCard>
         }
         side={
-          <aside className="portal-simple-stack">
-            <section className="portal-simple-side-card">
-              <span>Scope</span>
-              <strong>{scope.departments[0]?.name ?? "Academic scope"}</strong>
-              <p>{scope.classGroups.length} classes in this report scope.</p>
-            </section>
-            <section className="portal-simple-side-card">
-              <span>Saved views</span>
-              <strong>
-                {
-                  state.reportPresets.filter(
-                    preset =>
-                      preset.role === "headofdepartment" &&
-                      preset.ownerUserId === scope.actorId
-                  ).length
-                }
-              </strong>
-              <p>Saved academic report filters.</p>
-            </section>
-          </aside>
+          <PortalInsight
+            compact
+            eyebrow="Academic signal"
+            title={`${activeReportLabel} status`}
+            value={filteredRows.length}
+            valueLabel="visible records"
+            description="Use the current status mix to decide where academic review is needed."
+            points={reportInsightPoints}
+            variant="bars"
+            tone="purple"
+            testId="hod-reports-insight"
+          />
         }
       />
     </PlatformShell>

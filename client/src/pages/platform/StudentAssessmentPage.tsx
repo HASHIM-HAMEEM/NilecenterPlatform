@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   CheckCircle2,
   ClipboardCheck,
   Clock3,
@@ -25,10 +24,9 @@ import type {
   PlatformState,
   QuizQuestionPreview,
 } from "@/lib/domain/types";
-import { getDemoUser, roleMeta } from "@/lib/platformData";
+import { getDemoUser } from "@/lib/platformData";
 
 type StudentAssessmentView = "assignment-detail" | "quiz-detail";
-type SyncStatus = "loading" | "supabase" | "local" | "offline";
 
 const PLATFORM_STATE_UPDATED_EVENT = "nilelearn:platform-state-updated";
 
@@ -140,7 +138,6 @@ export default function StudentAssessmentPage({
 }) {
   const copy = pageCopy[view];
   const [version, setVersion] = useState(0);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
   const [savingAction, setSavingAction] = useState("");
   const [actionError, setActionError] = useState("");
   const [submissionText, setSubmissionText] = useState("");
@@ -156,16 +153,12 @@ export default function StudentAssessmentPage({
 
   useEffect(() => {
     let cancelled = false;
-    setSyncStatus("loading");
     fetchPlatformStateRequest().then(result => {
       if (cancelled) return;
       if (result.ok && result.data) {
         platformStore.setState(result.data.state);
-        setSyncStatus(result.data.persistence);
         setVersion(value => value + 1);
-        return;
       }
-      setSyncStatus("offline");
     });
     return () => {
       cancelled = true;
@@ -200,10 +193,18 @@ export default function StudentAssessmentPage({
 
   const { studentId } = getStudentScope(state);
   const assignment = assignmentId
-    ? state.assignments.find(item => item.id === assignmentId)
+    ? state.assignments.find(
+        item =>
+          item.id === assignmentId &&
+          (item.status === "active" || item.status === "completed")
+      )
     : undefined;
   const quiz = quizId
-    ? state.quizzes.find(item => item.id === quizId)
+    ? state.quizzes.find(
+        item =>
+          item.id === quizId &&
+          (item.status === "active" || item.status === "completed")
+      )
     : undefined;
   const activeRun = state.courseRuns.find(
     run => run.id === (assignment?.courseRunId ?? quiz?.courseRunId)
@@ -211,13 +212,6 @@ export default function StudentAssessmentPage({
   const activeCourse = state.courses.find(
     item => item.id === activeRun?.courseId
   );
-  const activeClass = state.classGroups.find(
-    item =>
-      item.courseRunId === activeRun?.id && item.studentIds.includes(studentId)
-  );
-  const teacher = state.teachers.find(item => item.id === activeRun?.teacherId);
-  const teacherUser = state.users.find(item => item.id === teacher?.userId);
-
   const latestSubmission = assignment
     ? sortBySubmittedAt(
         state.assignmentSubmissions.filter(
@@ -267,15 +261,6 @@ export default function StudentAssessmentPage({
           (quizPendingMedia[question.id]?.length ?? 0) > 0
       )
     : quizFallbackAnswer.trim().length > 0;
-
-  const syncLabel =
-    syncStatus === "supabase"
-      ? "Synced"
-      : syncStatus === "local"
-        ? "Saved locally"
-        : syncStatus === "loading"
-          ? "Checking"
-          : "Offline";
 
   const runWorkflowAction = async (
     actionLabel: string,
@@ -386,7 +371,7 @@ export default function StudentAssessmentPage({
                 ? "Audio response"
                 : "File response"
             }
-            description="Choose your file. Nile Learn saves metadata now; storage remains pending."
+            description="Choose your file for this answer. Your school can enable online storage when it is ready."
             value={mediaItems}
             onChange={items => {
               setQuizPendingMedia(current => ({
@@ -424,114 +409,124 @@ export default function StudentAssessmentPage({
     );
   };
 
-  const side = (
-    <div className="student-assessment-side">
-      <section className="student-assessment-summary-card">
-        <span>Class</span>
-        <strong>{activeClass?.name ?? "Assigned class"}</strong>
-        <p>{activeCourse?.title ?? "Course record"}</p>
-      </section>
-      <section className="student-assessment-summary-card">
-        <span>Teacher</span>
-        <strong>{teacherUser?.name ?? "Teacher"}</strong>
-        <p>{syncLabel}</p>
-      </section>
-      <section className="student-assessment-summary-card">
-        <span>Go back</span>
-        <Link
-          className="platform-row-link"
-          href={
-            view === "assignment-detail"
-              ? "/app/student/assignments"
-              : "/app/student/quizzes"
-          }
-        >
-          <ArrowLeft size={14} />
-          {view === "assignment-detail" ? "Assignments" : "Quizzes"}
-        </Link>
-      </section>
-    </div>
-  );
-
   const assignmentMain = assignment ? (
-    <div className="platform-workflow-main student-assessment-main">
-      <section className="platform-workflow-card student-assessment-submit-card">
-        <div className="platform-workflow-title">
+    <div className="student-assessment-workspace student-assignment-workspace">
+      <section className="student-assessment-status">
+        <div className="student-assessment-status-copy">
           <span>
-            <ClipboardCheck size={16} /> Submission
+            <ClipboardCheck size={16} /> Assignment status
           </span>
-          <strong>{assignment.title}</strong>
-        </div>
-        <div
-          className={`platform-assessment-feedback ${assignmentGrade ? "reviewed" : latestSubmission ? "pending" : "empty"}`}
-        >
-          <div>
-            <span>
-              {assignmentGrade
-                ? "Reviewed"
-                : latestSubmission
-                  ? "Submitted"
-                  : "Ready"}
-            </span>
-            <strong>
-              {assignmentGrade
-                ? `${assignmentGrade.score}/${assignmentGrade.maxScore}`
-                : readableStatus(latestSubmission?.status)}
-            </strong>
-            <p>
-              {assignmentGrade?.feedback ??
+          <h2>
+            {assignment.status === "completed"
+              ? "Assignment closed"
+              : assignmentGrade
+              ? "Teacher feedback"
+              : latestSubmission
+                ? "Submission received"
+                : "Ready to submit"}
+          </h2>
+          <p>
+            {assignment.status === "completed"
+              ? latestSubmission
+                ? "This assignment is closed. Your submitted work and feedback remain available here."
+                : "This assignment is closed and no longer accepts submissions."
+              : (assignmentGrade?.feedback ??
                 latestSubmission?.feedback ??
-                "Write your response and submit when ready."}
-            </p>
-            <PendingMediaSummary items={latestSubmission?.pendingMedia} />
-          </div>
+                "Write your response and submit it when you are ready.")}
+          </p>
+          <PendingMediaSummary items={latestSubmission?.pendingMedia} />
+        </div>
+        <div className="student-assessment-status-meta">
+          <StatusBadge
+            tone={statusTone(
+              assignment.status === "completed"
+                ? "completed"
+                : assignmentGrade
+                  ? "completed"
+                  : latestSubmission?.status
+            )}
+          >
+            {assignment.status === "completed"
+              ? "Closed"
+              : assignmentGrade
+              ? `${assignmentGrade.score}/${assignmentGrade.maxScore}`
+              : readableStatus(latestSubmission?.status)}
+          </StatusBadge>
           <dl>
             {renderFact("Due", formatDateTime(assignment.dueAt))}
-            {renderFact("Type", assignment.submissionType)}
+            {renderFact("Format", assignment.submissionType)}
             {renderFact(
-              "Submitted",
+              "Last submitted",
               latestSubmission
                 ? formatDateTime(latestSubmission.submittedAt)
-                : "None"
+                : "Not yet"
             )}
           </dl>
         </div>
-        {assignment.submissionType !== "text" ? (
-          <PendingMediaField
-            kind={mediaKindForSubmissionType(assignment.submissionType)}
-            label={
-              assignment.submissionType === "audio"
-                ? "Audio file"
-                : assignment.submissionType === "video"
-                  ? "Video file"
-                  : "Assignment file"
-            }
-            description="Choose the file for this submission. Storage remains pending until a provider is connected."
-            value={assignmentPendingMedia}
-            onChange={setAssignmentPendingMedia}
-          />
-        ) : null}
-        <textarea
-          aria-label="Assignment response"
-          value={submissionText}
-          onChange={event => setSubmissionText(event.target.value)}
-          placeholder="Write your answer"
-        />
-        <button
-          type="button"
-          className="platform-primary-button"
-          disabled={
-            (!submissionText.trim() && assignmentPendingMedia.length === 0) ||
-            savingAction === "Assignment submission"
-          }
-          onClick={submitAssignment}
-        >
-          <Send size={15} />
-          {savingAction === "Assignment submission"
-            ? "Submitting"
-            : "Submit assignment"}
-        </button>
       </section>
+      {assignment.status === "active" ? (
+        <section className="student-assessment-response">
+          <header className="student-assessment-response-head">
+            <div>
+              <span>Your response</span>
+              <h2>Submit your work</h2>
+            </div>
+            <small>{assignment.title}</small>
+          </header>
+          {assignment.submissionType !== "text" ? (
+            <PendingMediaField
+              kind={mediaKindForSubmissionType(assignment.submissionType)}
+              label={
+                assignment.submissionType === "audio"
+                  ? "Audio file"
+                  : assignment.submissionType === "video"
+                    ? "Video file"
+                    : "Assignment file"
+              }
+              description="Choose the file for this submission. Online storage is enabled when your school connects a provider."
+              value={assignmentPendingMedia}
+              onChange={setAssignmentPendingMedia}
+            />
+          ) : null}
+          <textarea
+            aria-label="Assignment response"
+            value={submissionText}
+            onChange={event => setSubmissionText(event.target.value)}
+            placeholder="Write your answer"
+          />
+          <button
+            type="button"
+            className="platform-primary-button"
+            disabled={
+              (!submissionText.trim() && assignmentPendingMedia.length === 0) ||
+              savingAction === "Assignment submission"
+            }
+            onClick={submitAssignment}
+          >
+            <Send size={15} />
+            {savingAction === "Assignment submission"
+              ? "Submitting"
+              : "Submit assignment"}
+          </button>
+        </section>
+      ) : (
+        <section
+          className="student-assessment-response student-assessment-response-closed"
+          data-testid="student-assignment-closed"
+        >
+          <header className="student-assessment-response-head">
+            <div>
+              <span>Submission</span>
+              <h2>Submission closed</h2>
+            </div>
+          </header>
+          <p>
+            {latestSubmission
+              ? "Your submitted work remains available above for review."
+              : "This assignment closed before a response was submitted."}
+          </p>
+        </section>
+      )}
     </div>
   ) : (
     <div className="platform-empty-state">
@@ -544,112 +539,149 @@ export default function StudentAssessmentPage({
   );
 
   const quizMain = quiz ? (
-    <div className="platform-workflow-main student-assessment-main">
-      <section className="platform-workflow-card student-assessment-brief-card">
-        <div className="platform-workflow-title">
+    <div className="student-assessment-workspace student-quiz-workspace">
+      <section className="student-assessment-status">
+        <div className="student-assessment-status-copy">
           <span>
-            <Clock3 size={16} /> Attempt status
+            <Clock3 size={16} /> Quiz status
           </span>
-          <strong>Ready to submit</strong>
+          <h2>
+            {quiz.status === "completed"
+              ? "Quiz closed"
+              : quizGrade
+                ? "Result available"
+                : latestAttempt
+                  ? "Attempt received"
+                  : "Ready to start"}
+          </h2>
+          <p>
+            {quiz.status === "completed"
+              ? latestAttempt
+                ? "This quiz is closed. Your saved attempt and result remain available here."
+                : "This quiz is closed and no longer accepts attempts."
+              : (quizGrade?.feedback ??
+                (latestAttempt
+                  ? "Your attempt is saved for teacher review."
+                  : "Answer the questions, then submit one attempt."))}
+          </p>
+          <PendingMediaSummary items={latestAttempt?.pendingMedia} />
         </div>
-        <div
-          className={`platform-assessment-feedback ${quizGrade ? "reviewed" : latestAttempt ? "pending" : "empty"}`}
-        >
-          <div>
-            <span>
-              {quizGrade ? "Reviewed" : latestAttempt ? "Submitted" : "Ready"}
-            </span>
-            <strong>
-              {quizGrade
+        <div className="student-assessment-status-meta">
+          <StatusBadge
+            tone={statusTone(
+              quiz.status === "completed"
+                ? "completed"
+                : quizGrade
+                  ? "completed"
+                  : latestAttempt?.status
+            )}
+          >
+            {quiz.status === "completed"
+              ? "Closed"
+              : quizGrade
                 ? `${quizGrade.score}/${quizGrade.maxScore}`
                 : latestAttempt
                   ? `${latestAttempt.score}/${latestAttempt.maxScore}`
-                  : `${attemptsRemaining} attempt(s) left`}
-            </strong>
-            <p>
-              {quizGrade?.feedback ??
-                (latestAttempt
-                  ? "Your attempt is saved for teacher review."
-                  : "Answer the questions and submit one attempt.")}
-            </p>
-            <PendingMediaSummary items={latestAttempt?.pendingMedia} />
-          </div>
+                  : `${attemptsRemaining} left`}
+          </StatusBadge>
           <dl>
             {renderFact("Due", formatDateTime(quiz.dueAt))}
-            {renderFact("Timer", `${quiz.durationMinutes} min`)}
+            {renderFact("Time", `${quiz.durationMinutes} min`)}
             {renderFact(
-              "Submitted",
-              formatDateTime(latestAttempt?.submittedAt)
+              "Last submitted",
+              latestAttempt
+                ? formatDateTime(latestAttempt.submittedAt)
+                : "Not yet"
             )}
           </dl>
         </div>
       </section>
 
-      <section className="platform-workflow-card student-assessment-submit-card">
-        <div className="platform-workflow-title">
-          <span>
-            <ListChecks size={16} /> Questions
-          </span>
-          <strong>{quiz.title}</strong>
-        </div>
-        {quizHasSafeQuestionPreview ? (
-          <div className="platform-quiz-question-list">
-            {quizQuestionPreviews.map((question, index) => (
-              <article
-                key={question.id}
-                className="platform-quiz-question-card"
-              >
-                <div className="platform-quiz-question-head">
-                  <span>Question {index + 1}</span>
-                  {renderQuestionMeta(question)}
-                </div>
-                <strong>{question.prompt}</strong>
-                {question.tags.length ? (
-                  <div className="platform-chip-row">
-                    {question.tags.slice(0, 3).map(tag => (
-                      <span key={tag}>{tag}</span>
-                    ))}
+      {quiz.status === "active" ? (
+        <section className="student-assessment-response">
+          <header className="student-assessment-response-head">
+            <div>
+              <span>
+                <ListChecks size={16} /> Questions
+              </span>
+              <h2>{quiz.title}</h2>
+            </div>
+            <small>{quizQuestionPreviews.length || 1} question(s)</small>
+          </header>
+          {quizHasSafeQuestionPreview ? (
+            <div className="student-quiz-question-list">
+              {quizQuestionPreviews.map((question, index) => (
+                <article key={question.id} className="student-quiz-question">
+                  <div className="student-quiz-question-head">
+                    <span>Question {index + 1}</span>
+                    {renderQuestionMeta(question)}
                   </div>
-                ) : null}
-                {renderQuizQuestionInput(question)}
-              </article>
-            ))}
-          </div>
-        ) : quizHasAttachedQuestions ? (
-          <div className="platform-empty-state">
-            <strong>No questions available</strong>
-            <span>This quiz is not ready for your course yet.</span>
-          </div>
-        ) : (
-          <div className="platform-inline-form">
-            <label>
-              Short answer
-              <input
-                value={quizFallbackAnswer}
-                onChange={event =>
-                  setQuizAnswers({ __fallback: event.target.value })
-                }
-              />
-            </label>
-          </div>
-        )}
-        <button
-          type="button"
-          className="platform-primary-button"
-          disabled={
-            !quizHasAnswer ||
-            attemptsRemaining <= 0 ||
-            savingAction === "Quiz attempt"
-          }
-          onClick={submitQuiz}
+                  <strong>{question.prompt}</strong>
+                  {question.tags.length ? (
+                    <div className="student-quiz-tags">
+                      {question.tags.slice(0, 3).map(tag => (
+                        <span key={tag}>{tag}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {renderQuizQuestionInput(question)}
+                </article>
+              ))}
+            </div>
+          ) : quizHasAttachedQuestions ? (
+            <div className="platform-empty-state">
+              <strong>No questions available</strong>
+              <span>This quiz is not ready for your course yet.</span>
+            </div>
+          ) : (
+            <div className="platform-inline-form">
+              <label>
+                Short answer
+                <input
+                  value={quizFallbackAnswer}
+                  onChange={event =>
+                    setQuizAnswers({ __fallback: event.target.value })
+                  }
+                />
+              </label>
+            </div>
+          )}
+          <button
+            type="button"
+            className="platform-primary-button"
+            disabled={
+              !quizHasAnswer ||
+              attemptsRemaining <= 0 ||
+              savingAction === "Quiz attempt"
+            }
+            onClick={submitQuiz}
+          >
+            {attemptsRemaining <= 0
+              ? "Attempts used"
+              : savingAction === "Quiz attempt"
+                ? "Submitting"
+                : "Submit attempt"}
+          </button>
+        </section>
+      ) : (
+        <section
+          className="student-assessment-response student-assessment-closed"
+          data-testid="student-quiz-closed"
         >
-          {attemptsRemaining <= 0
-            ? "Attempts used"
-            : savingAction === "Quiz attempt"
-              ? "Submitting"
-              : "Submit attempt"}
-        </button>
-      </section>
+          <header className="student-assessment-response-head">
+            <div>
+              <span>
+                <ListChecks size={16} /> Submission closed
+              </span>
+              <h2>Review your result</h2>
+            </div>
+          </header>
+          <p>
+            This quiz no longer accepts attempts. Any saved attempt and teacher
+            feedback remain available above.
+          </p>
+        </section>
+      )}
     </div>
   ) : (
     <div className="platform-empty-state">
@@ -671,11 +703,18 @@ export default function StudentAssessmentPage({
             : (quiz?.title ?? copy.title)
         }
         description={copy.description}
-        context={copy.context}
+        context={activeCourse?.title ?? "Course"}
         actions={
-          <StatusBadge tone={statusTone(assignment?.status ?? quiz?.status)}>
-            {readableStatus(assignment?.status ?? quiz?.status)}
-          </StatusBadge>
+          <Link
+            className="platform-secondary-button"
+            href={
+              view === "assignment-detail"
+                ? "/app/student/assignments"
+                : "/app/student/quizzes"
+            }
+          >
+            Back to {view === "assignment-detail" ? "assignments" : "quizzes"}
+          </Link>
         }
         main={
           <>
@@ -688,7 +727,6 @@ export default function StudentAssessmentPage({
             {view === "assignment-detail" ? assignmentMain : quizMain}
           </>
         }
-        side={side}
       />
     </PlatformShell>
   );

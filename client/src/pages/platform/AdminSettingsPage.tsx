@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import PlatformShell from "@/components/platform/PlatformShell";
 import { SettingsLayout } from "@/components/platform/PlatformLayouts";
@@ -42,9 +42,7 @@ export default function AdminSettingsPage() {
 
     platformStore.setState(response.data.state);
     setVersion(value => value + 1);
-    toast.success("Platform settings saved", {
-      description: response.data.persistence,
-    });
+    toast.success("Platform settings saved");
   };
 
   return (
@@ -67,12 +65,13 @@ export default function AdminSettingsPage() {
         }
         main={
           <DataTableCard
-            title="Global platform settings"
-            subtitle="Protected local configuration"
+            title="Organization settings"
+            subtitle="These changes apply across Nile Learn."
           >
             <form
               id="admin-platform-settings-form"
-              className="admin-system-settings-form"
+              className="admin-simple-settings-form"
+              data-testid="admin-settings-form"
               onSubmit={saveSettings}
             >
               <label>
@@ -130,17 +129,9 @@ export default function AdminSettingsPage() {
                   }
                 />
               </label>
-              <div className="admin-system-policy-list">
-                {[
-                  "Global settings apply to all portals.",
-                  "Provider setup stays on Connections.",
-                  "Activity review stays on Activity log.",
-                ].map(policy => (
-                  <span key={policy}>
-                    <CheckCircle2 size={15} /> {policy}
-                  </span>
-                ))}
-              </div>
+              <p className="admin-settings-helper">
+                Connections and activity are managed on their own pages.
+              </p>
               {error ? (
                 <div className="platform-empty-state error">
                   <strong>Settings were not saved</strong>
@@ -149,29 +140,6 @@ export default function AdminSettingsPage() {
               ) : null}
             </form>
           </DataTableCard>
-        }
-        side={
-          <div className="portal-simple-stack">
-            <section className="portal-simple-side-card">
-              <span>
-                <ShieldCheck size={15} />
-                Settings scope
-              </span>
-              <strong>{state.settings.organization}</strong>
-              <p>
-                This page only controls organization, language, term, and
-                activity retention.
-              </p>
-            </section>
-            <section className="portal-simple-side-card">
-              <span>
-                <ShieldCheck size={15} />
-                Current policy
-              </span>
-              <strong>{state.settings.academicTerm}</strong>
-              <p>{state.settings.retentionDays} day activity retention.</p>
-            </section>
-          </div>
         }
       />
     </PlatformShell>

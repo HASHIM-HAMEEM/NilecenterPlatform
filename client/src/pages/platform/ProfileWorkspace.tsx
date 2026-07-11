@@ -2,10 +2,7 @@ import { useMemo, useState } from "react";
 import {
   Bell,
   CheckCircle2,
-  Clock3,
-  GraduationCap,
   KeyRound,
-  MapPin,
   ShieldCheck,
   UserCircle,
 } from "lucide-react";
@@ -22,7 +19,7 @@ import type {
   StaffAvailabilityStatus,
   UserNotificationPreferences,
 } from "@/lib/domain/types";
-import { roleMeta, rolePermissions, type Role } from "@/lib/platformData";
+import { roleMeta, type Role } from "@/lib/platformData";
 
 type ProfileWorkspaceProps = {
   role: Role;
@@ -63,7 +60,7 @@ const descriptionByRole: Record<Role, string> = {
   student:
     "Manage your learning account, contact details, preferences, and security.",
   teacher:
-    "Manage your teaching contact details, availability, preferences, and security.",
+    "Manage your teaching contact details, availability, and preferences.",
   registrar:
     "Manage your admissions account details, preferences, and security.",
   headofdepartment:
@@ -81,29 +78,6 @@ const defaultPreferences: UserNotificationPreferences = {
   billing: false,
   system: false,
 };
-
-function formatList(items: string[]) {
-  return items.filter(Boolean).join(", ") || "Not assigned";
-}
-
-function formatDate(value?: string) {
-  if (!value) return "No recent activity";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "No recent activity";
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function roleRoot(role: Role) {
-  if (role === "headofdepartment") return "hod";
-  if (role === "branchadmin") return "branch";
-  if (role === "superadmin") return "admin";
-  return role;
-}
 
 function userInitials(name: string) {
   const parts = name
@@ -127,7 +101,7 @@ export default function ProfileWorkspace({ role }: ProfileWorkspaceProps) {
   const [passwordMessage, setPasswordMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [activeSection, setActiveSection] = useState<
-    "details" | "preferences" | "security" | "context"
+    "details" | "preferences" | "security"
   >("details");
 
   const state = useMemo(() => platformStore.getState(), [version]);
@@ -150,27 +124,6 @@ export default function ProfileWorkspace({ role }: ProfileWorkspaceProps) {
         staffProfile.departmentIds.includes(item.id)
       )
     : state.departments.filter(item => item.id === user?.departmentId);
-  const branchNames = branches.map(item => item.name);
-  const departmentNames = departments.map(item => item.name);
-  const enrollments = student
-    ? state.enrollments.filter(item => item.studentId === student.id)
-    : [];
-  const teacherRuns = user
-    ? state.courseRuns.filter(item => item.teacherId === user.id)
-    : [];
-  const teacherClassGroups = state.classGroups.filter(group =>
-    teacherRuns.some(run => run.id === group.courseRunId)
-  );
-  const activityEntityIds = new Set(
-    [user?.id, student?.id, teacherProfile?.id, staffProfile?.id].filter(
-      (item): item is string => Boolean(item)
-    )
-  );
-  const recentActivity = state.auditLogs
-    .filter(
-      item => item.actorId === user?.id || activityEntityIds.has(item.entityId)
-    )
-    .slice(0, 6);
 
   const initialDraft = useMemo<ProfileDraft>(
     () => ({
@@ -300,40 +253,10 @@ export default function ProfileWorkspace({ role }: ProfileWorkspaceProps) {
     );
   }
 
-  const enrollmentSummary = enrollments.map(enrollment => {
-    const run = state.courseRuns.find(
-      item => item.id === enrollment.courseRunId
-    );
-    const course = state.courses.find(item => item.id === run?.courseId);
-    const group = state.classGroups.find(
-      item => item.id === enrollment.classGroupId
-    );
-    const teacher = state.users.find(item => item.id === enrollment.teacherId);
-    return `${course?.title ?? "Course"} · ${group?.name ?? "Class"} · ${teacher?.name ?? "Teacher"}`;
-  });
-  const roleDetails =
-    role === "student"
-      ? [
-          `Level: ${student?.currentLevel ?? "Placement pending"}`,
-          `Courses: ${enrollmentSummary.length || 0}`,
-          ...enrollmentSummary.slice(0, 2),
-        ]
-      : role === "teacher"
-        ? [
-            `Subjects: ${formatList(staffProfile?.subjects ?? teacherProfile?.subjects ?? [])}`,
-            `Teaching levels: ${formatList(staffProfile?.teachingLevels ?? teacherProfile?.teachingLevels ?? [])}`,
-            `Assigned classes: ${teacherClassGroups.length}`,
-          ]
-        : [
-            `Access: ${staffProfile?.permissionScope ?? "Role default"}`,
-            `Work areas: ${formatList(staffProfile?.operationalScope ?? [])}`,
-            `Permissions: ${rolePermissions[role].length}`,
-          ];
   const profileSections = [
     { id: "details", label: student ? "Details" : "Contact" },
     { id: "preferences", label: "Preferences" },
     { id: "security", label: "Security" },
-    { id: "context", label: role === "student" ? "Learning" : "Role context" },
   ] as const;
 
   return (
@@ -344,15 +267,17 @@ export default function ProfileWorkspace({ role }: ProfileWorkspaceProps) {
         description={descriptionByRole[role]}
         context={roleMeta[role].label}
         actions={
-          <button
-            type="button"
-            className="platform-primary-button"
-            disabled={savingProfile}
-            onClick={saveProfile}
-          >
-            <CheckCircle2 size={15} />
-            {savingProfile ? "Saving" : "Save profile"}
-          </button>
+          activeSection === "security" ? undefined : (
+            <button
+              type="button"
+              className="platform-primary-button"
+              disabled={savingProfile}
+              onClick={saveProfile}
+            >
+              <CheckCircle2 size={15} />
+              {savingProfile ? "Saving" : "Save profile"}
+            </button>
+          )
         }
         toolbar={
           <nav
@@ -653,70 +578,6 @@ export default function ProfileWorkspace({ role }: ProfileWorkspaceProps) {
                 {passwordError ? (
                   <p className="platform-attendance-error">{passwordError}</p>
                 ) : null}
-              </section>
-            ) : null}
-
-            {activeSection === "context" ? (
-              <section
-                className="profile-account-context"
-                aria-label="Read-only account context"
-              >
-                <details className="profile-disclosure" open>
-                  <summary>
-                    <span>Role details</span>
-                    <strong>{roleMeta[role].label}</strong>
-                  </summary>
-                  <div className="profile-mini-list">
-                    <span>
-                      <MapPin size={14} /> {formatList(branchNames)}
-                    </span>
-                    <span>
-                      <GraduationCap size={14} /> {formatList(departmentNames)}
-                    </span>
-                    {roleDetails.map(item => (
-                      <span key={item}>{item}</span>
-                    ))}
-                  </div>
-                </details>
-
-                <details className="profile-disclosure">
-                  <summary>
-                    <span>Access</span>
-                    <strong>{rolePermissions[role].length} permissions</strong>
-                  </summary>
-                  <div className="profile-chip-row">
-                    {rolePermissions[role].slice(0, 6).map(permission => (
-                      <span key={permission}>
-                        {permission.replace(":", " ")}
-                      </span>
-                    ))}
-                  </div>
-                </details>
-
-                <details className="profile-disclosure">
-                  <summary>
-                    <span>Activity</span>
-                    <strong>Recent account changes</strong>
-                  </summary>
-                  <div className="profile-activity-list">
-                    {recentActivity.length ? (
-                      recentActivity.map(item => (
-                        <article key={item.id}>
-                          <Clock3 size={14} />
-                          <div>
-                            <strong>{item.action.replaceAll(".", " ")}</strong>
-                            <small>{item.summary}</small>
-                            <span>{formatDate(item.createdAt)}</span>
-                          </div>
-                        </article>
-                      ))
-                    ) : (
-                      <div className="profile-empty-note">
-                        No profile activity yet.
-                      </div>
-                    )}
-                  </div>
-                </details>
               </section>
             ) : null}
 

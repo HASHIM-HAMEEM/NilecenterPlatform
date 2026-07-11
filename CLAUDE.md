@@ -2,7 +2,11 @@
 
 This file exists because LLMs make predictable mistakes when writing code. These are not suggestions. They are repository rules for Nile Learn work.
 
-Follow this file together with `AGENTS.md` and the matching `.codex/prompts/*.md` prompt before changing code.
+Follow this file together with the mandatory document list in `AGENTS.md` and
+the matching `.codex/prompts/*.md` prompt before changing code. Architecture,
+persistence, auth, RBAC, or integration work also requires
+`docs/NILE_LEARN_MASTER_PLAN.md` and
+`docs/MODERNIZATION_EXECUTION_CONTRACT.md`.
 
 ## Scope And Precedence
 
@@ -36,7 +40,9 @@ Do not start coding until the target behavior is clear.
 - If multiple approaches exist, briefly identify the practical options and choose one.
 - If the requirement is unclear enough that a wrong implementation would be costly, stop and ask.
 
-For Nile Learn, preserve the current auth/backend behavior unless the user explicitly asks to change it.
+For Nile Learn, preserve the current auth/backend behavior unless the user
+explicitly asks to change it or the current approved master-plan slice
+explicitly changes that boundary.
 
 ## 3. Simplicity
 
@@ -140,6 +146,16 @@ For review-style work, list findings first, ordered by severity, with file/line 
 
 ## Nile Learn Boundary
 
-Do not restate Nile Learn product, role, portal, security, RBAC, RLS, or design rules here. Those rules live in `AGENTS.md` and the matching `.codex/prompts/*.md` file.
+Do not restate Nile Learn product, role, portal, security, RBAC, RLS, architecture,
+or UI rules here.
+
+- Product, role, security, and command authority lives in `AGENTS.md`.
+- Product architecture and sequencing lives in
+  `docs/NILE_LEARN_MASTER_PLAN.md`.
+- Agent orchestration and phase gates live in
+  `docs/MODERNIZATION_EXECUTION_CONTRACT.md`.
+- UI rules live in `DESIGN.md`, `docs/DESIGN_V2.md`,
+  `docs/SIMPLE_UI.md`, and `docs/UI_INFORMATION_ARCHITECTURE.md`.
+- Feature acceptance criteria live in the matching `.codex/prompts/*.md` file.
 
 This file may add stricter engineering discipline, but it must not weaken or partially duplicate `AGENTS.md`.

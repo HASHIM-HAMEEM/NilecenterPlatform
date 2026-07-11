@@ -4,6 +4,10 @@
 
 This document maps the internal administration architecture for Nile Learn before more feature work is added. It is based on the current code, not chat history.
 
+Product sequencing and provider authority are defined in
+`docs/NILE_LEARN_MASTER_PLAN.md`. This document describes current workflows and
+must not override that plan.
+
 The platform is in internal alpha stabilization. The current implementation has broad route coverage, domain models, workflow actions, server-side action gates, demo seed data, and portal QA coverage. It does not yet have production-grade external integrations, durable normalized persistence as the only authority, or production media/payment/provider flows.
 
 ## Sources Read
@@ -13,11 +17,16 @@ The platform is in internal alpha stabilization. The current implementation has 
 - `client/src/lib/domain/store.ts`
 - `client/src/lib/domain/seed.ts`
 - `server/auth.ts`
+- `server/sessionRepository.ts`
+- `server/sessionStore.ts`
 - `server/routes.ts`
 - `server/platformState.ts`
+- `server/platformRepository.ts`
 - `client/src/App.tsx`
 - `CLAUDE.md`
 - `AGENTS.md`
+- `docs/NILE_LEARN_MASTER_PLAN.md`
+- `docs/MODERNIZATION_EXECUTION_CONTRACT.md`
 - `DESIGN.md`
 - `.codex/prompts/00-discovery.md`
 
@@ -94,21 +103,26 @@ Important boundary:
 - Client `localStorage` is a demo UX cache and must not be treated as production authority.
 - Server-side action gates in `server/platformState.ts` are the authority for protected mutations.
 
-### Server Auth Layer
+### Server Auth And Session Layers
 
-`server/auth.ts` defines server roles, demo users, Supabase sign-in fallback behavior, and an HttpOnly cookie session.
+`server/auth.ts` defines server roles, demo users, Supabase sign-in behavior,
+cookie handling, and session orchestration. `server/sessionRepository.ts` owns
+the asynchronous repository, memory default, and non-default durable Supabase
+adapter. `server/sessionStore.ts` is a compatibility re-export.
 
 Current behavior:
 
 - Roles: `student`, `teacher`, `registrar`, `headofdepartment`, `branchadmin`, `superadmin`.
 - Demo accounts are available for local/internal testing.
 - Supabase sign-in is attempted when configured.
-- Sessions are stored in an in-memory map with a 12 hour TTL.
+- Sessions use the memory repository by default with a 12 hour TTL.
+- A non-default normalized adapter passes disposable-local PostgREST tests but
+  is not approved for linked/shared runtime activation.
 - The session contains `userId`, `email`, `name`, `roles`, `activeRole`, `provider`, and `expiresAt`.
 
 Production gap:
 
-- Session storage is not durable across server restarts.
+- Default session storage is not durable across server restarts.
 - Supabase/RLS and normalized database authority still need a complete production design.
 
 ### Server API Layer
@@ -144,6 +158,22 @@ It handles:
 - writing optional Supabase event rows when configured
 
 This file is the current internal authority for role-based workflow safety.
+
+### Server Persistence Layer
+
+`server/platformRepository.ts` owns snapshot persistence. It stores one
+denormalized state document and may fall back to local storage. This is an alpha
+compatibility adapter, not a production authority model.
+
+Responsibility boundaries:
+
+- `server/auth.ts`: authenticate and resolve the request session;
+- `server/sessionRepository.ts`: session storage boundary and adapters;
+- `server/sessionStore.ts`: compatibility re-export;
+- `server/routes.ts`: API transport, request checks, and response routing;
+- `server/platformState.ts`: action authorization, scope enforcement, domain
+  orchestration, and scoped read-model construction;
+- `server/platformRepository.ts`: load and replace the current snapshot.
 
 ## Role Map
 
@@ -866,12 +896,40 @@ Gaps:
 ### Partial
 
 - Client `localStorage` is still used as a demo cache and offline UX layer.
-- Server sessions are in memory.
+- Memory-backed sessions remain the runtime default; the non-default durable
+  adapter is verified locally but not activated.
 - Platform state persistence is not yet a fully normalized production database authority.
 - Branch/HOD scoping exists but needs production test depth across every edge case.
 - Reports and exports are functional but need final production definitions per role.
 - Payment, schedule, and communication workflows are internally represented but not provider-backed.
 - UI route coverage is broad, but each route still needs route-by-route polish and workflow QA after data architecture stabilizes.
+
+### Class Delivery Integrity Checkpoint
+
+The compatibility workflow now enforces these preconditions before a delivery
+write:
+
+- Initial enrollment activation names one exact course run and one exact class
+  group. The server and domain use the same target and do not auto-select a
+  fallback.
+- Course, run, branch, assigned teacher identity, teacher profile, teacher staff
+  profile, and teacher branch scope must be active.
+- A branch-limited registrar cannot apply a global student status mutation when
+  any affected enrollment is outside the registrar's branch scope.
+- Attendance accepts only active or completed class sessions.
+- Class sessions stay within run dates and require an active room with enough
+  capacity when a room is selected.
+- Assessment creation requires an active delivery run.
+- Important accepted and rejected paths are covered by domain and server tests;
+  accepted writes continue to create audit evidence.
+
+This is compatibility hardening, not the final production class model. The
+normalized target still requires effective-dated class memberships, teacher
+assignments, schedules, and a single class-session identity. Until that model is
+promoted, `ClassGroup.studentIds`, `Enrollment.classGroupId`,
+`Enrollment.teacherId`, and `TeacherProfile.assignedClassIds` remain duplicated
+snapshot relationships and must not be treated as a production transaction
+boundary.
 
 ### Placeholder
 
@@ -885,12 +943,13 @@ Gaps:
 ### Future Integration
 
 - Live Moodle sync.
-- Live EMS sync.
+- Finite, reconciled legacy EMS migration and cutover.
 - Payment gateway.
 - Real email/SMS/WhatsApp sending.
 - Meeting provider.
 - Production file/media storage.
-- Durable server sessions.
+- Production activation of durable server sessions with atomic lifecycle audit
+  evidence.
 - Supabase RLS-backed normalized tables.
 - Scheduled jobs and background processing.
 - Production audit export/retention.
@@ -908,6 +967,16 @@ Current risky authority:
 - Client `localStorage` can hold demo platform state and should not be trusted for production authorization or final persistence.
 - Client-side route guards improve UX but are not sufficient for production authorization.
 
+Provider authority:
+
+- Nile Learn owns identity, role/scope, organization, admissions, enrollment,
+  class delivery, schedule, attendance, finance, certificates, messaging, and
+  audit.
+- Moodle initially owns Moodle-managed content, activities, completion,
+  attempts, grades, and feedback; Nile Learn displays read-only projections.
+- Legacy EMS is a one-way migration source only. It is not a permanent sync
+  partner and receives no writeback.
+
 Required production authority:
 
 - Authenticated server session.
@@ -919,7 +988,8 @@ Required production authority:
 
 1. Production persistence is not yet the single source of truth.
 2. Client localStorage remains useful for demo UX but is risky if treated as authority.
-3. Session storage is in memory and not durable.
+3. Memory-backed sessions remain the runtime default; production durable
+   activation and atomic lifecycle audit evidence are incomplete.
 4. External integrations are correctly deferred but many UI surfaces still need clear "placeholder/config/status only" treatment.
 5. Placement-to-level rules need formal program-specific mapping.
 6. Payment gating and reconciliation need internal rules before adding a provider.
@@ -928,15 +998,19 @@ Required production authority:
 9. Report metrics need a final product definition per role.
 10. Audit logs exist, but export, retention, filtering, and review workflows need production hardening.
 
-## Recommended Implementation Sequence
+## Domain Dependency Order
 
-1. Preserve the clean portal QA baseline before all changes.
-2. Finalize the production data architecture: normalized tables, ownership fields, branch/department scope, and RLS boundaries.
-3. Harden auth/session persistence and make server-derived identity the only authority for protected actions.
-4. Stabilize super admin user and role management edge cases.
-5. Stabilize student lifecycle end to end: lead/application, placement, level, enrollment, course, class, teacher, active portal.
-6. Stabilize teacher lifecycle end to end: profile, assignment to classes, attendance, grading, feedback, progress.
-7. Stabilize registrar, HOD, and branch admin workflows one workflow slice at a time.
-8. Polish UI route by route after workflow behavior is stable.
-9. Add CI enforcement for `npm run check`, tests, build, and portal QA.
-10. Integrate external systems only after internal data authority and workflow QA are stable.
+The authoritative current checkpoint and approved implementation sequence live
+in `docs/NILE_LEARN_MASTER_PLAN.md`. The order below describes workflow
+dependencies only; it does not approve a slice:
+
+1. Identity, role grants, branch/department scope, and audit authority.
+2. Durable authenticated sessions and server-derived scope.
+3. Admissions and student lifecycle from intake through active enrollment.
+4. Course runs, classes, schedules, rooms, and teacher assignment.
+5. Teacher attendance, assessment, grading, feedback, and student progress.
+6. Registrar, HOD, branch, and super-admin governance over normalized records.
+7. Read-only Moodle projection and finite EMS migration in their approved
+   phases.
+8. Route-by-route Simple UI and responsive completion after each workflow is
+   authoritative and stable.

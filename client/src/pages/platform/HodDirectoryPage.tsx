@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, GraduationCap, Search } from "lucide-react";
+import { ArrowRight, Plus, Search } from "lucide-react";
 import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
 import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
@@ -118,7 +118,18 @@ export default function HodDirectoryPage({ view }: { view: HodDirectoryView }) {
   );
   const scopedRunIds = new Set(scopedRuns.map(run => run.id));
   const copy = viewCopy[view];
-  const primaryAction = copy.action ? (
+  const primaryAction = view === "classes" ? (
+    <div className="platform-page-actions">
+      <Link className="platform-secondary-button" href="/app/hod/schedule">
+        Open schedule
+        <ArrowRight size={15} />
+      </Link>
+      <Link className="platform-primary-button" href="/app/hod/classes/runs/new">
+        <Plus size={15} />
+        New course run
+      </Link>
+    </div>
+  ) : copy.action ? (
     <Link className="platform-primary-button" href={actionHref(view)}>
       {copy.action}
       <ArrowRight size={15} />
@@ -229,7 +240,7 @@ export default function HodDirectoryPage({ view }: { view: HodDirectoryView }) {
           name: group.name,
           detail: course?.title ?? "Course not set",
           scope: `${branch?.name ?? "Branch"} · ${group.schedule}`,
-          status: run?.status ?? "active",
+          status: group.status,
           metric: `${group.studentIds.length}/${group.capacity} learners`,
           href: "/app/hod/schedule",
         };
@@ -255,8 +266,6 @@ export default function HodDirectoryPage({ view }: { view: HodDirectoryView }) {
       (status === "all" || row.status === status)
     );
   });
-  const firstDepartment = academicDepartments[0];
-
   return (
     <PlatformShell role="headofdepartment" title={copy.title}>
       <WorkspaceLayout
@@ -266,7 +275,10 @@ export default function HodDirectoryPage({ view }: { view: HodDirectoryView }) {
         context="Academic"
         actions={primaryAction}
         toolbar={
-          <div className="simple-portal-toolbar hod-directory-toolbar">
+          <div
+            className="hod-compact-toolbar hod-directory-toolbar-v3"
+            data-testid={`hod-${view}-toolbar`}
+          >
             <label>
               Search
               <span>
@@ -299,70 +311,44 @@ export default function HodDirectoryPage({ view }: { view: HodDirectoryView }) {
             title={copy.title}
             subtitle={`${filteredRows.length} records`}
           >
-            <table className="hod-directory-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Academic scope</th>
-                  <th>Status</th>
-                  <th>Summary</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.length ? (
-                  filteredRows.map(row => (
-                    <tr key={row.id}>
-                      <td>
-                        <strong>{row.name}</strong>
-                        <small>{row.detail}</small>
-                      </td>
-                      <td>
-                        <strong>{row.scope}</strong>
-                        <small>{row.id}</small>
-                      </td>
-                      <td>
-                        <StatusBadge tone={statusTone(row.status)}>
-                          {humanize(row.status)}
-                        </StatusBadge>
-                      </td>
-                      <td>
-                        {row.href ? (
-                          <Link
-                            className="simple-portal-row-action"
-                            href={row.href}
-                          >
-                            {row.metric}
-                            <ArrowRight size={14} />
-                          </Link>
-                        ) : (
-                          row.metric
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4}>
-                      <strong>{copy.empty}</strong>
-                      <small>Try a different search or status filter.</small>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div
+              className="hod-directory-list"
+              data-testid={`hod-${view}-list`}
+            >
+              {filteredRows.length ? (
+                filteredRows.map(row => (
+                  <article key={row.id}>
+                    <div className="hod-directory-list-copy">
+                      <span>{row.detail}</span>
+                      <strong>{row.name}</strong>
+                      <p>{row.scope}</p>
+                    </div>
+                    <div className="hod-directory-list-meta">
+                      <StatusBadge tone={statusTone(row.status)}>
+                        {humanize(row.status)}
+                      </StatusBadge>
+                      {row.href ? (
+                        <Link
+                          className="simple-portal-row-action"
+                          href={row.href}
+                        >
+                          {row.metric}
+                          <ArrowRight size={14} />
+                        </Link>
+                      ) : (
+                        <small>{row.metric}</small>
+                      )}
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="platform-empty-state">
+                  <strong>{copy.empty}</strong>
+                  <span>Try a different search or status filter.</span>
+                </div>
+              )}
+            </div>
           </DataTableCard>
-        }
-        side={
-          <aside className="portal-simple-stack">
-            <section className="portal-simple-side-card">
-              <span>
-                <GraduationCap size={15} />
-                Department scope
-              </span>
-              <strong>{firstDepartment?.name ?? "Academic scope"}</strong>
-              <p>{filteredRows.length} visible records in this view.</p>
-            </section>
-          </aside>
         }
       />
     </PlatformShell>

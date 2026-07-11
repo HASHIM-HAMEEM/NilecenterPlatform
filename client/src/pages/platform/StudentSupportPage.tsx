@@ -1,8 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, LifeBuoy, Search, Send } from "lucide-react";
+import { CheckCircle2, Search, Send } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
-import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
+import {
+  FormFlowLayout,
+  WorkspaceLayout,
+} from "@/components/platform/PlatformLayouts";
 import {
   DataTableCard,
   StatusBadge,
@@ -31,7 +35,22 @@ function humanize(value: string) {
     .replace(/\b\w/g, character => character.toUpperCase());
 }
 
-export default function StudentSupportPage() {
+function formatUpdatedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "No date";
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+export default function StudentSupportPage({
+  mode = "list",
+}: {
+  mode?: "list" | "create";
+}) {
   const [version, setVersion] = useState(0);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
@@ -61,10 +80,6 @@ export default function StudentSupportPage() {
       (status === "all" || ticket.status === status)
     );
   });
-  const openTickets = tickets.filter(
-    ticket => ticket.status !== "completed" && ticket.status !== "cancelled"
-  ).length;
-
   const createTicket = (event: FormEvent) => {
     event.preventDefault();
     const subject = draft.subject.trim();
@@ -95,10 +110,111 @@ export default function StudentSupportPage() {
       user.id
     );
     setDraft({ subject: "", priority: "normal" });
-    setResult(`Created support request ${id}.`);
+    setResult("Your support request has been created.");
     setVersion(value => value + 1);
-    toast.success("Support request created", { description: id });
+    toast.success("Support request created", {
+      description: "Your request is now in the support queue.",
+    });
   };
+
+  if (mode === "create") {
+    return (
+      <PlatformShell role="student" title="New support request">
+        <FormFlowLayout
+          className="student-support-page student-support-create-page"
+          title="New support request"
+          description="Tell the school team what you need help with."
+          context="Student"
+          actions={
+            result ? (
+              <Link
+                className="platform-primary-button"
+                href="/app/student/support"
+              >
+                View requests
+              </Link>
+            ) : (
+              <>
+                <Link
+                  className="platform-secondary-button"
+                  href="/app/student/support"
+                >
+                  Cancel
+                </Link>
+                <button
+                  type="submit"
+                  form="student-support-request-form"
+                  className="platform-primary-button"
+                >
+                  <Send size={15} />
+                  Send request
+                </button>
+              </>
+            )
+          }
+          main={
+            <section className="student-support-create-surface">
+              {result ? (
+                <div className="student-support-success" role="status">
+                  <CheckCircle2 size={20} />
+                  <div>
+                    <strong>Request sent</strong>
+                    <span>{result}</span>
+                  </div>
+                </div>
+              ) : (
+                <form
+                  id="student-support-request-form"
+                  className="student-support-form simple-form-section"
+                  onSubmit={createTicket}
+                >
+                  <div className="student-support-create-heading">
+                    <span>Step 1 of 1</span>
+                    <h2>Describe the help you need</h2>
+                    <p>
+                      Keep the subject short. The support team will follow up in
+                      your message inbox.
+                    </p>
+                  </div>
+                  <label>
+                    Request subject
+                    <input
+                      autoFocus
+                      value={draft.subject}
+                      onChange={event =>
+                        setDraft(value => ({
+                          ...value,
+                          subject: event.target.value,
+                        }))
+                      }
+                      placeholder="Example: I need help with a class recording"
+                    />
+                  </label>
+                  <label>
+                    Priority
+                    <select
+                      value={draft.priority}
+                      onChange={event =>
+                        setDraft(value => ({
+                          ...value,
+                          priority: event.target.value as TicketPriority,
+                        }))
+                      }
+                    >
+                      <option value="low">Low</option>
+                      <option value="normal">Normal</option>
+                      <option value="high">High</option>
+                      <option value="urgent">Urgent</option>
+                    </select>
+                  </label>
+                </form>
+              )}
+            </section>
+          }
+        />
+      </PlatformShell>
+    );
+  }
 
   return (
     <PlatformShell role="student" title="Support">
@@ -108,14 +224,13 @@ export default function StudentSupportPage() {
         description="Ask for help and follow your open requests."
         context="Student"
         actions={
-          <button
-            type="submit"
-            form="student-support-request-form"
+          <Link
             className="platform-primary-button"
+            href="/app/student/support/new"
           >
             <Send size={15} />
-            Create request
-          </button>
+            New request
+          </Link>
         }
         toolbar={
           <div className="simple-portal-toolbar student-support-toolbar">
@@ -148,119 +263,43 @@ export default function StudentSupportPage() {
         }
         main={
           <div className="student-support-main">
-            <DataTableCard title="New request" subtitle="Tell us what happened">
-              <form
-                id="student-support-request-form"
-                className="student-support-form simple-form-section"
-                onSubmit={createTicket}
-              >
-                <label>
-                  Request subject
-                  <input
-                    value={draft.subject}
-                    onChange={event =>
-                      setDraft(value => ({
-                        ...value,
-                        subject: event.target.value,
-                      }))
-                    }
-                    placeholder="Example: I need help with class recording"
-                  />
-                </label>
-                <label>
-                  Priority
-                  <select
-                    value={draft.priority}
-                    onChange={event =>
-                      setDraft(value => ({
-                        ...value,
-                        priority: event.target.value as TicketPriority,
-                      }))
-                    }
-                  >
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-                </label>
-                {result ? (
-                  <div className="simple-success-state" role="status">
-                    <CheckCircle2 size={15} />
-                    <span>{result}</span>
-                  </div>
-                ) : null}
-              </form>
-            </DataTableCard>
-
             <DataTableCard
               title="Support requests"
               subtitle={`${filteredTickets.length} request(s)`}
+              className="student-support-record-card"
             >
-              <table className="student-support-table">
-                <thead>
-                  <tr>
-                    <th>Request</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTickets.length ? (
-                    filteredTickets.map(ticket => (
-                      <tr key={ticket.id}>
-                        <td>
-                          <strong>{ticket.subject}</strong>
-                          <small>{ticket.id}</small>
-                        </td>
-                        <td>{priorityLabel(ticket.priority)}</td>
-                        <td>
-                          <StatusBadge tone={statusTone(ticket.status)}>
-                            {humanize(ticket.status)}
-                          </StatusBadge>
-                        </td>
-                        <td>
-                          {new Date(ticket.lastUpdatedAt).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4}>
-                        <strong>No support requests found</strong>
-                        <small>
-                          Try a different search or create a request.
-                        </small>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              {filteredTickets.length ? (
+                <div className="student-support-record-list">
+                  {filteredTickets.map(ticket => (
+                    <article key={ticket.id}>
+                      <div className="student-support-record-copy">
+                        <span>Support request</span>
+                        <strong>{ticket.subject}</strong>
+                      </div>
+                      <dl className="student-support-record-facts">
+                        <div>
+                          <dt>Priority</dt>
+                          <dd>{priorityLabel(ticket.priority)}</dd>
+                        </div>
+                        <div>
+                          <dt>Updated</dt>
+                          <dd>{formatUpdatedAt(ticket.lastUpdatedAt)}</dd>
+                        </div>
+                      </dl>
+                      <StatusBadge tone={statusTone(ticket.status)}>
+                        {humanize(ticket.status)}
+                      </StatusBadge>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="platform-empty-state">
+                  <strong>No support requests found</strong>
+                  <span>Try a different search or create a request.</span>
+                </div>
+              )}
             </DataTableCard>
           </div>
-        }
-        side={
-          <aside className="portal-simple-stack">
-            <section className="portal-simple-side-card">
-              <span>
-                <LifeBuoy size={15} />
-                Support status
-              </span>
-              <strong>{openTickets} open</strong>
-              <p>Support requests stay attached to your student account.</p>
-            </section>
-            <section className="portal-simple-side-card">
-              <span>
-                <CheckCircle2 size={15} />
-                What helps
-              </span>
-              <strong>Keep it short</strong>
-              <p>
-                Include the class, lesson, or assignment name when relevant.
-              </p>
-            </section>
-          </aside>
         }
       />
     </PlatformShell>

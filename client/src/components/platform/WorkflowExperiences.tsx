@@ -1317,7 +1317,10 @@ function LearningWorkflow({
       .filter(lesson => lesson.moduleId === module.id)
       .map(lesson => {
         const progress = state.lessonProgress.find(
-          item => item.lessonId === lesson.id && item.studentId === studentId
+          item =>
+            item.lessonId === lesson.id &&
+            item.studentId === studentId &&
+            item.enrollmentId === enrollment?.id
         );
         const resources = state.resources.filter(
           resource =>
@@ -1352,7 +1355,11 @@ function LearningWorkflow({
           item.assignmentId === assignment.id && item.studentId === studentId
       )
     : undefined;
-  const quiz = state.quizzes.find(item => item.courseRunId === run?.id);
+  const quiz = state.quizzes.find(
+    item =>
+      item.courseRunId === run?.id &&
+      (item.status === "active" || item.status === "completed")
+  );
   const quizAttempts = quiz
     ? state.quizAttempts.filter(
         item => item.quizId === quiz.id && item.studentId === studentId
@@ -1364,14 +1371,7 @@ function LearningWorkflow({
   );
   const latestAttempt = quizAttempts[0];
   const syncStatus = backendSyncStatus;
-  const syncLabel =
-    syncStatus === "supabase"
-      ? "Supabase synced"
-      : syncStatus === "local"
-        ? "Local fallback"
-        : syncStatus === "loading"
-          ? "Syncing"
-          : "Offline cache";
+  const syncLabel = formatSyncStatusLabel(syncStatus);
 
   const selectCourse = (runId: string) => {
     setManualRunId(runId);
@@ -1384,7 +1384,8 @@ function LearningWorkflow({
     const lesson = platformStore.startLesson(
       selectedLesson.id,
       studentId,
-      getDemoUser(role).id
+      getDemoUser(role).id,
+      enrollment?.id
     );
     refresh();
     toast.success("Lesson opened", { description: lesson.title });
@@ -1396,7 +1397,8 @@ function LearningWorkflow({
     const lesson = platformStore.completeLesson(
       selectedLesson.id,
       studentId,
-      getDemoUser(role).id
+      getDemoUser(role).id,
+      enrollment?.id
     );
     refresh();
     toast.success("Lesson marked complete", { description: lesson.title });
@@ -2095,7 +2097,11 @@ function AssessmentWorkflow({ role, state, refresh, params }: WorkflowProps) {
         );
   const quizOptions =
     role === "student"
-      ? state.quizzes.filter(quiz => studentRunIds.has(quiz.courseRunId))
+      ? state.quizzes.filter(
+          quiz =>
+            studentRunIds.has(quiz.courseRunId) &&
+            (quiz.status === "active" || quiz.status === "completed")
+        )
       : state.quizzes.filter(quiz => scopedRunIds.has(quiz.courseRunId));
   const questionBankItems =
     role === "student"
@@ -3877,7 +3883,11 @@ function StudentCalendarWorkflow({
       status: assignment.status,
     }));
   const quizEvents = state.quizzes
-    .filter(quiz => scope.runIds.has(quiz.courseRunId))
+    .filter(
+      quiz =>
+        scope.runIds.has(quiz.courseRunId) &&
+        (quiz.status === "active" || quiz.status === "completed")
+    )
     .map(quiz => ({
       id: quiz.id,
       title: quiz.title,
@@ -4309,12 +4319,8 @@ function StudentQuranWorkflow({ role, state, refresh }: WorkflowProps) {
     platformStore.setState(result.data.state);
     refresh();
     setPendingMedia([]);
-    setWorkflowMessage(
-      `Submitted to your Quran teacher · ${result.data.persistence}`
-    );
-    toast.success("Recitation submitted", {
-      description: result.data.persistence,
-    });
+    setWorkflowMessage("Submitted to your Quran teacher.");
+    toast.success("Recitation submitted");
   };
 
   return (
@@ -5047,9 +5053,7 @@ function AttendanceWorkflow({
                 : "No session"}
             </span>
             <span>
-              {backendSyncStatus === "loading"
-                ? "Syncing state"
-                : `${backendSyncStatus} state`}
+              {formatSyncStatusLabel(backendSyncStatus)}
             </span>
           </div>
           <div
@@ -5886,7 +5890,7 @@ function SchedulingWorkflow({
       payload?.conflicts?.length
         ? "Event saved with conflict"
         : "Event scheduled",
-      { description: `${title.trim()} · ${result.data.persistence}` }
+      { description: title.trim() }
     );
   };
 
@@ -6443,16 +6447,14 @@ function CertificateWorkflow({
         : actionType === "certificate.issue"
           ? `Issued ${changed.verificationCode}.`
           : `Rejected ${changed.verificationCode}.`;
-    setWorkflowMessage(`${message} Saved to ${result.data.persistence}.`);
+    setWorkflowMessage(message);
     toast.success(
       actionType === "certificate.approve"
         ? "Certificate approved"
         : actionType === "certificate.issue"
           ? "Certificate issued"
           : "Certificate rejected",
-      {
-        description: result.data.persistence,
-      }
+      {}
     );
   };
 
@@ -6827,10 +6829,8 @@ function QuranWorkflow({ role, state, refresh }: WorkflowProps) {
     }
     platformStore.setState(result.data.state);
     refresh();
-    setWorkflowMessage(`Review saved · ${result.data.persistence}`);
-    toast.success("Recitation reviewed", {
-      description: result.data.persistence,
-    });
+    setWorkflowMessage("Review saved.");
+    toast.success("Recitation reviewed");
   };
 
   const updateProgress = async () => {
@@ -6855,10 +6855,8 @@ function QuranWorkflow({ role, state, refresh }: WorkflowProps) {
     }
     platformStore.setState(result.data.state);
     refresh();
-    setWorkflowMessage(`Progress updated · ${result.data.persistence}`);
-    toast.success("Quran progress updated", {
-      description: result.data.persistence,
-    });
+    setWorkflowMessage("Progress updated.");
+    toast.success("Quran progress updated");
   };
 
   return (

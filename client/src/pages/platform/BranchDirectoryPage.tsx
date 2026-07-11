@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, Search, Users } from "lucide-react";
+import { ArrowRight, Plus, Search } from "lucide-react";
 import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
 import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
@@ -140,9 +140,9 @@ export default function BranchDirectoryPage({
           name: group.name,
           detail: course?.title ?? "Course",
           scope: room?.name ?? group.schedule,
-          status: run.status,
+          status: group.status,
           metric: `${group.studentIds.length}/${group.capacity} learners`,
-          href: "/app/branch/schedule",
+          href: `/app/branch/classes/${group.id}`,
         };
       })
       .filter(Boolean) as DirectoryRow[];
@@ -160,10 +160,16 @@ export default function BranchDirectoryPage({
   const copy = viewCopy[view];
   const action =
     view === "classes" ? (
-      <Link className="platform-primary-button" href="/app/branch/schedule">
-        Open schedule
-        <ArrowRight size={15} />
-      </Link>
+      <div className="platform-page-actions">
+        <Link className="platform-secondary-button" href="/app/branch/schedule">
+          Open schedule
+          <ArrowRight size={15} />
+        </Link>
+        <Link className="platform-primary-button" href="/app/branch/classes/new">
+          <Plus size={15} />
+          New class
+        </Link>
+      </div>
     ) : null;
 
   return (
@@ -175,7 +181,10 @@ export default function BranchDirectoryPage({
         context={branch?.name ?? "Branch"}
         actions={action}
         toolbar={
-          <div className="simple-portal-toolbar branch-directory-toolbar">
+          <div
+            className="branch-compact-toolbar branch-directory-toolbar-v3"
+            data-testid={`branch-${view}-toolbar`}
+          >
             <label>
               Search
               <span>
@@ -208,70 +217,44 @@ export default function BranchDirectoryPage({
             title={copy.title}
             subtitle={`${filteredRows.length} records`}
           >
-            <table className="branch-directory-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Branch detail</th>
-                  <th>Status</th>
-                  <th>Summary</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.length ? (
-                  filteredRows.map(row => (
-                    <tr key={row.id}>
-                      <td>
-                        <strong>{row.name}</strong>
-                        <small>{row.detail}</small>
-                      </td>
-                      <td>
-                        <strong>{row.scope}</strong>
-                        <small>{row.id}</small>
-                      </td>
-                      <td>
-                        <StatusBadge tone={statusTone(row.status)}>
-                          {humanize(row.status)}
-                        </StatusBadge>
-                      </td>
-                      <td>
-                        {row.href ? (
-                          <Link
-                            className="simple-portal-row-action"
-                            href={row.href}
-                          >
-                            {row.metric}
-                            <ArrowRight size={14} />
-                          </Link>
-                        ) : (
-                          row.metric
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4}>
-                      <strong>{copy.empty}</strong>
-                      <small>Try a different search or status filter.</small>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div
+              className="branch-directory-list"
+              data-testid={`branch-${view}-list`}
+            >
+              {filteredRows.length ? (
+                filteredRows.map(row => (
+                  <article key={row.id}>
+                    <div className="branch-directory-list-copy">
+                      <strong>{row.name}</strong>
+                      <p>{row.detail}</p>
+                      <small>{row.scope}</small>
+                    </div>
+                    <div className="branch-directory-list-meta">
+                      <StatusBadge tone={statusTone(row.status)}>
+                        {humanize(row.status)}
+                      </StatusBadge>
+                      {row.href ? (
+                        <Link
+                          className="simple-portal-row-action"
+                          href={row.href}
+                        >
+                          {row.metric}
+                          <ArrowRight size={14} />
+                        </Link>
+                      ) : (
+                        <small>{row.metric}</small>
+                      )}
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="platform-empty-state">
+                  <strong>{copy.empty}</strong>
+                  <span>Try a different search or status filter.</span>
+                </div>
+              )}
+            </div>
           </DataTableCard>
-        }
-        side={
-          <aside className="portal-simple-stack">
-            <section className="portal-simple-side-card">
-              <span>
-                <Users size={15} />
-                Branch scope
-              </span>
-              <strong>{branch?.name ?? "Branch"}</strong>
-              <p>{filteredRows.length} visible records in this view.</p>
-            </section>
-          </aside>
         }
       />
     </PlatformShell>

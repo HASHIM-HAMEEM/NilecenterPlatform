@@ -60,6 +60,7 @@ type CreatePlacementInput = Pick<
   "fullName" | "email" | "phone" | "subject" | "preferredDate" | "currentLevel"
 > & {
   branchId?: string;
+  leadId?: string;
 };
 
 type CreateCalendarEventInput = {
@@ -150,26 +151,6 @@ function cloneSeed(): PlatformState {
   return JSON.parse(JSON.stringify(seedPlatformState)) as PlatformState;
 }
 
-function mergeById<T extends { id: string }>(seedItems: T[], storedItems?: T[]) {
-  const merged = new Map((storedItems ?? []).map((item) => [item.id, item]));
-  seedItems.forEach((item) => {
-    if (!merged.has(item.id)) merged.set(item.id, item);
-  });
-  return Array.from(merged.values());
-}
-
-function mergePortalSettings(
-  seedItems: PlatformState["portalSettings"],
-  storedItems?: PlatformState["portalSettings"],
-) {
-  const keyFor = (item: PlatformState["portalSettings"][number]) => `${item.role}:${item.scopeId}`;
-  const merged = new Map((storedItems ?? []).map((item) => [keyFor(item), item]));
-  seedItems.forEach((item) => {
-    if (!merged.has(keyFor(item))) merged.set(keyFor(item), item);
-  });
-  return Array.from(merged.values());
-}
-
 function normalizeStoredState(value: unknown): PlatformState {
   if (!value || typeof value !== "object") return cloneSeed();
   const seed = cloneSeed();
@@ -177,12 +158,10 @@ function normalizeStoredState(value: unknown): PlatformState {
   return {
     ...seed,
     ...stored,
-    users: mergeById(seed.users, stored.users),
-    staffProfiles: mergeById(seed.staffProfiles, stored.staffProfiles),
-    courseRuns: mergeById(seed.courseRuns, stored.courseRuns),
-    classGroups: mergeById(seed.classGroups, stored.classGroups),
-    events: mergeById(seed.events, stored.events),
-    portalSettings: mergePortalSettings(seed.portalSettings, stored.portalSettings),
+    classGroups: (stored.classGroups ?? seed.classGroups).map(group => ({
+      ...group,
+      status: group.status ?? "active",
+    })),
   };
 }
 
@@ -321,17 +300,19 @@ class PlatformStore {
   startLesson(
     lessonId: string,
     studentId = "stu_demo",
-    actorId = "usr_student_demo"
+    actorId = "usr_student_demo",
+    enrollmentId?: string
   ) {
-    return this.applyAction({ type: "lesson.start", lessonId, studentId, actorId }).result as ReturnType<typeof applyStartLesson>;
+    return this.applyAction({ type: "lesson.start", lessonId, enrollmentId, studentId, actorId }).result as ReturnType<typeof applyStartLesson>;
   }
 
   completeLesson(
     lessonId: string,
     studentId = "stu_demo",
-    actorId = "usr_student_demo"
+    actorId = "usr_student_demo",
+    enrollmentId?: string
   ) {
-    return this.applyAction({ type: "lesson.complete", lessonId, studentId, actorId }).result as ReturnType<typeof applyCompleteLesson>;
+    return this.applyAction({ type: "lesson.complete", lessonId, enrollmentId, studentId, actorId }).result as ReturnType<typeof applyCompleteLesson>;
   }
 
   submitAssignment(

@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { MessageSquare, Search, Send } from "lucide-react";
+import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
-import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
 import {
-  DataTableCard,
-  StatusBadge,
-} from "@/components/platform/PlatformPrimitives";
+  FormFlowLayout,
+  WorkspaceLayout,
+} from "@/components/platform/PlatformLayouts";
 import { runPlatformWorkflowActionRequest } from "@/lib/backend/api";
 import { getStoredAuthSession } from "@/lib/auth/session";
+import { getMessageRecipientScope } from "@/lib/domain/messageScope";
 import { platformStore } from "@/lib/domain/store";
 import type { User } from "@/lib/domain/types";
 import { roleMeta, type Role } from "@/lib/platformData";
 
 type PortalMessagesPageProps = {
   role: Role;
+  mode?: "inbox" | "compose";
 };
-
-type MessageTone = "green" | "amber" | "slate";
 
 const fallbackUserIdByRole: Record<Role, string> = {
   student: "usr_student_demo",
@@ -57,23 +57,22 @@ function formatDate(value?: string) {
   }).format(date);
 }
 
-function messageTone(read?: boolean): MessageTone {
-  return read ? "slate" : "amber";
-}
-
-function roleRoot(role: Role) {
-  if (role === "headofdepartment") return "hod";
-  if (role === "branchadmin") return "branch";
-  if (role === "superadmin") return "admin";
-  return role;
-}
-
 function userLabel(user?: User) {
   if (!user) return "Unknown";
   return `${user.name} · ${roleMeta[user.activeRole].label}`;
 }
 
-export default function PortalMessagesPage({ role }: PortalMessagesPageProps) {
+function messagesHref(role: Role) {
+  if (role === "headofdepartment") return "/app/hod/messages";
+  if (role === "branchadmin") return "/app/branch/messages";
+  if (role === "superadmin") return "/app/admin/messages";
+  return `/app/${role}/messages`;
+}
+
+export default function PortalMessagesPage({
+  role,
+  mode = "inbox",
+}: PortalMessagesPageProps) {
   const [version, setVersion] = useState(0);
   const [query, setQuery] = useState("");
   const [recipientId, setRecipientId] = useState("");
@@ -92,88 +91,19 @@ export default function PortalMessagesPage({ role }: PortalMessagesPageProps) {
       user => user.id === session?.userId && user.activeRole === role
     ) ?? state.users.find(user => user.id === fallbackUserIdByRole[role]);
   const actorId = actor?.id ?? fallbackUserIdByRole[role];
+  const inboxHref = messagesHref(role);
 
-  const scopedTeacherRunIds = new Set(
-    state.courseRuns.filter(run => run.teacherId === actorId).map(run => run.id)
+  const recipientScope = useMemo(
+    () => getMessageRecipientScope(state, role, actorId),
+    [actorId, role, state]
   );
-  const scopedTeacherStudentIds = new Set(
-    state.enrollments
-      .filter(enrollment => scopedTeacherRunIds.has(enrollment.courseRunId))
-      .map(enrollment => enrollment.studentId)
+  const recipients = state.users.filter(user =>
+    recipientScope.sendableUserIds.has(user.id)
   );
-  const scopedTeacherStudentUserIds = new Set(
-    state.students
-      .filter(student => scopedTeacherStudentIds.has(student.id))
-      .map(student => student.userId)
-  );
-  const branchIds =
-    role === "branchadmin"
-      ? new Set(
-          [
-            actor?.branchId,
-            ...state.staffProfiles
-              .filter(profile => profile.userId === actorId)
-              .flatMap(profile => profile.branchIds),
-          ].filter(Boolean)
-        )
-      : new Set<string>();
-  const departmentIds =
-    role === "headofdepartment"
-      ? new Set(
-          [
-            actor?.departmentId,
-            ...state.staffProfiles
-              .filter(profile => profile.userId === actorId)
-              .flatMap(profile => profile.departmentIds),
-          ].filter(Boolean)
-        )
-      : new Set<string>();
-
-  const recipientIds = new Set<string>();
-  if (role === "student") {
-    state.enrollments
-      .filter(enrollment =>
-        state.students.some(
-          student =>
-            student.id === enrollment.studentId && student.userId === actorId
-        )
-      )
-      .forEach(enrollment => {
-        if (enrollment.teacherId) {
-          recipientIds.add(enrollment.teacherId);
-        }
-      });
-    recipientIds.add("usr_registrar_demo");
-  } else if (role === "teacher") {
-    scopedTeacherStudentUserIds.forEach(id => recipientIds.add(id));
-    recipientIds.add("usr_hod_demo");
-  } else if (role === "registrar") {
-    state.users
-      .filter(
-        user =>
-          user.branchId === actor?.branchId || user.activeRole === "student"
-      )
-      .forEach(user => recipientIds.add(user.id));
-  } else if (role === "headofdepartment") {
-    state.users
-      .filter(user => user.departmentId && departmentIds.has(user.departmentId))
-      .forEach(user => recipientIds.add(user.id));
-    recipientIds.add("usr_teacher_demo");
-  } else if (role === "branchadmin") {
-    state.users
-      .filter(user => user.branchId && branchIds.has(user.branchId))
-      .forEach(user => recipientIds.add(user.id));
-    recipientIds.add("usr_teacher_demo");
-  } else {
-    state.users.forEach(user => recipientIds.add(user.id));
-  }
-  recipientIds.delete(actorId);
-
-  const recipients = state.users.filter(user => recipientIds.has(user.id));
   const selectedRecipientId = recipientId || recipients[0]?.id || "";
   const visibleMessageIds = new Set([
     actorId,
-    ...recipients.map(user => user.id),
+    ...Array.from(recipientScope.visibleUserIds),
   ]);
   const messages = state.messages
     .filter(
@@ -240,6 +170,114 @@ export default function PortalMessagesPage({ role }: PortalMessagesPageProps) {
     setResult({ tone: "success", text: "Message sent." });
   };
 
+  if (mode === "compose") {
+    return (
+      <PlatformShell role={role} title="New message">
+        <FormFlowLayout
+          className="portal-messages-page portal-message-compose-page"
+          title="New message"
+          description="Write one clear update for someone in your workspace."
+          context={roleMeta[role].label}
+          actions={
+            result?.tone === "success" ? (
+              <Link className="platform-primary-button" href={inboxHref}>
+                View messages
+              </Link>
+            ) : (
+              <>
+                <Link className="platform-secondary-button" href={inboxHref}>
+                  Cancel
+                </Link>
+                <button
+                  type="submit"
+                  form="portal-message-compose-form"
+                  className="platform-primary-button"
+                  disabled={!recipients.length || saving}
+                >
+                  <Send size={15} />
+                  {saving ? "Sending" : sendLabel}
+                </button>
+              </>
+            )
+          }
+          main={
+            <section
+              className="portal-message-compose-surface"
+              data-testid={`portal-message-compose-${role}`}
+            >
+              {result?.tone === "success" ? (
+                <div className="portal-message-compose-success" role="status">
+                  <MessageSquare size={20} />
+                  <div>
+                    <strong>Message sent</strong>
+                    <span>{result.text}</span>
+                  </div>
+                </div>
+              ) : (
+                <form
+                  id="portal-message-compose-form"
+                  className="portal-message-compose-form"
+                  onSubmit={sendMessage}
+                >
+                  <div className="portal-message-compose-flow-heading">
+                    <span>Step 1 of 1</span>
+                    <h2>Choose a recipient and write the update</h2>
+                    <p>
+                      Keep the subject short so the recipient can scan it quickly.
+                    </p>
+                  </div>
+                  <label>
+                    Recipient
+                    <select
+                      value={selectedRecipientId}
+                      onChange={event => setRecipientId(event.target.value)}
+                    >
+                      {recipients.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {userLabel(user)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Subject
+                    <input
+                      autoFocus
+                      value={subject}
+                      onChange={event => setSubject(event.target.value)}
+                      placeholder={`${roleMeta[role].shortLabel} update`}
+                    />
+                  </label>
+                  <label className="portal-message-compose-body">
+                    Message
+                    <textarea
+                      value={body}
+                      onChange={event => setBody(event.target.value)}
+                      placeholder="Write a short update"
+                    />
+                  </label>
+                  {!recipients.length ? (
+                    <p className="platform-attendance-error">
+                      There is no one in your current workspace to message yet.
+                    </p>
+                  ) : null}
+                  {result ? (
+                    <p
+                      aria-live="polite"
+                      className="platform-attendance-error"
+                    >
+                      {result.text}
+                    </p>
+                  ) : null}
+                </form>
+              )}
+            </section>
+          }
+        />
+      </PlatformShell>
+    );
+  }
+
   return (
     <PlatformShell role={role} title={titleByRole[role]}>
       <WorkspaceLayout
@@ -247,136 +285,88 @@ export default function PortalMessagesPage({ role }: PortalMessagesPageProps) {
         title={titleByRole[role]}
         description={descriptionByRole[role]}
         context={roleMeta[role].label}
+        actions={
+          <Link
+            className="platform-primary-button"
+            href={`${inboxHref}/new`}
+          >
+            <MessageSquare size={15} />
+            New message
+          </Link>
+        }
         toolbar={
-          <div className="portal-simple-toolbar portal-messages-toolbar">
+          <div
+            className="portal-message-toolbar-v3"
+            data-testid={`portal-messages-toolbar-${role}`}
+          >
             <label>
-              Search
-              <span>
-                <Search size={14} />
-                <input
-                  value={query}
-                  onChange={event => setQuery(event.target.value)}
-                  placeholder="Search messages"
-                />
-              </span>
+              <span className="sr-only">Search messages</span>
+              <Search size={15} />
+              <input
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Search messages"
+              />
             </label>
           </div>
         }
         main={
-          <DataTableCard
-            title="Conversation list"
-            subtitle={`${filteredMessages.length} messages`}
+          <section
+            className="portal-message-inbox-v3"
+            data-testid={`portal-messages-inbox-${role}`}
           >
-            <div className="admin-ia-table-wrap">
-              <table className="portal-messages-table">
-                <thead>
-                  <tr>
-                    <th>Message</th>
-                    <th>People</th>
-                    <th>Status</th>
-                    <th>Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredMessages.map(message => {
-                    const from = state.users.find(
-                      user => user.id === message.fromUserId
-                    );
-                    const to = state.users.find(
-                      user => user.id === message.toUserId
-                    );
-                    return (
-                      <tr key={message.id}>
-                        <td>
-                          <strong>{message.subject}</strong>
-                          <small>{message.body}</small>
-                        </td>
-                        <td>
-                          <strong>{from?.name ?? "Sender"}</strong>
-                          <small>To {to?.name ?? "recipient"}</small>
-                        </td>
-                        <td>
-                          <StatusBadge tone={messageTone(message.read)}>
-                            {message.read ? "read" : "unread"}
-                          </StatusBadge>
-                        </td>
-                        <td>{formatDate(message.createdAt)}</td>
-                      </tr>
-                    );
-                  })}
-                  {!filteredMessages.length ? (
-                    <tr>
-                      <td colSpan={4}>
-                        <div className="platform-empty-state">
-                          <strong>No messages found</strong>
-                          <span>Send a message or adjust search.</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </DataTableCard>
-        }
-        side={
-          <section className="platform-workflow-card portal-message-compose">
-            <div className="platform-workflow-title">
-              <span>
-                <MessageSquare size={16} /> New message
-              </span>
-              <strong>{recipients.length} recipients</strong>
-            </div>
-            <form className="platform-inline-form" onSubmit={sendMessage}>
-              <label>
-                Recipient
-                <select
-                  value={selectedRecipientId}
-                  onChange={event => setRecipientId(event.target.value)}
-                >
-                  {recipients.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {userLabel(user)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Subject
-                <input
-                  value={subject}
-                  onChange={event => setSubject(event.target.value)}
-                  placeholder={`${roleMeta[role].shortLabel} update`}
-                />
-              </label>
-              <label>
-                Message
-                <textarea
-                  value={body}
-                  onChange={event => setBody(event.target.value)}
-                  placeholder="Write a short update"
-                />
-              </label>
-              {result ? (
-                <p
-                  className={
-                    result.tone === "success"
-                      ? "platform-scheduler-feedback success"
-                      : "platform-attendance-error"
-                  }
-                >
-                  {result.text}
-                </p>
+            <div className="portal-message-inbox-heading">
+              <div>
+                <span>Inbox</span>
+                <h2>{filteredMessages.length} message(s)</h2>
+              </div>
+              {filteredMessages.some(message => !message.read) ? (
+                <small>
+                  {filteredMessages.filter(message => !message.read).length}{" "}
+                  unread
+                </small>
               ) : null}
-              <button
-                type="submit"
-                className="platform-primary-button"
-                disabled={!recipients.length || saving}
-              >
-                <Send size={15} />
-                {saving ? "Sending" : sendLabel}
-              </button>
-            </form>
+            </div>
+            <div className="portal-message-inbox-list">
+              {filteredMessages.map(message => {
+                const from = state.users.find(
+                  user => user.id === message.fromUserId
+                );
+                const to = state.users.find(
+                  user => user.id === message.toUserId
+                );
+                const outgoing = message.fromUserId === actorId;
+                const counterpart = outgoing ? to : from;
+                return (
+                  <article
+                    key={message.id}
+                    className={message.read ? "" : "unread"}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="portal-message-read-dot"
+                    />
+                    <div>
+                      <span>
+                        {outgoing ? "To" : "From"}{" "}
+                        {counterpart?.name ?? "Nile Learn"}
+                      </span>
+                      <strong>{message.subject}</strong>
+                      <p>{message.body}</p>
+                    </div>
+                    <time dateTime={message.createdAt}>
+                      {formatDate(message.createdAt)}
+                    </time>
+                  </article>
+                );
+              })}
+              {!filteredMessages.length ? (
+                <div className="portal-message-empty-v3">
+                  <strong>No messages found</strong>
+                  <p>Send a message or try a different search.</p>
+                </div>
+              ) : null}
+            </div>
           </section>
         }
       />
