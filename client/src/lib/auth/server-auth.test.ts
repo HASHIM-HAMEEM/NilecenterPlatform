@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   attachSession,
   changeDemoPasswordForSession,
@@ -9,8 +9,14 @@ import {
   resetDemoPasswordResetState,
   signIn,
   type ServerSession,
+  validateAuthConfiguration,
 } from "../../../../server/auth";
-import { resetDefaultSessionStore, setSessionStore, type SessionStore } from "../../../../server/sessionStore";
+import {
+  resetDefaultSessionStore,
+  SessionRepositoryUnavailableError,
+  setSessionStore,
+  type SessionStore,
+} from "../../../../server/sessionStore";
 
 const originalEnv = {
   NODE_ENV: process.env.NODE_ENV,
@@ -36,10 +42,13 @@ afterEach(() => {
   process.env.SUPABASE_URL = originalEnv.SUPABASE_URL;
   process.env.VITE_SUPABASE_URL = originalEnv.VITE_SUPABASE_URL;
   process.env.SUPABASE_PUBLISHABLE_KEY = originalEnv.SUPABASE_PUBLISHABLE_KEY;
-  process.env.VITE_SUPABASE_PUBLISHABLE_KEY = originalEnv.VITE_SUPABASE_PUBLISHABLE_KEY;
+  process.env.VITE_SUPABASE_PUBLISHABLE_KEY =
+    originalEnv.VITE_SUPABASE_PUBLISHABLE_KEY;
   process.env.VITE_SUPABASE_ANON_KEY = originalEnv.VITE_SUPABASE_ANON_KEY;
   resetDemoPasswordResetState();
   resetDefaultSessionStore();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("server demo auth", () => {
@@ -56,7 +65,9 @@ describe("server demo auth", () => {
     process.env.DEMO_AUTH_ENABLED = "true";
     process.env.NILE_DEMO_PASSWORD = "12345";
 
-    await expect(signIn("s@nl.test", "wrong-password", "student")).rejects.toThrow("Invalid email, password, or role.");
+    await expect(
+      signIn("s@nl.test", "wrong-password", "student")
+    ).rejects.toThrow("Invalid email, password, or role.");
 
     const session = await signIn("s@nl.test", "12345", "student");
     expect(session.provider).toBe("demo");
@@ -69,7 +80,11 @@ describe("server demo auth", () => {
     process.env.DEMO_AUTH_ENABLED = "true";
     delete process.env.NILE_DEMO_PASSWORD;
 
-    const session = await signIn("teacher.demo@nilelearn.local", "demo1234", "teacher");
+    const session = await signIn(
+      "teacher.demo@nilelearn.local",
+      "demo1234",
+      "teacher"
+    );
     expect(session.provider).toBe("demo");
     expect(session.activeRole).toBe("teacher");
   });
@@ -79,15 +94,35 @@ describe("server demo auth", () => {
     process.env.NODE_ENV = "production";
     delete process.env.DEMO_AUTH_ENABLED;
     delete process.env.VITE_DEMO_AUTH_ENABLED;
-    process.env.NILE_DEMO_PASSWORD = "12345";
+    process.env.NILE_DEMO_PASSWORD = "production-demo-password";
 
-    await expect(signIn("s@nl.test", "12345", "student")).rejects.toThrow("Invalid email, password, or role.");
+    await expect(
+      signIn("s@nl.test", "production-demo-password", "student")
+    ).rejects.toThrow("Invalid email, password, or role.");
 
     process.env.DEMO_AUTH_ENABLED = "true";
-    const session = await signIn("s@nl.test", "12345", "student");
+    const session = await signIn(
+      "s@nl.test",
+      "production-demo-password",
+      "student"
+    );
 
     expect(session.provider).toBe("demo");
     expect(session.activeRole).toBe("student");
+  });
+
+  it("fails startup validation when production demo auth has no strong explicit password", () => {
+    useDemoOnlyAuth();
+    process.env.NODE_ENV = "production";
+    process.env.DEMO_AUTH_ENABLED = "true";
+    process.env.NILE_DEMO_PASSWORD = "short";
+
+    expect(() => validateAuthConfiguration()).toThrow(
+      "Production demo authentication requires an explicit NILE_DEMO_PASSWORD with at least 8 characters."
+    );
+
+    process.env.NILE_DEMO_PASSWORD = "production-demo-password";
+    expect(() => validateAuthConfiguration()).not.toThrow();
   });
 
   it("resets a demo password without changing Supabase auth behavior", async () => {
@@ -95,7 +130,10 @@ describe("server demo auth", () => {
     process.env.DEMO_AUTH_ENABLED = "true";
     process.env.NILE_DEMO_PASSWORD = "original-password";
 
-    const request = requestDemoPasswordReset("teacher.demo@nilelearn.local", "teacher");
+    const request = requestDemoPasswordReset(
+      "teacher.demo@nilelearn.local",
+      "teacher"
+    );
     expect(request.ok).toBe(true);
     expect(request.demoResetPath).toContain("/auth/reset-password?");
 
@@ -107,10 +145,16 @@ describe("server demo auth", () => {
     });
     expect(result).toMatchObject({ ok: true, role: "teacher" });
 
-    await expect(signIn("teacher.demo@nilelearn.local", "original-password", "teacher")).resolves.toMatchObject({
+    await expect(
+      signIn("teacher.demo@nilelearn.local", "original-password", "teacher")
+    ).resolves.toMatchObject({
       provider: "demo",
     });
-    const session = await signIn("teacher.demo@nilelearn.local", "new-demo-password", "teacher");
+    const session = await signIn(
+      "teacher.demo@nilelearn.local",
+      "new-demo-password",
+      "teacher"
+    );
     expect(session.provider).toBe("demo");
     expect(session.activeRole).toBe("teacher");
   });
@@ -130,7 +174,11 @@ describe("server demo auth", () => {
     process.env.DEMO_AUTH_ENABLED = "true";
     process.env.NILE_DEMO_PASSWORD = "original-password";
 
-    const session = await signIn("teacher.demo@nilelearn.local", "original-password", "teacher");
+    const session = await signIn(
+      "teacher.demo@nilelearn.local",
+      "original-password",
+      "teacher"
+    );
 
     expect(() =>
       changeDemoPasswordForSession(session, {
@@ -152,7 +200,11 @@ describe("server demo auth", () => {
       })
     ).toMatchObject({ ok: true, role: "teacher" });
 
-    const nextSession = await signIn("teacher.demo@nilelearn.local", "new-demo-password", "teacher");
+    const nextSession = await signIn(
+      "teacher.demo@nilelearn.local",
+      "new-demo-password",
+      "teacher"
+    );
     expect(nextSession.provider).toBe("demo");
   });
 
@@ -213,6 +265,7 @@ describe("server session store", () => {
   function createInspectableStore() {
     const sessions = new Map<string, ServerSession>();
     const store: SessionStore = {
+      kind: "memory",
       create(session) {
         sessions.set(session.id, session);
       },
@@ -229,18 +282,20 @@ describe("server session store", () => {
     return { store, sessions };
   }
 
-  it("reads request sessions through the configured server store", () => {
+  it("reads request sessions through the configured server store", async () => {
     const { store } = createInspectableStore();
     const restoreStore = setSessionStore(store);
     const session = testSession();
     store.create(session);
 
-    expect(getRequestSession(requestWithCookie("nilelearn_session=sess_test_1"))).toEqual(session);
+    await expect(
+      getRequestSession(requestWithCookie("nilelearn_session=sess_test_1"))
+    ).resolves.toEqual(session);
 
     restoreStore();
   });
 
-  it("attaches and ends sessions through the configured server store", () => {
+  it("attaches and ends sessions through the configured server store", async () => {
     const { store, sessions } = createInspectableStore();
     const restoreStore = setSessionStore(store);
     const { headers, response } = responseRecorder();
@@ -250,11 +305,18 @@ describe("server session store", () => {
     const body = attachSession(response, session);
     const cookie = headers.get("Set-Cookie") ?? "";
 
-    expect(body).toMatchObject({ userId: "usr_student_demo", activeRole: "student", provider: "demo" });
+    expect(body).toMatchObject({
+      userId: "usr_student_demo",
+      activeRole: "student",
+      provider: "demo",
+    });
     expect(cookie).toContain("nilelearn_session=sess_test_1");
     expect(cookie).toContain("HttpOnly");
 
-    endRequestSession(requestWithCookie("nilelearn_session=sess_test_1"), response);
+    await endRequestSession(
+      requestWithCookie("nilelearn_session=sess_test_1"),
+      response
+    );
 
     expect(sessions.has("sess_test_1")).toBe(false);
     expect(headers.get("Set-Cookie")).toContain("Max-Age=0");
@@ -262,7 +324,7 @@ describe("server session store", () => {
     restoreStore();
   });
 
-  it("sets production cookies with secure HttpOnly session attributes", () => {
+  it("sets production cookies with secure HttpOnly session attributes", async () => {
     process.env.NODE_ENV = "production";
     const { headers, response } = responseRecorder();
 
@@ -276,7 +338,10 @@ describe("server session store", () => {
     expect(cookie).toContain("SameSite=Lax");
     expect(cookie).toContain("Secure");
 
-    endRequestSession(requestWithCookie("nilelearn_session=sess_test_1"), response);
+    await endRequestSession(
+      requestWithCookie("nilelearn_session=sess_test_1"),
+      response
+    );
 
     expect(headers.get("Set-Cookie")).toContain("Max-Age=0");
     expect(headers.get("Set-Cookie")).toContain("Secure");
@@ -293,14 +358,155 @@ describe("server session store", () => {
     expect(headers.get("Set-Cookie")).not.toContain("Secure");
   });
 
-  it("deletes expired sessions from the configured server store", () => {
+  it("deletes expired sessions from the configured server store", async () => {
     const { store, sessions } = createInspectableStore();
     const restoreStore = setSessionStore(store);
     const session = testSession({ expiresAt: "2000-01-01T00:00:00.000Z" });
     store.create(session);
 
-    expect(getRequestSession(requestWithCookie("nilelearn_session=sess_test_1"))).toBeNull();
+    await expect(
+      getRequestSession(requestWithCookie("nilelearn_session=sess_test_1"))
+    ).resolves.toBeNull();
     expect(sessions.has("sess_test_1")).toBe(false);
+
+    restoreStore();
+  });
+
+  it("clears the browser cookie even when durable revocation is unavailable", async () => {
+    const store: SessionStore = {
+      kind: "supabase",
+      create: async () => undefined,
+      get: async () => null,
+      delete: async () => {
+        throw new SessionRepositoryUnavailableError();
+      },
+      clear: async () => undefined,
+    };
+    const restoreStore = setSessionStore(store);
+    const { headers, response } = responseRecorder();
+
+    await expect(
+      endRequestSession(
+        requestWithCookie("nilelearn_session=sess_test_1"),
+        response
+      )
+    ).rejects.toBeInstanceOf(SessionRepositoryUnavailableError);
+    expect(headers.get("Set-Cookie")).toContain("Max-Age=0");
+
+    restoreStore();
+  });
+});
+
+describe("server durable session authority", () => {
+  it("uses normalized identity and one role grant instead of Auth metadata", async () => {
+    process.env.SUPABASE_URL = "https://phase1-test.supabase.co";
+    process.env.SUPABASE_PUBLISHABLE_KEY = "test-only-publishable-key";
+    const create = vi.fn();
+    const resolveSupabaseIdentity = vi.fn(async () => ({
+      userId: "40000000-0000-4000-8000-000000000002",
+      authUserId: "10000000-0000-4000-8000-000000000002",
+      email: "teacher@nilelearn.local",
+      name: "Local Teacher",
+      activeRole: "teacher" as const,
+      activeRoleGrantId: "50000000-0000-4000-8000-000000000002",
+      branchIds: ["20000000-0000-4000-8000-000000000001"],
+      departmentIds: ["30000000-0000-4000-8000-000000000001"],
+    }));
+    const repository: SessionStore = {
+      kind: "supabase",
+      create,
+      get: async () => null,
+      delete: async () => undefined,
+      clear: async () => undefined,
+      resolveSupabaseIdentity,
+    };
+    const restoreStore = setSessionStore(repository);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              user: {
+                id: "10000000-0000-4000-8000-000000000002",
+                email: "provider-email@nilelearn.local",
+                app_metadata: { role: "student" },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+      )
+    );
+
+    const session = await signIn(
+      "teacher@nilelearn.local",
+      "test-password",
+      "teacher"
+    );
+
+    expect(resolveSupabaseIdentity).toHaveBeenCalledWith(
+      "10000000-0000-4000-8000-000000000002",
+      "teacher"
+    );
+    expect(session).toMatchObject({
+      userId: "40000000-0000-4000-8000-000000000002",
+      activeRole: "teacher",
+      roles: ["teacher"],
+      activeRoleGrantId: "50000000-0000-4000-8000-000000000002",
+      branchIds: ["20000000-0000-4000-8000-000000000001"],
+      departmentIds: ["30000000-0000-4000-8000-000000000001"],
+      provider: "supabase",
+      authorizationModel: "normalized",
+    });
+    expect(create).toHaveBeenCalledWith(session);
+
+    restoreStore();
+  });
+
+  it("keeps Supabase Auth snapshot-compatible when the memory repository is selected", async () => {
+    process.env.SUPABASE_URL = "https://phase1-test.supabase.co";
+    process.env.SUPABASE_PUBLISHABLE_KEY = "test-only-publishable-key";
+    const create = vi.fn();
+    const repository: SessionStore = {
+      kind: "memory",
+      create,
+      get: async () => null,
+      delete: async () => undefined,
+      clear: async () => undefined,
+    };
+    const restoreStore = setSessionStore(repository);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              user: {
+                id: "10000000-0000-4000-8000-000000000002",
+                email: "teacher@nilelearn.local",
+                app_metadata: {
+                  role: "teacher",
+                  demo_user_id: "usr_teacher_demo",
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+      )
+    );
+
+    const session = await signIn(
+      "teacher@nilelearn.local",
+      "test-password",
+      "teacher"
+    );
+
+    expect(session).toMatchObject({
+      userId: "usr_teacher_demo",
+      provider: "supabase",
+      authorizationModel: "snapshot",
+    });
+    expect(create).toHaveBeenCalledWith(session);
 
     restoreStore();
   });

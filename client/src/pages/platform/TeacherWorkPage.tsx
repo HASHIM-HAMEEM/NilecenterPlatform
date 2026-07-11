@@ -3,15 +3,16 @@ import {
   BookOpen,
   CalendarDays,
   CheckCircle2,
-  ClipboardCheck,
   Headphones,
   Plus,
   Search,
+  XCircle,
 } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import PlatformShell from "@/components/platform/PlatformShell";
 import {
+  DetailLayout,
   FormFlowLayout,
   WorkspaceLayout,
 } from "@/components/platform/PlatformLayouts";
@@ -35,12 +36,17 @@ type TeacherWorkView =
   | "assignment-detail"
   | "new-assignment"
   | "grading"
+  | "grading-detail"
   | "calendar"
-  | "quran";
+  | "calendar-new"
+  | "quran"
+  | "quran-detail";
 
 type TeacherWorkPageProps = {
   view: TeacherWorkView;
   assignmentId?: string;
+  submissionId?: string;
+  recitationId?: string;
 };
 
 const calendarTypeOptions: { value: CalendarEventType; label: string }[] = [
@@ -99,6 +105,20 @@ function statusTone(status: EntityStatus): "green" | "amber" | "red" | "slate" {
   return "slate";
 }
 
+function assignmentStatusLabel(status: EntityStatus) {
+  if (status === "draft") return "Draft";
+  if (status === "active") return "Published";
+  if (status === "completed") return "Closed";
+  if (status === "cancelled") return "Cancelled";
+  return status;
+}
+
+function dateInputValue(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
 function truncate(value: string, maxLength = 70) {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength - 3).trimEnd()}...`;
@@ -107,18 +127,20 @@ function truncate(value: string, maxLength = 70) {
 export default function TeacherWorkPage({
   view,
   assignmentId,
+  submissionId,
+  recitationId,
 }: TeacherWorkPageProps) {
   const [state, setState] = useState(() => platformStore.getState());
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | EntityStatus>("all");
   const [savingAction, setSavingAction] = useState("");
   const [actionError, setActionError] = useState("");
-  const [selectedSubmissionId, setSelectedSubmissionId] = useState("");
   const [selectedAttemptId, setSelectedAttemptId] = useState("");
   const [assignmentScore, setAssignmentScore] = useState(88);
   const [assignmentFeedback, setAssignmentFeedback] = useState(
     "Good work. Strengthen examples in the next submission."
   );
+  const [gradeSaved, setGradeSaved] = useState(false);
   const [quizScore, setQuizScore] = useState(90);
   const [quizFeedback, setQuizFeedback] = useState(
     "Reviewed. Keep improving grammar accuracy."
@@ -130,6 +152,14 @@ export default function TeacherWorkPage({
     submissionType: "text" as "text" | "file" | "audio" | "video",
     rubric: "Accuracy, Evidence, Teacher notes",
   });
+  const [assignmentEdit, setAssignmentEdit] = useState({
+    title: "",
+    dueAt: "",
+    submissionType: "text" as "text" | "file" | "audio" | "video",
+    rubric: "",
+  });
+  const [cancelReason, setCancelReason] = useState("");
+  const [showAssignmentCancel, setShowAssignmentCancel] = useState(false);
   const [calendarDraft, setCalendarDraft] = useState({
     title: "Arabic L3 review session",
     eventType: "live_session" as CalendarEventType,
@@ -141,11 +171,13 @@ export default function TeacherWorkPage({
     ends: "10:30",
   });
   const [selectedRecitationId, setSelectedRecitationId] = useState("");
+  const [calendarResult, setCalendarResult] = useState("");
   const [memorizedPercent, setMemorizedPercent] = useState(0);
   const [tajweedScore, setTajweedScore] = useState(0);
   const [recitationFeedback, setRecitationFeedback] = useState(
     "Clear recitation. Continue revision before the next lesson."
   );
+  const [quranReviewSaved, setQuranReviewSaved] = useState(false);
 
   const activeUser =
     getActiveUser() ?? demoUsers.find(user => user.activeRole === "teacher");
@@ -241,7 +273,7 @@ export default function TeacherWorkPage({
       return false;
     }
     refreshWithState(response.data.state);
-    toast.success(label, { description: response.data.persistence });
+    toast.success(label);
     return true;
   };
 
@@ -309,6 +341,46 @@ export default function TeacherWorkPage({
   const routeAssignmentPending = routeAssignmentSubmissions.filter(
     submission => submission.status === "pending"
   ).length;
+  const routeAssignmentActiveLearnerIds = new Set(
+    state.enrollments
+      .filter(
+        enrollment =>
+          enrollment.courseRunId === routeAssignment?.courseRunId &&
+          enrollment.status === "active"
+      )
+      .map(enrollment => enrollment.studentId)
+      .filter(studentId => {
+        const student = state.students.find(item => item.id === studentId);
+        const user = state.users.find(item => item.id === student?.userId);
+        return student?.status === "active" && user?.status === "active";
+      })
+  );
+  const routeAssignmentCompletedLearnerIds = new Set(
+    routeAssignmentSubmissions
+      .filter(submission => submission.status === "completed")
+      .map(submission => submission.studentId)
+  );
+  const routeAssignmentCanClose = Boolean(
+    routeAssignment &&
+      (new Date(routeAssignment.dueAt).getTime() <= Date.now() ||
+        (routeAssignmentActiveLearnerIds.size > 0 &&
+          Array.from(routeAssignmentActiveLearnerIds).every(studentId =>
+            routeAssignmentCompletedLearnerIds.has(studentId)
+          )))
+  );
+  const routeAssignmentCanCancel = Boolean(
+    routeAssignment &&
+      (routeAssignment.status === "draft" || routeAssignment.status === "active") &&
+      routeAssignmentSubmissions.length === 0
+  );
+  const routeAssignmentHasUnsavedDraftChanges = Boolean(
+    routeAssignment &&
+      routeAssignment.status === "draft" &&
+      (assignmentEdit.title !== routeAssignment.title ||
+        assignmentEdit.dueAt !== dateInputValue(routeAssignment.dueAt) ||
+        assignmentEdit.submissionType !== routeAssignment.submissionType ||
+        assignmentEdit.rubric !== routeAssignment.rubric.join(", "))
+  );
 
   const assignmentSubmissions = state.assignmentSubmissions
     .filter(submission => {
@@ -329,10 +401,12 @@ export default function TeacherWorkPage({
   const reviewSubmissions = assignmentSubmissions.filter(
     submission => submission.status === "pending"
   );
-  const reviewSubmissionKey = reviewSubmissions.map(item => item.id).join("|");
-  const selectedSubmission =
-    reviewSubmissions.find(item => item.id === selectedSubmissionId) ??
-    reviewSubmissions[0];
+  const routeGradingSubmission = submissionId
+    ? assignmentSubmissions.find(submission => submission.id === submissionId)
+    : undefined;
+  const routeGradingAssignment = state.assignments.find(
+    assignment => assignment.id === routeGradingSubmission?.assignmentId
+  );
 
   const quizAttempts = state.quizAttempts
     .filter(attempt => {
@@ -380,23 +454,22 @@ export default function TeacherWorkPage({
   const selectedRecitation =
     recitations.find(item => item.id === selectedRecitationId) ??
     recitations[0];
+  const routeRecitation = recitationId
+    ? recitations.find(recitation => recitation.id === recitationId)
+    : undefined;
+  const activeRecitation =
+    view === "quran-detail" ? routeRecitation : selectedRecitation;
   const recitationKey = recitations.map(item => item.id).join("|");
   const selectedStudent = state.students.find(
-    item => item.id === selectedRecitation?.studentId
+    item => item.id === activeRecitation?.studentId
   );
   const selectedQuranPlan = state.quranPlans.find(
-    item => item.studentId === selectedRecitation?.studentId
+    item => item.studentId === activeRecitation?.studentId
   );
   const selectedProgress =
     state.quranProgress.find(
-      item => item.studentId === selectedRecitation?.studentId
+      item => item.studentId === activeRecitation?.studentId
     ) ?? state.quranProgress[0];
-
-  useEffect(() => {
-    if (!selectedSubmissionId && reviewSubmissions[0]?.id) {
-      setSelectedSubmissionId(reviewSubmissions[0].id);
-    }
-  }, [reviewSubmissionKey, selectedSubmissionId]);
 
   useEffect(() => {
     if (!selectedAttemptId && reviewAttempts[0]?.id) {
@@ -411,18 +484,30 @@ export default function TeacherWorkPage({
   }, [recitationKey, selectedRecitationId]);
 
   useEffect(() => {
+    if (!routeAssignment) return;
+    setAssignmentEdit({
+      title: routeAssignment.title,
+      dueAt: dateInputValue(routeAssignment.dueAt),
+      submissionType: routeAssignment.submissionType,
+      rubric: routeAssignment.rubric.join(", "),
+    });
+    setCancelReason("");
+    setShowAssignmentCancel(false);
+  }, [routeAssignment?.id]);
+
+  useEffect(() => {
     setMemorizedPercent(selectedProgress?.memorizedPercent ?? 0);
     setTajweedScore(selectedProgress?.tajweedScore ?? 0);
     setRecitationFeedback(
-      selectedRecitation?.feedback ??
+      activeRecitation?.feedback ??
         selectedProgress?.notes ??
         "Clear recitation. Continue revision before the next lesson."
     );
-  }, [selectedProgress?.id, selectedRecitation?.id]);
+  }, [selectedProgress?.id, activeRecitation?.id]);
 
   const createAssignment = async () => {
     if (!assignmentDraft.courseRunId || !assignmentDraft.title.trim()) return;
-    await runAction("Assignment created", {
+    await runAction("Draft saved", {
       type: "assignment.create",
       courseRunId: assignmentDraft.courseRunId,
       title: assignmentDraft.title.trim(),
@@ -432,14 +517,66 @@ export default function TeacherWorkPage({
     });
   };
 
-  const gradeSubmission = async () => {
-    if (!selectedSubmission) return;
-    await runAction("Submission graded", {
+  const updateAssignment = async () => {
+    if (
+      !routeAssignment ||
+      !assignmentEdit.title.trim() ||
+      !assignmentEdit.dueAt
+    ) {
+      return;
+    }
+    await runAction("Draft saved", {
+      type: "assignment.update",
+      assignmentId: routeAssignment.id,
+      title: assignmentEdit.title.trim(),
+      dueAt: new Date(assignmentEdit.dueAt).toISOString(),
+      submissionType: assignmentEdit.submissionType,
+      rubric: splitList(assignmentEdit.rubric),
+    });
+  };
+
+  const publishAssignment = async () => {
+    if (!routeAssignment) return;
+    await runAction("Assignment published", {
+      type: "assignment.status.update",
+      assignmentId: routeAssignment.id,
+      status: "active",
+    });
+  };
+
+  const closeAssignment = async () => {
+    if (!routeAssignment) return;
+    await runAction("Assignment closed", {
+      type: "assignment.status.update",
+      assignmentId: routeAssignment.id,
+      status: "completed",
+    });
+  };
+
+  const cancelAssignment = async () => {
+    if (!routeAssignment || cancelReason.trim().length < 5) return;
+    const cancelled = await runAction("Assignment cancelled", {
+      type: "assignment.status.update",
+      assignmentId: routeAssignment.id,
+      status: "cancelled",
+      reason: cancelReason.trim(),
+    });
+    if (cancelled) {
+      setCancelReason("");
+      setShowAssignmentCancel(false);
+    }
+  };
+
+  const gradeSubmission = async (submission?: AssignmentSubmission) => {
+    if (!submission) return false;
+    const graded = await runAction("Submission graded", {
       type: "assignment.grade",
-      submissionId: selectedSubmission.id,
+      submissionId: submission.id,
       score: Math.min(100, Math.max(0, Number(assignmentScore) || 0)),
       feedback: assignmentFeedback.trim() || "Reviewed by teacher.",
     });
+    if (graded) setGradeSaved(true);
+    return graded;
   };
 
   const reviewQuizAttempt = async () => {
@@ -511,7 +648,7 @@ export default function TeacherWorkPage({
       : undefined;
     const submitBranchId =
       submitRun?.branchId ?? submitRoom?.branchId ?? submitBranch?.id;
-    await runAction("Event scheduled", {
+    const created = await runAction("Event scheduled", {
       type: "calendar.create",
       eventType: submitDraft.eventType,
       title: submitDraft.title.trim(),
@@ -521,11 +658,14 @@ export default function TeacherWorkPage({
       roomId: usesRoom ? submitRoom?.id : undefined,
       classGroupId: usesClass ? submitClass?.id : undefined,
     });
+    if (created) {
+      setCalendarResult("Your event is now on the teaching calendar.");
+    }
   };
 
   const updateQuranProgress = async () => {
-    if (!selectedProgress) return;
-    await runAction("Progress updated", {
+    if (!selectedProgress) return false;
+    return runAction("Progress updated", {
       type: "quran.progress.update",
       recordId: selectedProgress.id,
       memorizedPercent: Math.min(
@@ -538,57 +678,21 @@ export default function TeacherWorkPage({
   };
 
   const reviewRecitation = async () => {
-    if (!selectedRecitation || !recitationFeedback.trim()) return;
-    await runAction("Recitation reviewed", {
+    if (!activeRecitation || !recitationFeedback.trim()) return false;
+    const reviewed = await runAction("Recitation reviewed", {
       type: "recitation.review",
-      submissionId: selectedRecitation.id,
+      submissionId: activeRecitation.id,
       feedback: recitationFeedback.trim(),
     });
+    if (reviewed) setQuranReviewSaved(true);
+    return reviewed;
   };
-
-  const workTabs = (
-    <nav
-      className="portal-ia-subnav teacher-work-tabs"
-      aria-label="Teacher work"
-    >
-      <Link
-        href="/app/teacher/assignments"
-        className={
-          view === "assignments" ||
-          view === "assignment-detail" ||
-          view === "new-assignment"
-            ? "active"
-            : ""
-        }
-      >
-        Assignments
-      </Link>
-      <Link
-        href="/app/teacher/grading"
-        className={view === "grading" ? "active" : ""}
-      >
-        Grading
-      </Link>
-      <Link
-        href="/app/teacher/calendar"
-        className={view === "calendar" ? "active" : ""}
-      >
-        Calendar
-      </Link>
-      <Link
-        href="/app/teacher/quran-review"
-        className={view === "quran" ? "active" : ""}
-      >
-        Quran review
-      </Link>
-    </nav>
-  );
 
   if (view === "new-assignment") {
     return (
       <PlatformShell role="teacher" title="Create assignment">
         <FormFlowLayout
-          className="portal-ia-page teacher-work-page"
+          className="portal-ia-page teacher-work-page teacher-assignment-create-page"
           context={<span>Teacher</span>}
           title="Create assignment"
           description="Create one assignment for an assigned class."
@@ -600,9 +704,11 @@ export default function TeacherWorkPage({
               Back to assignments
             </Link>
           }
-          toolbar={workTabs}
           main={
-            <section className="portal-ia-form-card">
+            <section
+              className="portal-ia-form-card"
+              data-testid="teacher-assignment-create-form"
+            >
               {actionError ? (
                 <p className="platform-form-error">{actionError}</p>
               ) : null}
@@ -686,16 +792,14 @@ export default function TeacherWorkPage({
                   type="button"
                   className="platform-primary-button"
                   disabled={
-                    savingAction === "Assignment created" ||
+                    savingAction === "Draft saved" ||
                     !assignmentDraft.courseRunId ||
                     !assignmentDraft.title.trim()
                   }
                   onClick={createAssignment}
                 >
                   <Plus size={15} />
-                  {savingAction === "Assignment created"
-                    ? "Creating"
-                    : "Create assignment"}
+                  {savingAction === "Draft saved" ? "Saving" : "Save draft"}
                 </button>
               </div>
             </section>
@@ -709,7 +813,7 @@ export default function TeacherWorkPage({
     return (
       <PlatformShell role="teacher" title="Assignments">
         <WorkspaceLayout
-          className="portal-ia-page teacher-work-page"
+          className="portal-ia-page teacher-work-page teacher-assignments-page"
           context={<span>Teacher</span>}
           title="Assignments"
           description="Find assignments for your classes."
@@ -723,97 +827,80 @@ export default function TeacherWorkPage({
             </Link>
           }
           toolbar={
-            <>
-              {workTabs}
-              <div className="portal-simple-toolbar teacher-work-toolbar">
-                <label>
-                  Search
-                  <span>
-                    <Search size={14} />
-                    <input
-                      value={search}
-                      onChange={event => setSearch(event.target.value)}
-                      placeholder="Assignment, class, type"
-                    />
-                  </span>
-                </label>
-                <label>
-                  Status
-                  <select
-                    value={status}
-                    onChange={event =>
-                      setStatus(event.target.value as "all" | EntityStatus)
-                    }
-                  >
-                    <option value="all">All statuses</option>
-                    <option value="active">Active</option>
-                    <option value="pending">Pending</option>
-                    <option value="paused">Paused</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </label>
-              </div>
-            </>
+            <div className="portal-simple-toolbar teacher-work-toolbar">
+              <label>
+                Search
+                <span>
+                  <Search size={14} />
+                  <input
+                    value={search}
+                    onChange={event => setSearch(event.target.value)}
+                    placeholder="Assignment, class, type"
+                  />
+                </span>
+              </label>
+              <label>
+                Status
+                <select
+                  value={status}
+                  onChange={event =>
+                    setStatus(event.target.value as "all" | EntityStatus)
+                  }
+                >
+                  <option value="all">All statuses</option>
+                  <option value="draft">Draft</option>
+                  <option value="active">Published</option>
+                  <option value="completed">Closed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </label>
+            </div>
           }
           main={
             <DataTableCard
               title="Assignments"
               subtitle={`${filteredAssignments.length} items`}
+              className="teacher-work-record-card"
             >
-              <div className="admin-ia-table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Assignment</th>
-                      <th>Class</th>
-                      <th>Due</th>
-                      <th>Submission</th>
-                      <th>Status</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAssignments.map(assignment => (
-                      <tr key={assignment.id}>
-                        <td>
-                          <strong>{assignment.title}</strong>
-                          <small>
-                            {assignment.rubric.slice(0, 2).join(", ")}
-                          </small>
-                        </td>
-                        <td>{classLabel(assignment.courseRunId)}</td>
-                        <td>{formatDate(assignment.dueAt)}</td>
-                        <td>{assignment.submissionType}</td>
-                        <td>
-                          <StatusBadge tone={statusTone(assignment.status)}>
-                            {assignment.status}
-                          </StatusBadge>
-                        </td>
-                        <td>
-                          <Link
-                            className="platform-row-link"
-                            href={`/app/teacher/assignments/${assignment.id}`}
-                          >
-                            Open
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                    {!filteredAssignments.length ? (
-                      <tr>
-                        <td colSpan={6}>
-                          <div className="platform-empty-state">
-                            <strong>No assignments found</strong>
-                            <span>
-                              Try another search or create an assignment.
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
+              {filteredAssignments.length ? (
+                <div className="teacher-work-record-list">
+                  {filteredAssignments.map(assignment => (
+                    <article key={assignment.id}>
+                      <div className="teacher-work-record-copy">
+                        <span>{classLabel(assignment.courseRunId)}</span>
+                        <strong>{assignment.title}</strong>
+                        <p>{assignment.rubric.slice(0, 2).join(" · ")}</p>
+                      </div>
+                      <dl className="teacher-work-record-facts">
+                        <div>
+                          <dt>Due</dt>
+                          <dd>{formatDate(assignment.dueAt)}</dd>
+                        </div>
+                        <div>
+                          <dt>Submission</dt>
+                          <dd>{assignment.submissionType}</dd>
+                        </div>
+                      </dl>
+                      <div className="teacher-work-record-actions">
+                        <StatusBadge tone={statusTone(assignment.status)}>
+                          {assignmentStatusLabel(assignment.status)}
+                        </StatusBadge>
+                        <Link
+                          className="platform-row-link"
+                          href={`/app/teacher/assignments/${assignment.id}`}
+                        >
+                          Open
+                        </Link>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="platform-empty-state">
+                  <strong>No assignments found</strong>
+                  <span>Try another search or create an assignment.</span>
+                </div>
+              )}
             </DataTableCard>
           }
         />
@@ -825,10 +912,14 @@ export default function TeacherWorkPage({
     return (
       <PlatformShell role="teacher" title="Assignment detail">
         <WorkspaceLayout
-          className="portal-ia-page teacher-work-page"
+          className="portal-ia-page teacher-work-page teacher-assignment-detail-page"
           context={<span>Teacher</span>}
           title={routeAssignment?.title ?? "Assignment detail"}
-          description="Review one assignment and its submitted work."
+          description={
+            routeAssignment?.status === "draft"
+              ? "Finish the draft, then publish it for the assigned class."
+              : "Review one assignment and its submitted work."
+          }
           actions={
             <Link
               className="platform-secondary-button"
@@ -837,17 +928,21 @@ export default function TeacherWorkPage({
               Back to assignments
             </Link>
           }
-          toolbar={workTabs}
           main={
             routeAssignment ? (
               <>
-                <section className="platform-workflow-card">
+                {actionError ? (
+                  <p className="platform-form-error" role="alert">
+                    {actionError}
+                  </p>
+                ) : null}
+                <section className="platform-workflow-card teacher-assignment-brief">
                   <div className="platform-workflow-title">
                     <span>
                       <BookOpen size={16} /> Assignment
                     </span>
                     <StatusBadge tone={statusTone(routeAssignment.status)}>
-                      {routeAssignment.status}
+                      {assignmentStatusLabel(routeAssignment.status)}
                     </StatusBadge>
                   </div>
                   <div className="teacher-assignment-detail-grid">
@@ -874,62 +969,301 @@ export default function TeacherWorkPage({
                       <span key={item}>{item}</span>
                     ))}
                   </div>
+
+                  {routeAssignment.status === "draft" ? (
+                    <section
+                      className="teacher-assignment-lifecycle"
+                      data-testid="teacher-assignment-draft-controls"
+                    >
+                      <div className="teacher-assignment-lifecycle-head">
+                        <div>
+                          <span>Draft details</span>
+                          <h2>Prepare this assignment</h2>
+                          <p>
+                            Learners will not see it until you publish it.
+                          </p>
+                        </div>
+                        <StatusBadge tone="amber">Draft</StatusBadge>
+                      </div>
+                      <div className="portal-ia-form-grid teacher-assignment-lifecycle-form">
+                        <label>
+                          Title
+                          <input
+                            value={assignmentEdit.title}
+                            onChange={event =>
+                              setAssignmentEdit(current => ({
+                                ...current,
+                                title: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          Due date
+                          <input
+                            type="date"
+                            min={routeAssignmentRun?.startsOn}
+                            max={routeAssignmentRun?.endsOn}
+                            value={assignmentEdit.dueAt}
+                            onChange={event =>
+                              setAssignmentEdit(current => ({
+                                ...current,
+                                dueAt: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          Submission type
+                          <select
+                            value={assignmentEdit.submissionType}
+                            onChange={event =>
+                              setAssignmentEdit(current => ({
+                                ...current,
+                                submissionType: event.target.value as
+                                  | "text"
+                                  | "file"
+                                  | "audio"
+                                  | "video",
+                              }))
+                            }
+                          >
+                            <option value="text">Written response</option>
+                            <option value="file">File</option>
+                            <option value="audio">Audio</option>
+                            <option value="video">Video</option>
+                          </select>
+                        </label>
+                        <label>
+                          Rubric
+                          <input
+                            value={assignmentEdit.rubric}
+                            onChange={event =>
+                              setAssignmentEdit(current => ({
+                                ...current,
+                                rubric: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                      </div>
+                      <div className="teacher-assignment-lifecycle-actions">
+                        <button
+                          type="button"
+                          className="platform-secondary-button"
+                          disabled={
+                            savingAction === "Draft saved" ||
+                            !assignmentEdit.title.trim() ||
+                            !assignmentEdit.dueAt
+                          }
+                          onClick={updateAssignment}
+                        >
+                          {savingAction === "Draft saved"
+                            ? "Saving"
+                            : "Save draft"}
+                        </button>
+                        <button
+                          type="button"
+                          className="platform-primary-button"
+                          data-testid="teacher-assignment-publish"
+                          disabled={
+                            savingAction === "Assignment published" ||
+                            routeAssignmentHasUnsavedDraftChanges
+                          }
+                          onClick={publishAssignment}
+                        >
+                          <CheckCircle2 size={15} />
+                          {savingAction === "Assignment published"
+                            ? "Publishing"
+                            : "Publish assignment"}
+                        </button>
+                        {routeAssignmentCanCancel ? (
+                          <button
+                            type="button"
+                            className="platform-secondary-button"
+                            onClick={() => setShowAssignmentCancel(true)}
+                          >
+                            <XCircle size={15} />
+                            Cancel assignment
+                          </button>
+                        ) : null}
+                      </div>
+                      {routeAssignmentHasUnsavedDraftChanges ? (
+                        <p className="teacher-assignment-lifecycle-note">
+                          Save your changes before publishing this assignment.
+                        </p>
+                      ) : null}
+                    </section>
+                  ) : routeAssignment.status === "active" ? (
+                    <section
+                      className="teacher-assignment-lifecycle"
+                      data-testid="teacher-assignment-published-controls"
+                    >
+                      <div className="teacher-assignment-lifecycle-head">
+                        <div>
+                          <span>Published</span>
+                          <h2>Available to learners</h2>
+                          <p>
+                            Close it after the due date or when every active
+                            learner has a graded submission.
+                          </p>
+                        </div>
+                        <StatusBadge tone="green">Published</StatusBadge>
+                      </div>
+                      <div className="teacher-assignment-lifecycle-actions">
+                        <button
+                          type="button"
+                          className="platform-primary-button"
+                          data-testid="teacher-assignment-close"
+                          disabled={
+                            !routeAssignmentCanClose ||
+                            savingAction === "Assignment closed"
+                          }
+                          onClick={closeAssignment}
+                        >
+                          <CheckCircle2 size={15} />
+                          {savingAction === "Assignment closed"
+                            ? "Closing"
+                            : "Close assignment"}
+                        </button>
+                        {routeAssignmentCanCancel ? (
+                          <button
+                            type="button"
+                            className="platform-secondary-button"
+                            onClick={() => setShowAssignmentCancel(true)}
+                          >
+                            <XCircle size={15} />
+                            Cancel assignment
+                          </button>
+                        ) : null}
+                      </div>
+                      {!routeAssignmentCanClose ? (
+                        <p className="teacher-assignment-lifecycle-note">
+                          Closing becomes available after the due date or when
+                          every active learner has a graded submission.
+                        </p>
+                      ) : null}
+                    </section>
+                  ) : (
+                    <section
+                      className="teacher-assignment-lifecycle teacher-assignment-lifecycle-terminal"
+                      data-testid="teacher-assignment-terminal-state"
+                    >
+                      <div className="teacher-assignment-lifecycle-head">
+                        <div>
+                          <span>{assignmentStatusLabel(routeAssignment.status)}</span>
+                          <h2>
+                            {routeAssignment.status === "completed"
+                              ? "Assignment closed"
+                              : "Assignment cancelled"}
+                          </h2>
+                          <p>
+                            {routeAssignment.status === "completed"
+                              ? "Submitted work and grades remain available as a record."
+                              : "This assignment is no longer available to learners."}
+                          </p>
+                        </div>
+                        <StatusBadge tone={statusTone(routeAssignment.status)}>
+                          {assignmentStatusLabel(routeAssignment.status)}
+                        </StatusBadge>
+                      </div>
+                    </section>
+                  )}
+
+                  {showAssignmentCancel && routeAssignmentCanCancel ? (
+                    <section
+                      className="teacher-assignment-cancel-form"
+                      data-testid="teacher-assignment-cancel-form"
+                    >
+                      <label>
+                        Cancellation reason
+                        <textarea
+                          value={cancelReason}
+                          onChange={event => setCancelReason(event.target.value)}
+                          placeholder="Tell learners why this assignment is cancelled."
+                        />
+                      </label>
+                      <div className="teacher-assignment-lifecycle-actions">
+                        <button
+                          type="button"
+                          className="platform-danger-button"
+                          data-testid="teacher-assignment-cancel"
+                          disabled={
+                            cancelReason.trim().length < 5 ||
+                            savingAction === "Assignment cancelled"
+                          }
+                          onClick={cancelAssignment}
+                        >
+                          <XCircle size={15} />
+                          {savingAction === "Assignment cancelled"
+                            ? "Cancelling"
+                            : "Cancel assignment"}
+                        </button>
+                        <button
+                          type="button"
+                          className="platform-secondary-button"
+                          onClick={() => {
+                            setCancelReason("");
+                            setShowAssignmentCancel(false);
+                          }}
+                        >
+                          Keep assignment
+                        </button>
+                      </div>
+                    </section>
+                  ) : null}
                 </section>
 
                 <DataTableCard
                   title="Submitted work"
                   subtitle={`${routeAssignmentSubmissions.length} submission(s)`}
+                  className="teacher-work-record-card"
                 >
-                  <div className="admin-ia-table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Student</th>
-                          <th>Submitted</th>
-                          <th>Status</th>
-                          <th>Score</th>
-                          <th>Feedback</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {routeAssignmentSubmissions.map(submission => (
-                          <tr key={submission.id}>
-                            <td>
-                              <strong>
-                                {studentName(submission.studentId)}
-                              </strong>
-                              <small>{truncate(submission.response, 64)}</small>
-                            </td>
-                            <td>{formatDateTime(submission.submittedAt)}</td>
-                            <td>
-                              <StatusBadge tone={statusTone(submission.status)}>
-                                {submission.status}
-                              </StatusBadge>
-                            </td>
-                            <td>
-                              {submission.score === undefined
-                                ? "-"
-                                : `${submission.score}/100`}
-                            </td>
-                            <td>{submission.feedback ?? "Not reviewed"}</td>
-                          </tr>
-                        ))}
-                        {!routeAssignmentSubmissions.length ? (
-                          <tr>
-                            <td colSpan={5}>
-                              <div className="platform-empty-state">
-                                <strong>No submissions yet</strong>
-                                <span>
-                                  Student submissions for this assignment will
-                                  appear here.
-                                </span>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : null}
-                      </tbody>
-                    </table>
-                  </div>
+                  {routeAssignmentSubmissions.length ? (
+                    <div className="teacher-work-record-list">
+                      {routeAssignmentSubmissions.map(submission => (
+                        <article key={submission.id}>
+                          <div className="teacher-work-record-copy">
+                            <span>{studentName(submission.studentId)}</span>
+                            <strong>
+                              {truncate(
+                                submission.response || "No response",
+                                76
+                              )}
+                            </strong>
+                            <p>{submission.feedback ?? "Awaiting review"}</p>
+                          </div>
+                          <dl className="teacher-work-record-facts">
+                            <div>
+                              <dt>Submitted</dt>
+                              <dd>{formatDateTime(submission.submittedAt)}</dd>
+                            </div>
+                            <div>
+                              <dt>Score</dt>
+                              <dd>
+                                {submission.score === undefined
+                                  ? "Not graded"
+                                  : `${submission.score}/100`}
+                              </dd>
+                            </div>
+                          </dl>
+                          <div className="teacher-work-record-actions">
+                            <StatusBadge tone={statusTone(submission.status)}>
+                              {submission.status}
+                            </StatusBadge>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="platform-empty-state">
+                      <strong>No submissions yet</strong>
+                      <span>
+                        Student submissions for this assignment will appear
+                        here.
+                      </span>
+                    </div>
+                  )}
                 </DataTableCard>
               </>
             ) : (
@@ -955,185 +1289,433 @@ export default function TeacherWorkPage({
     );
   }
 
+  if (view === "grading-detail") {
+    const submission = routeGradingSubmission;
+    const assignment = routeGradingAssignment;
+
+    return (
+      <PlatformShell role="teacher" title="Review submission">
+        <DetailLayout
+          className="portal-ia-page teacher-work-page teacher-grading-detail-page"
+          context={<span>Teacher</span>}
+          title="Review submission"
+          description="Review one learner response and record a clear outcome."
+          actions={
+            <Link
+              className="platform-secondary-button"
+              href="/app/teacher/grading"
+            >
+              Back to grading
+            </Link>
+          }
+          main={
+            submission && assignment ? (
+              gradeSaved ? (
+                <section
+                  className="teacher-action-success"
+                  data-testid="teacher-grade-success"
+                >
+                  <CheckCircle2 aria-hidden="true" size={20} />
+                  <div>
+                    <strong>Submission graded</strong>
+                    <span>The learner feedback has been saved.</span>
+                  </div>
+                  <Link
+                    className="platform-primary-button"
+                    href="/app/teacher/grading"
+                  >
+                    Return to grading
+                  </Link>
+                </section>
+              ) : (
+                <section
+                  className="teacher-submission-review"
+                  data-testid="teacher-submission-review"
+                >
+                  <header className="teacher-submission-review-head">
+                    <div>
+                      <span>Submission</span>
+                      <h2>{assignment.title}</h2>
+                      <p>
+                        {studentName(submission.studentId)} ·{" "}
+                        {classLabel(assignment.courseRunId)}
+                      </p>
+                    </div>
+                    <StatusBadge tone={statusTone(submission.status)}>
+                      {submission.status}
+                    </StatusBadge>
+                  </header>
+                  <section className="teacher-submission-response">
+                    <span>Learner response</span>
+                    <p>
+                      {submission.response || "No written response provided."}
+                    </p>
+                  </section>
+                  {submission.status === "pending" ? (
+                    <form
+                      className="teacher-submission-grade-form"
+                      data-testid="teacher-grade-editor"
+                      onSubmit={event => {
+                        event.preventDefault();
+                        void gradeSubmission(submission);
+                      }}
+                    >
+                      <div className="teacher-submission-grade-heading">
+                        <div>
+                          <span>Result</span>
+                          <strong>Record the learner outcome</strong>
+                        </div>
+                        <StatusBadge tone={statusTone(submission.status)}>
+                          {submission.status}
+                        </StatusBadge>
+                      </div>
+                      <label>
+                        Score
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={assignmentScore}
+                          onChange={event => {
+                            setGradeSaved(false);
+                            setAssignmentScore(Number(event.target.value));
+                          }}
+                        />
+                      </label>
+                      <label>
+                        Feedback
+                        <input
+                          value={assignmentFeedback}
+                          onChange={event => {
+                            setGradeSaved(false);
+                            setAssignmentFeedback(event.target.value);
+                          }}
+                          placeholder="Brief feedback for the learner"
+                        />
+                      </label>
+                      <button
+                        type="submit"
+                        className="platform-primary-button"
+                        disabled={savingAction === "Submission graded"}
+                      >
+                        <CheckCircle2 size={15} />
+                        {savingAction === "Submission graded"
+                          ? "Saving result"
+                          : "Save result"}
+                      </button>
+                    </form>
+                  ) : (
+                    <section className="teacher-submission-result">
+                      <div>
+                        <span>Recorded result</span>
+                        <strong>
+                          {submission.score === undefined
+                            ? "Reviewed"
+                            : `${submission.score}/100`}
+                        </strong>
+                        <p>{submission.feedback ?? "No feedback recorded."}</p>
+                      </div>
+                      <StatusBadge tone={statusTone(submission.status)}>
+                        {submission.status}
+                      </StatusBadge>
+                    </section>
+                  )}
+                </section>
+              )
+            ) : (
+              <section className="platform-empty-state">
+                <strong>This submission is not available.</strong>
+                <span>
+                  Return to grading and choose an item from your queue.
+                </span>
+              </section>
+            )
+          }
+        />
+      </PlatformShell>
+    );
+  }
+
   if (view === "grading") {
     return (
       <PlatformShell role="teacher" title="Grading">
         <WorkspaceLayout
-          className="portal-ia-page teacher-work-page"
+          className="portal-ia-page teacher-work-page teacher-grading-page"
           context={<span>Teacher</span>}
           title="Grading"
-          description="Review submitted work."
-          toolbar={workTabs}
+          description="Review assignment submissions from your classes."
+          actions={
+            <Link
+              className="platform-secondary-button"
+              href="/app/teacher/quizzes/review"
+            >
+              Review quizzes
+            </Link>
+          }
           main={
             <>
               {actionError ? (
                 <p className="platform-form-error">{actionError}</p>
               ) : null}
-              <div className="teacher-work-review-grid">
-                <section className="platform-workflow-card">
-                  <div className="platform-workflow-title">
-                    <span>
-                      <ClipboardCheck size={16} /> Manual review
-                    </span>
-                    <strong>{reviewSubmissions.length} pending</strong>
-                  </div>
-                  <div className="platform-row-list compact">
-                    {reviewSubmissions.length ? (
-                      reviewSubmissions.map(submission => (
-                        <article
-                          key={submission.id}
-                          className={
-                            selectedSubmission?.id === submission.id
-                              ? "selected"
-                              : ""
-                          }
-                        >
-                          <div>
-                            <strong>
-                              {assignmentTitle(submission.assignmentId)}
-                            </strong>
-                            <small>
-                              {studentName(submission.studentId)} ·{" "}
-                              {truncate(submission.response, 86)}
-                            </small>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSelectedSubmissionId(submission.id)
-                            }
-                          >
-                            Open
-                          </button>
-                        </article>
-                      ))
-                    ) : (
-                      <article>
+              <DataTableCard
+                title="Submission queue"
+                subtitle={`${reviewSubmissions.length} waiting for review`}
+              >
+                <div
+                  className="platform-row-list teacher-grading-list"
+                  data-testid="teacher-grading-list"
+                >
+                  {reviewSubmissions.length ? (
+                    reviewSubmissions.map(submission => (
+                      <Link
+                        key={submission.id}
+                        className="teacher-grading-row-link"
+                        href={`/app/teacher/grading/${submission.id}`}
+                      >
                         <div>
-                          <strong>No assignments need review</strong>
-                          <small>Submitted assignments will appear here.</small>
+                          <strong>
+                            {assignmentTitle(submission.assignmentId)}
+                          </strong>
+                          <small>
+                            {studentName(submission.studentId)} ·{" "}
+                            {classLabel(
+                              state.assignments.find(
+                                item => item.id === submission.assignmentId
+                              )?.courseRunId
+                            )}
+                          </small>
                         </div>
-                      </article>
-                    )}
-                  </div>
-                  <div className="teacher-review-editor">
-                    <label>
-                      Score
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={assignmentScore}
-                        onChange={event =>
-                          setAssignmentScore(Number(event.target.value))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Feedback
-                      <input
-                        value={assignmentFeedback}
-                        onChange={event =>
-                          setAssignmentFeedback(event.target.value)
-                        }
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="platform-primary-button"
-                      disabled={
-                        !selectedSubmission ||
-                        savingAction === "Submission graded"
-                      }
-                      onClick={gradeSubmission}
-                    >
-                      <CheckCircle2 size={15} />
-                      {savingAction === "Submission graded"
-                        ? "Saving"
-                        : "Grade submission"}
-                    </button>
-                  </div>
-                </section>
-
-                <section className="platform-workflow-card">
-                  <div className="platform-workflow-title">
-                    <span>
-                      <BookOpen size={16} /> Quiz review
-                    </span>
-                    <strong>{reviewAttempts.length} pending</strong>
-                  </div>
-                  <div className="platform-row-list compact">
-                    {reviewAttempts.length ? (
-                      reviewAttempts.map(attempt => (
-                        <article
-                          key={attempt.id}
-                          className={
-                            selectedAttempt?.id === attempt.id ? "selected" : ""
-                          }
-                        >
-                          <div>
-                            <strong>{quizTitle(attempt.quizId)}</strong>
-                            <small>
-                              {studentName(attempt.studentId)} ·{" "}
-                              {formatDate(
-                                attempt.submittedAt ?? attempt.startedAt
-                              )}
-                            </small>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedAttemptId(attempt.id)}
-                          >
-                            Open
-                          </button>
-                        </article>
-                      ))
-                    ) : (
-                      <article>
-                        <div>
-                          <strong>No quiz attempts need review</strong>
-                          <small>Pending attempts will appear here.</small>
-                        </div>
-                      </article>
-                    )}
-                  </div>
-                  <div className="teacher-review-editor">
-                    <label>
-                      Score
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={quizScore}
-                        onChange={event =>
-                          setQuizScore(Number(event.target.value))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Feedback
-                      <input
-                        value={quizFeedback}
-                        onChange={event => setQuizFeedback(event.target.value)}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="platform-primary-button"
-                      disabled={
-                        !selectedAttempt || savingAction === "Quiz reviewed"
-                      }
-                      onClick={reviewQuizAttempt}
-                    >
-                      <CheckCircle2 size={15} />
-                      {savingAction === "Quiz reviewed"
-                        ? "Saving"
-                        : "Save quiz review"}
-                    </button>
-                  </div>
-                </section>
-              </div>
+                        <StatusBadge tone={statusTone(submission.status)}>
+                          {submission.status}
+                        </StatusBadge>
+                      </Link>
+                    ))
+                  ) : (
+                    <article>
+                      <div>
+                        <strong>No assignments need review</strong>
+                        <small>Submitted assignments will appear here.</small>
+                      </div>
+                    </article>
+                  )}
+                </div>
+              </DataTableCard>
             </>
+          }
+        />
+      </PlatformShell>
+    );
+  }
+
+  if (view === "calendar-new") {
+    return (
+      <PlatformShell role="teacher" title="New calendar event">
+        <FormFlowLayout
+          className="teacher-work-page teacher-calendar-create-page"
+          context={<span>Teacher</span>}
+          title="New calendar event"
+          description="Schedule one class event for your assigned teaching work."
+          actions={
+            calendarResult ? (
+              <Link
+                className="platform-primary-button"
+                href="/app/teacher/calendar"
+              >
+                View calendar
+              </Link>
+            ) : (
+              <>
+                <Link
+                  className="platform-secondary-button"
+                  href="/app/teacher/calendar"
+                >
+                  Cancel
+                </Link>
+                <button
+                  type="submit"
+                  form="teacher-calendar-event-form"
+                  className="platform-primary-button"
+                  disabled={
+                    savingAction === "Event scheduled" ||
+                    !calendarDraft.title.trim() ||
+                    !calendarDraft.date ||
+                    calendarDraft.starts >= calendarDraft.ends
+                  }
+                >
+                  <CalendarDays size={15} />
+                  {savingAction === "Event scheduled"
+                    ? "Saving event"
+                    : "Create event"}
+                </button>
+              </>
+            )
+          }
+          main={
+            <section className="teacher-calendar-create-flow">
+              {actionError ? (
+                <p className="platform-form-error">{actionError}</p>
+              ) : null}
+              {calendarResult ? (
+                <div className="teacher-calendar-create-success" role="status">
+                  <CheckCircle2 size={20} />
+                  <div>
+                    <strong>Event created</strong>
+                    <span>{calendarResult}</span>
+                  </div>
+                </div>
+              ) : (
+                <form
+                  id="teacher-calendar-event-form"
+                  className="teacher-calendar-form teacher-calendar-create-flow-form"
+                  onSubmit={event => {
+                    event.preventDefault();
+                    void createCalendarEvent();
+                  }}
+                >
+                  <div className="teacher-calendar-create-flow-heading">
+                    <span>Event details</span>
+                    <h2>Choose the class, time, and place</h2>
+                    <p>
+                      Your event stays within the classes and branches assigned
+                      to you.
+                    </p>
+                  </div>
+                  <div className="teacher-calendar-create-flow-grid">
+                    <label className="teacher-calendar-title-field">
+                      Title
+                      <input
+                        name="title"
+                        value={calendarDraft.title}
+                        onChange={event =>
+                          setCalendarDraft(current => ({
+                            ...current,
+                            title: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Type
+                      <select
+                        name="eventType"
+                        value={calendarDraft.eventType}
+                        onChange={event =>
+                          setCalendarDraft(current => ({
+                            ...current,
+                            eventType: event.target.value as CalendarEventType,
+                          }))
+                        }
+                      >
+                        {calendarTypeOptions.map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Branch
+                      <select
+                        name="branchId"
+                        value={calendarDraft.branchId}
+                        onChange={event =>
+                          setCalendarDraft(current => ({
+                            ...current,
+                            branchId: event.target.value,
+                          }))
+                        }
+                      >
+                        {branchOptions.map(branch => (
+                          <option key={branch.id} value={branch.id}>
+                            {branch.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Class
+                      <select
+                        name="classGroupId"
+                        value={calendarDraft.classGroupId}
+                        onChange={event =>
+                          setCalendarDraft(current => ({
+                            ...current,
+                            classGroupId: event.target.value,
+                          }))
+                        }
+                      >
+                        {classOptions.map(group => (
+                          <option key={group.id} value={group.id}>
+                            {group.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Room
+                      <select
+                        name="roomId"
+                        value={calendarDraft.roomId}
+                        onChange={event =>
+                          setCalendarDraft(current => ({
+                            ...current,
+                            roomId: event.target.value,
+                          }))
+                        }
+                      >
+                        {roomOptions.map(room => (
+                          <option key={room.id} value={room.id}>
+                            {room.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Date
+                      <input
+                        name="date"
+                        type="date"
+                        value={calendarDraft.date}
+                        onChange={event =>
+                          setCalendarDraft(current => ({
+                            ...current,
+                            date: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Starts
+                      <input
+                        name="starts"
+                        type="time"
+                        value={calendarDraft.starts}
+                        onChange={event =>
+                          setCalendarDraft(current => ({
+                            ...current,
+                            starts: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Ends
+                      <input
+                        name="ends"
+                        type="time"
+                        value={calendarDraft.ends}
+                        onChange={event =>
+                          setCalendarDraft(current => ({
+                            ...current,
+                            ends: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                </form>
+              )}
+            </section>
           }
         />
       </PlatformShell>
@@ -1144,214 +1726,262 @@ export default function TeacherWorkPage({
     return (
       <PlatformShell role="teacher" title="Calendar">
         <WorkspaceLayout
-          className="portal-ia-page teacher-work-page"
+          className="portal-ia-page teacher-work-page teacher-calendar-page"
           context={<span>Teacher</span>}
           title="Calendar"
-          description="Schedule class events."
-          toolbar={workTabs}
+          description="Review the class events on your teaching calendar."
+          actions={
+            <Link
+              className="platform-primary-button"
+              href="/app/teacher/calendar/new"
+            >
+              <Plus size={15} />
+              Create event
+            </Link>
+          }
           main={
             <>
               {actionError ? (
                 <p className="platform-form-error">{actionError}</p>
               ) : null}
-              <section className="platform-workflow-card teacher-calendar-create-card">
-                <div className="platform-workflow-title">
-                  <span>
-                    <CalendarDays size={16} /> Create event
-                  </span>
-                  <strong>{selectedBranch?.name ?? "Assigned classes"}</strong>
-                </div>
-                <div className="teacher-calendar-form teacher-calendar-form-grid">
-                  <label>
-                    Title
-                    <input
-                      name="title"
-                      value={calendarDraft.title}
-                      onChange={event =>
-                        setCalendarDraft(current => ({
-                          ...current,
-                          title: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Type
-                    <select
-                      name="eventType"
-                      value={calendarDraft.eventType}
-                      onChange={event =>
-                        setCalendarDraft(current => ({
-                          ...current,
-                          eventType: event.target.value as CalendarEventType,
-                        }))
-                      }
-                    >
-                      {calendarTypeOptions.map(option => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Branch
-                    <select
-                      name="branchId"
-                      value={calendarDraft.branchId}
-                      onChange={event =>
-                        setCalendarDraft(current => ({
-                          ...current,
-                          branchId: event.target.value,
-                        }))
-                      }
-                    >
-                      {branchOptions.map(branch => (
-                        <option key={branch.id} value={branch.id}>
-                          {branch.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Class
-                    <select
-                      name="classGroupId"
-                      value={calendarDraft.classGroupId}
-                      onChange={event =>
-                        setCalendarDraft(current => ({
-                          ...current,
-                          classGroupId: event.target.value,
-                        }))
-                      }
-                    >
-                      {classOptions.map(group => (
-                        <option key={group.id} value={group.id}>
-                          {group.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Room
-                    <select
-                      name="roomId"
-                      value={calendarDraft.roomId}
-                      onChange={event =>
-                        setCalendarDraft(current => ({
-                          ...current,
-                          roomId: event.target.value,
-                        }))
-                      }
-                    >
-                      {roomOptions.map(room => (
-                        <option key={room.id} value={room.id}>
-                          {room.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Date
-                    <input
-                      name="date"
-                      type="date"
-                      value={calendarDraft.date}
-                      onChange={event =>
-                        setCalendarDraft(current => ({
-                          ...current,
-                          date: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Starts
-                    <input
-                      name="starts"
-                      type="time"
-                      value={calendarDraft.starts}
-                      onChange={event =>
-                        setCalendarDraft(current => ({
-                          ...current,
-                          starts: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Ends
-                    <input
-                      name="ends"
-                      type="time"
-                      value={calendarDraft.ends}
-                      onChange={event =>
-                        setCalendarDraft(current => ({
-                          ...current,
-                          ends: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-                <div className="platform-calendar-actions">
-                  <button
-                    type="button"
-                    className="platform-primary-button"
-                    disabled={
-                      savingAction === "Event scheduled" ||
-                      !calendarDraft.title.trim() ||
-                      !calendarDraft.date ||
-                      calendarDraft.starts >= calendarDraft.ends
-                    }
-                    onClick={createCalendarEvent}
-                  >
-                    <CalendarDays size={15} />
-                    {savingAction === "Event scheduled"
-                      ? "Saving event"
-                      : "Create event"}
-                  </button>
-                </div>
-              </section>
               <DataTableCard
                 title="Scheduled events"
                 subtitle={`${visibleEvents.length} visible`}
+                className="teacher-work-record-card"
               >
-                <div className="admin-ia-table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Event</th>
-                        <th>When</th>
-                        <th>Class</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleEvents.map(event => (
-                        <tr key={event.id}>
-                          <td>
-                            <strong>{event.title}</strong>
-                            <small>{event.type.replace(/_/g, " ")}</small>
-                          </td>
-                          <td>{formatDateTime(event.startsAt)}</td>
-                          <td>
+                {visibleEvents.length ? (
+                  <div className="teacher-work-record-list">
+                    {visibleEvents.map(event => (
+                      <article key={event.id}>
+                        <div className="teacher-work-record-copy">
+                          <span>{event.type.replaceAll("_", " ")}</span>
+                          <strong>{event.title}</strong>
+                          <p>
                             {teacherClassGroups.find(
                               group => group.id === event.classGroupId
                             )?.name ?? "General"}
-                          </td>
-                          <td>
-                            <StatusBadge tone={statusTone(event.status)}>
-                              {event.status}
-                            </StatusBadge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                          </p>
+                        </div>
+                        <dl className="teacher-work-record-facts">
+                          <div>
+                            <dt>When</dt>
+                            <dd>{formatDateTime(event.startsAt)}</dd>
+                          </div>
+                        </dl>
+                        <div className="teacher-work-record-actions">
+                          <StatusBadge tone={statusTone(event.status)}>
+                            {event.status}
+                          </StatusBadge>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="platform-empty-state">
+                    <strong>No events scheduled</strong>
+                    <span>
+                      Events for your assigned classes will appear here.
+                    </span>
+                  </div>
+                )}
               </DataTableCard>
             </>
+          }
+        />
+      </PlatformShell>
+    );
+  }
+
+  if (view === "quran-detail") {
+    const recitation = activeRecitation;
+
+    return (
+      <PlatformShell role="teacher" title="Review recitation">
+        <DetailLayout
+          className="portal-ia-page teacher-work-page teacher-quran-detail-page"
+          context={<span>Teacher</span>}
+          title="Review recitation"
+          description="Review one learner recording and update the learning record."
+          actions={
+            <Link
+              className="platform-secondary-button"
+              href="/app/teacher/quran-review"
+            >
+              Back to recitations
+            </Link>
+          }
+          main={
+            recitation ? (
+              quranReviewSaved ? (
+                <section
+                  className="teacher-action-success"
+                  data-testid="teacher-quran-review-success"
+                >
+                  <CheckCircle2 aria-hidden="true" size={20} />
+                  <div>
+                    <strong>Recitation reviewed</strong>
+                    <span>The learner feedback has been saved.</span>
+                  </div>
+                  <Link
+                    className="platform-primary-button"
+                    href="/app/teacher/quran-review"
+                  >
+                    Return to recitations
+                  </Link>
+                </section>
+              ) : (
+                <section
+                  className="teacher-recitation-review"
+                  data-testid="teacher-recitation-review"
+                >
+                  <header className="teacher-recitation-review-head">
+                    <div>
+                      <span>Recitation</span>
+                      <h2>{recitation.title}</h2>
+                      <p>
+                        {studentName(recitation.studentId)} · submitted{" "}
+                        {formatDateTime(recitation.submittedAt)}
+                      </p>
+                    </div>
+                    <StatusBadge tone={statusTone(recitation.status)}>
+                      {recitation.status}
+                    </StatusBadge>
+                  </header>
+                  <dl className="teacher-recitation-facts">
+                    <div>
+                      <dt>Plan</dt>
+                      <dd>{selectedQuranPlan?.target ?? "Not set"}</dd>
+                    </div>
+                    <div>
+                      <dt>Current juz</dt>
+                      <dd>{selectedQuranPlan?.currentJuz ?? "Not set"}</dd>
+                    </div>
+                    <div>
+                      <dt>Level</dt>
+                      <dd>{selectedStudent?.currentLevel ?? "Not set"}</dd>
+                    </div>
+                  </dl>
+                  {recitation.pendingMedia?.length ? (
+                    <section className="teacher-recitation-media">
+                      <span>Attached media</span>
+                      <div>
+                        {recitation.pendingMedia.map(media => (
+                          <article key={media.id}>
+                            <Headphones aria-hidden="true" size={16} />
+                            <div>
+                              <strong>{media.previewLabel}</strong>
+                              <small>{media.name}</small>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+                  {recitation.status === "pending" ? (
+                    <form
+                      className="teacher-recitation-review-form"
+                      data-testid="teacher-recitation-review-form"
+                      onSubmit={event => {
+                        event.preventDefault();
+                        void reviewRecitation();
+                      }}
+                    >
+                      <div className="teacher-recitation-review-form-head">
+                        <div>
+                          <span>Review</span>
+                          <strong>
+                            Update progress and leave concise feedback.
+                          </strong>
+                        </div>
+                      </div>
+                      <label>
+                        Memorized %
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={memorizedPercent}
+                          onChange={event =>
+                            setMemorizedPercent(Number(event.target.value))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Tajweed score
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={tajweedScore}
+                          onChange={event =>
+                            setTajweedScore(Number(event.target.value))
+                          }
+                        />
+                      </label>
+                      <label className="teacher-recitation-feedback">
+                        Feedback
+                        <textarea
+                          value={recitationFeedback}
+                          onChange={event => {
+                            setQuranReviewSaved(false);
+                            setRecitationFeedback(event.target.value);
+                          }}
+                          placeholder="Brief feedback for the learner"
+                        />
+                      </label>
+                      <div className="teacher-recitation-review-actions">
+                        <button
+                          type="button"
+                          className="platform-secondary-button"
+                          disabled={
+                            !selectedProgress ||
+                            savingAction === "Progress updated"
+                          }
+                          onClick={() => void updateQuranProgress()}
+                        >
+                          {savingAction === "Progress updated"
+                            ? "Saving progress"
+                            : "Save progress"}
+                        </button>
+                        <button
+                          type="submit"
+                          className="platform-primary-button"
+                          disabled={
+                            savingAction === "Recitation reviewed" ||
+                            !recitationFeedback.trim()
+                          }
+                        >
+                          {savingAction === "Recitation reviewed"
+                            ? "Saving review"
+                            : "Save review"}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <section className="teacher-recitation-result">
+                      <div>
+                        <span>Recorded feedback</span>
+                        <p>
+                          {recitation.feedback ??
+                            selectedProgress?.notes ??
+                            "No feedback was recorded."}
+                        </p>
+                      </div>
+                      <StatusBadge tone={statusTone(recitation.status)}>
+                        {recitation.status}
+                      </StatusBadge>
+                    </section>
+                  )}
+                </section>
+              )
+            ) : (
+              <section className="platform-empty-state">
+                <strong>This recitation is not available.</strong>
+                <span>
+                  Return to the recitation queue and choose another item.
+                </span>
+              </section>
+            )
           }
         />
       </PlatformShell>
@@ -1361,33 +1991,29 @@ export default function TeacherWorkPage({
   return (
     <PlatformShell role="teacher" title="Quran review">
       <WorkspaceLayout
-        className="portal-ia-page teacher-work-page"
+        className="portal-ia-page teacher-work-page teacher-quran-review-page"
         context={<span>Teacher</span>}
         title="Quran review"
-        description="Review recitations and update progress."
-        toolbar={workTabs}
+        description="Review learner recitations waiting for feedback."
         main={
           <>
             {actionError ? (
               <p className="platform-form-error">{actionError}</p>
             ) : null}
-            <section className="platform-workflow-card">
-              <div className="platform-workflow-title">
-                <span>
-                  <Headphones size={16} /> Quran review
-                </span>
-                <strong>{recitations.length} recitations</strong>
-              </div>
-              <div className="platform-row-list compact">
+            <DataTableCard
+              title="Recitation queue"
+              subtitle={`${recitations.length} recitations`}
+            >
+              <div
+                className="platform-row-list teacher-recitation-list"
+                data-testid="teacher-recitation-list"
+              >
                 {recitations.length ? (
                   recitations.map(recitation => (
-                    <article
+                    <Link
                       key={recitation.id}
-                      className={
-                        selectedRecitation?.id === recitation.id
-                          ? "selected"
-                          : ""
-                      }
+                      className="teacher-recitation-row-link"
+                      href={`/app/teacher/quran-review/${recitation.id}`}
                     >
                       <div>
                         <strong>{recitation.title}</strong>
@@ -1396,18 +2022,10 @@ export default function TeacherWorkPage({
                           {formatDateTime(recitation.submittedAt)}
                         </small>
                       </div>
-                      <div className="platform-row-actions">
-                        <StatusBadge tone={statusTone(recitation.status)}>
-                          {recitation.status}
-                        </StatusBadge>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedRecitationId(recitation.id)}
-                        >
-                          Open
-                        </button>
-                      </div>
-                    </article>
+                      <StatusBadge tone={statusTone(recitation.status)}>
+                        {recitation.status}
+                      </StatusBadge>
+                    </Link>
                   ))
                 ) : (
                   <article>
@@ -1418,83 +2036,7 @@ export default function TeacherWorkPage({
                   </article>
                 )}
               </div>
-            </section>
-
-            <section className="platform-workflow-card">
-              <div className="platform-workflow-title">
-                <span>
-                  <BookOpen size={16} /> Memorization and tajweed
-                </span>
-                <strong>
-                  {selectedStudent?.currentLevel ?? "Progress review"}
-                </strong>
-              </div>
-              <div className="teacher-quran-summary">
-                <span>Plan: {selectedQuranPlan?.target ?? "No plan"}</span>
-                <span>Current juz: {selectedQuranPlan?.currentJuz ?? "-"}</span>
-                <span>{studentName(selectedRecitation?.studentId)}</span>
-              </div>
-              <div className="teacher-calendar-form-grid compact">
-                <label>
-                  Memorized %
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={memorizedPercent}
-                    onChange={event =>
-                      setMemorizedPercent(Number(event.target.value))
-                    }
-                  />
-                </label>
-                <label>
-                  Tajweed score
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={tajweedScore}
-                    onChange={event =>
-                      setTajweedScore(Number(event.target.value))
-                    }
-                  />
-                </label>
-              </div>
-              <textarea
-                value={recitationFeedback}
-                onChange={event => setRecitationFeedback(event.target.value)}
-              />
-              <div className="platform-action-grid">
-                <button
-                  type="button"
-                  disabled={
-                    !selectedProgress || savingAction === "Progress updated"
-                  }
-                  onClick={updateQuranProgress}
-                >
-                  {savingAction === "Progress updated"
-                    ? "Updating"
-                    : "Update progress"}
-                </button>
-                <button
-                  type="button"
-                  className="platform-primary-button"
-                  disabled={
-                    !selectedRecitation ||
-                    selectedRecitation.status === "approved" ||
-                    savingAction === "Recitation reviewed" ||
-                    !recitationFeedback.trim()
-                  }
-                  onClick={reviewRecitation}
-                >
-                  {savingAction === "Recitation reviewed"
-                    ? "Saving"
-                    : selectedRecitation?.status === "approved"
-                      ? "Reviewed"
-                      : "Review recitation"}
-                </button>
-              </div>
-            </section>
+            </DataTableCard>
           </>
         }
       />

@@ -20,9 +20,18 @@ import type {
   UserNotificationPreferences,
 } from "../client/src/lib/domain/types.js";
 import { canSendMessageToUser } from "../client/src/lib/domain/messageScope.js";
-import { roleOrder, rolePermissions, type Permission, type Role } from "../client/src/lib/platformData.js";
+import {
+  roleOrder,
+  rolePermissions,
+  type Permission,
+  type Role,
+} from "../client/src/lib/platformData.js";
 import type { ServerSession } from "./auth.js";
-import { getPlatformStateRepository, normalizePlatformState, type PlatformStatePayload } from "./platformRepository.js";
+import {
+  getPlatformStateRepository,
+  normalizePlatformState,
+  type PlatformStatePayload,
+} from "./platformRepository.js";
 
 function now() {
   return new Date().toISOString();
@@ -37,143 +46,421 @@ export async function getPlatformStateSnapshot(): Promise<PlatformStatePayload> 
 }
 
 function studentIdForSession(state: PlatformState, session: ServerSession) {
-  return state.students.find((student) => student.userId === session.userId)?.id ?? "stu_demo";
+  return state.students.find(
+    student => student.userId === session.userId && student.status === "active"
+  )?.id;
+}
+
+function requireStudentIdForSession(
+  state: PlatformState,
+  session: ServerSession
+) {
+  const studentId = studentIdForSession(state, session);
+  if (!studentId) {
+    throw new Error("Student profile is not mapped to this session identity.");
+  }
+  return studentId;
 }
 
 function userForSession(state: PlatformState, session: ServerSession) {
-  return state.users.find((item) => item.id === session.userId);
+  return state.users.find(item => item.id === session.userId);
 }
 
-function branchIdsForUserScope(state: PlatformState, user?: PlatformState["users"][number]) {
-  const branchIds = new Set<string>();
-  if (user?.branchId) branchIds.add(user.branchId);
-  const department = state.departments.find((item) => item.id === user?.departmentId);
-  department?.branchIds.forEach((branchId) => branchIds.add(branchId));
-  return branchIds;
+function activeStaffProfileForSession(
+  state: PlatformState,
+  session: ServerSession
+) {
+  if (session.activeRole === "student") return undefined;
+  return state.staffProfiles.find(
+    profile =>
+      profile.userId === session.userId &&
+      profile.role === session.activeRole &&
+      profile.status === "active"
+  );
+}
+
+function branchIdsForSessionScope(
+  state: PlatformState,
+  session: ServerSession
+) {
+  return new Set(activeStaffProfileForSession(state, session)?.branchIds ?? []);
+}
+
+function departmentIdsForSessionScope(
+  state: PlatformState,
+  session: ServerSession
+) {
+  return new Set(
+    activeStaffProfileForSession(state, session)?.departmentIds ?? []
+  );
+}
+
+function assertSnapshotSessionAuthority(
+  state: PlatformState,
+  session: ServerSession
+) {
+  const user = userForSession(state, session);
+  if (!user) {
+    if (session.activeRole === "student") {
+      throw new Error(
+        "Student profile is not mapped to this session identity."
+      );
+    }
+    throw new Error("Session identity is not mapped to an active state user.");
+  }
+  if (user.status !== "active") {
+    throw new Error("Session identity is not active in platform state.");
+  }
+  if (!session.roles.includes(session.activeRole)) {
+    throw new Error("Session active role does not match its granted roles.");
+  }
+  if (!user.roles.includes(session.activeRole)) {
+    throw new Error(
+      "Session active role is no longer granted in platform state."
+    );
+  }
+  if (session.activeRole === "student") {
+    const studentProfile = state.students.find(
+      profile =>
+        profile.userId === session.userId && profile.status === "active"
+    );
+    if (!studentProfile) {
+      throw new Error(
+        "Snapshot student actions require an active student profile."
+      );
+    }
+    return;
+  }
+  if (!activeStaffProfileForSession(state, session)) {
+    throw new Error(
+      `Snapshot staff actions require an active ${session.activeRole} staff profile.`
+    );
+  }
+  if (session.activeRole === "teacher") {
+    const teacherProfile = state.teachers.find(
+      profile =>
+        profile.userId === session.userId && profile.status === "active"
+    );
+    if (!teacherProfile) {
+      throw new Error(
+        "Snapshot teacher actions require an active teacher profile."
+      );
+    }
+  }
 }
 
 function courseRunForAssignment(state: PlatformState, assignmentId: string) {
-  const assignment = state.assignments.find((item) => item.id === assignmentId);
-  return assignment ? state.courseRuns.find((item) => item.id === assignment.courseRunId) : undefined;
+  const assignment = state.assignments.find(item => item.id === assignmentId);
+  return assignment
+    ? state.courseRuns.find(item => item.id === assignment.courseRunId)
+    : undefined;
 }
 
 function courseRunForQuiz(state: PlatformState, quizId: string) {
-  const quiz = state.quizzes.find((item) => item.id === quizId);
-  return quiz ? state.courseRuns.find((item) => item.id === quiz.courseRunId) : undefined;
+  const quiz = state.quizzes.find(item => item.id === quizId);
+  return quiz
+    ? state.courseRuns.find(item => item.id === quiz.courseRunId)
+    : undefined;
 }
 
 function branchForInvoice(state: PlatformState, invoiceId: string) {
-  const invoice = state.invoices.find((item) => item.id === invoiceId);
-  const enrollment = state.enrollments.find((item) => item.studentId === invoice?.studentId);
-  const run = state.courseRuns.find((item) => item.id === enrollment?.courseRunId);
+  const invoice = state.invoices.find(item => item.id === invoiceId);
+  const enrollment = state.enrollments.find(
+    item => item.studentId === invoice?.studentId
+  );
+  const run = state.courseRuns.find(
+    item => item.id === enrollment?.courseRunId
+  );
   return run?.branchId;
 }
 
-function teacherOwnsStudent(state: PlatformState, teacherUserId: string, studentId: string) {
+function teacherOwnsStudent(
+  state: PlatformState,
+  teacherUserId: string,
+  studentId: string
+) {
   const classGroupIds = teacherClassGroupIds(state, teacherUserId);
-  return state.classGroups.some((item) => classGroupIds.has(item.id) && item.studentIds.includes(studentId)) ||
-    state.enrollments.some((item) => item.studentId === studentId && item.classGroupId && classGroupIds.has(item.classGroupId));
+  const student = state.students.find(item => item.id === studentId);
+  const studentUser = student
+    ? state.users.find(item => item.id === student.userId)
+    : undefined;
+  return Boolean(
+    student?.status === "active" &&
+      studentUser?.status === "active" &&
+      state.enrollments.some(item => {
+        if (
+          item.studentId !== studentId ||
+          item.status !== "active" ||
+          !item.classGroupId ||
+          !classGroupIds.has(item.classGroupId)
+        ) {
+          return false;
+        }
+        const group = state.classGroups.find(
+          groupItem => groupItem.id === item.classGroupId
+        );
+        return group?.studentIds.includes(studentId);
+      })
+  );
 }
 
-function teacherOwnsResource(state: PlatformState, teacherUserId: string, resourceId: string) {
-  const resource = state.resources.find((item) => item.id === resourceId);
-  const lesson = state.lessons.find((item) => item.id === resource?.lessonId);
-  const module = state.modules.find((item) => item.id === lesson?.moduleId);
-  return Boolean(module && state.courseRuns.some((item) => item.courseId === module.courseId && item.teacherId === teacherUserId));
+function teacherOwnsResource(
+  state: PlatformState,
+  teacherUserId: string,
+  resourceId: string
+) {
+  const resource = state.resources.find(item => item.id === resourceId);
+  const lesson = state.lessons.find(item => item.id === resource?.lessonId);
+  const module = state.modules.find(item => item.id === lesson?.moduleId);
+  return Boolean(
+    module &&
+      state.courseRuns.some(
+        item =>
+          item.courseId === module.courseId &&
+          item.teacherId === teacherUserId &&
+          item.status === "active"
+      )
+  );
 }
 
 function studentIdsForTeacher(state: PlatformState, teacherUserId: string) {
   const classGroupIds = teacherClassGroupIds(state, teacherUserId);
-  const rosterIds = state.classGroups
-    .filter((item) => classGroupIds.has(item.id))
-    .flatMap((item) => item.studentIds);
-  const enrollmentIds = state.enrollments
-    .filter((item) => item.classGroupId && classGroupIds.has(item.classGroupId))
-    .map((item) => item.studentId);
-  return new Set([...rosterIds, ...enrollmentIds]);
+  return new Set(
+    state.enrollments
+      .filter(
+        item =>
+          item.status === "active" &&
+          Boolean(item.classGroupId && classGroupIds.has(item.classGroupId)) &&
+          teacherOwnsStudent(state, teacherUserId, item.studentId)
+      )
+      .map(item => item.studentId)
+  );
 }
 
 function teacherClassGroupIds(state: PlatformState, teacherUserId: string) {
-  const runIds = new Set(state.courseRuns.filter((item) => item.teacherId === teacherUserId).map((item) => item.id));
-  return new Set(state.classGroups.filter((item) => runIds.has(item.courseRunId)).map((item) => item.id));
+  const runIds = new Set(
+    state.courseRuns
+      .filter(
+        item => item.teacherId === teacherUserId && item.status === "active"
+      )
+      .map(item => item.id)
+  );
+  return new Set(
+    state.classGroups
+      .filter(item => runIds.has(item.courseRunId))
+      .map(item => item.id)
+  );
 }
 
 function studentIdsForBranch(state: PlatformState, branchId?: string) {
-  const runIds = new Set(state.courseRuns.filter((item) => item.branchId === branchId).map((item) => item.id));
-  return new Set(state.enrollments.filter((item) => runIds.has(item.courseRunId)).map((item) => item.studentId));
-}
-
-function hodOwnsCourse(state: PlatformState, session: ServerSession, courseId: string) {
-  const user = userForSession(state, session);
-  const course = state.courses.find((item) => item.id === courseId);
-  const program = state.programs.find((item) => item.id === course?.programId);
-  const department = state.departments.find((item) => item.id === program?.departmentId);
-  return Boolean(department && (department.ownerUserId === session.userId || department.id === user?.departmentId));
-}
-
-function hodOwnsStudent(state: PlatformState, session: ServerSession, studentId: string) {
-  const courseIds = new Set(
-    state.enrollments
-      .filter((item) => item.studentId === studentId)
-      .map((item) => state.courseRuns.find((run) => run.id === item.courseRunId)?.courseId)
-      .filter((courseId): courseId is string => Boolean(courseId)),
+  const runIds = new Set(
+    state.courseRuns
+      .filter(item => item.branchId === branchId && item.status === "active")
+      .map(item => item.id)
   );
-  return Array.from(courseIds).some((courseId) => hodOwnsCourse(state, session, courseId));
+  return new Set(
+    state.enrollments
+      .filter(item => item.status === "active" && runIds.has(item.courseRunId))
+      .map(item => item.studentId)
+  );
 }
 
-function hodOwnsCertificate(state: PlatformState, session: ServerSession, certificateId: string) {
-  const certificate = state.certificates.find((item) => item.id === certificateId);
-  if (!certificate || !hodOwnsCourse(state, session, certificate.courseId) || !hodOwnsStudent(state, session, certificate.studentId)) {
+function hodOwnsCourse(
+  state: PlatformState,
+  session: ServerSession,
+  courseId: string
+) {
+  const course = state.courses.find(item => item.id === courseId);
+  const program = state.programs.find(item => item.id === course?.programId);
+  const department = state.departments.find(
+    item => item.id === program?.departmentId
+  );
+  return Boolean(
+    department &&
+      departmentIdsForSessionScope(state, session).has(department.id)
+  );
+}
+
+function hodOwnsCourseRun(
+  state: PlatformState,
+  session: ServerSession,
+  courseRun: PlatformState["courseRuns"][number] | undefined
+) {
+  if (!courseRun || !hodOwnsCourse(state, session, courseRun.courseId)) {
     return false;
   }
-  return state.enrollments.some((enrollment) => {
+  const branchIds = branchIdsForSessionScope(state, session);
+  return branchIds.has("br_global") || branchIds.has(courseRun.branchId);
+}
+
+function hodOwnsStudent(
+  state: PlatformState,
+  session: ServerSession,
+  studentId: string
+) {
+  const courseIds = new Set(
+    state.enrollments
+      .filter(item => item.studentId === studentId)
+      .map(
+        item =>
+          state.courseRuns.find(
+            run =>
+              run.id === item.courseRunId &&
+              hodOwnsCourseRun(state, session, run)
+          )?.courseId
+      )
+      .filter((courseId): courseId is string => Boolean(courseId))
+  );
+  return Array.from(courseIds).some(courseId =>
+    hodOwnsCourse(state, session, courseId)
+  );
+}
+
+function hodOwnsCertificate(
+  state: PlatformState,
+  session: ServerSession,
+  certificateId: string
+) {
+  const certificate = state.certificates.find(
+    item => item.id === certificateId
+  );
+  if (
+    !certificate ||
+    !hodOwnsCourse(state, session, certificate.courseId) ||
+    !hodOwnsStudent(state, session, certificate.studentId)
+  ) {
+    return false;
+  }
+  return state.enrollments.some(enrollment => {
     if (enrollment.studentId !== certificate.studentId) return false;
-    const run = state.courseRuns.find((item) => item.id === enrollment.courseRunId);
-    return run?.courseId === certificate.courseId;
+    const run = state.courseRuns.find(
+      item => item.id === enrollment.courseRunId
+    );
+    return (
+      run?.courseId === certificate.courseId &&
+      hodOwnsCourseRun(state, session, run)
+    );
   });
 }
 
-function canMessageRecipient(state: PlatformState, session: ServerSession, toUserId: string) {
-  return canSendMessageToUser(state, session.activeRole, session.userId, toUserId);
+function canMessageRecipient(
+  state: PlatformState,
+  session: ServerSession,
+  toUserId: string
+) {
+  return canSendMessageToUser(
+    state,
+    session.activeRole,
+    session.userId,
+    toUserId
+  );
 }
 
-function assertStudentScopedAction(state: PlatformState, action: PlatformWorkflowAction, session: ServerSession) {
+function assertStudentScopedAction(
+  state: PlatformState,
+  action: PlatformWorkflowAction,
+  session: ServerSession
+) {
   if (session.activeRole !== "student") return;
-  const studentId = studentIdForSession(state, session);
+  const studentId = requireStudentIdForSession(state, session);
   if (action.type === "assignment.submit") {
     const run = courseRunForAssignment(state, action.assignmentId);
-    if (!state.enrollments.some((item) => item.studentId === studentId && item.courseRunId === run?.id)) {
-      throw new Error("Student can only submit assignments for enrolled course runs.");
+    if (
+      !state.enrollments.some(
+        item => item.studentId === studentId && item.courseRunId === run?.id
+      )
+    ) {
+      throw new Error(
+        "Student can only submit assignments for enrolled course runs."
+      );
     }
   }
   if (action.type === "quiz.submit") {
     const run = courseRunForQuiz(state, action.quizId);
-    if (!state.enrollments.some((item) => item.studentId === studentId && item.courseRunId === run?.id)) {
-      throw new Error("Student can only submit quizzes for enrolled course runs.");
+    if (
+      !state.enrollments.some(
+        item => item.studentId === studentId && item.courseRunId === run?.id
+      )
+    ) {
+      throw new Error(
+        "Student can only submit quizzes for enrolled course runs."
+      );
     }
   }
   if (action.type === "lesson.start" || action.type === "lesson.complete") {
-    const lesson = state.lessons.find((item) => item.id === action.lessonId);
-    const module = state.modules.find((item) => item.id === lesson?.moduleId);
-    const run = state.courseRuns.find((item) => item.courseId === module?.courseId);
-    if (!state.enrollments.some((item) => item.studentId === studentId && item.courseRunId === run?.id)) {
-      throw new Error("Student can only open lessons for enrolled course runs.");
+    const lesson = state.lessons.find(item => item.id === action.lessonId);
+    const module = state.modules.find(item => item.id === lesson?.moduleId);
+    const courseRunIds = new Set(
+      state.courseRuns
+        .filter(
+          item => item.courseId === module?.courseId && item.status === "active"
+        )
+        .map(item => item.id)
+    );
+    const requestedEnrollmentId = action.enrollmentId;
+    if (
+      requestedEnrollmentId !== undefined &&
+      (typeof requestedEnrollmentId !== "string" ||
+        !requestedEnrollmentId.trim())
+    ) {
+      throw new Error(
+        "Student can only open lessons for enrolled course runs."
+      );
+    }
+    if (
+      !state.enrollments.some(
+        item =>
+          item.studentId === studentId &&
+          item.status === "active" &&
+          courseRunIds.has(item.courseRunId) &&
+          (requestedEnrollmentId === undefined ||
+            item.id === requestedEnrollmentId)
+      )
+    ) {
+      throw new Error(
+        "Student can only open lessons for enrolled course runs."
+      );
     }
   }
   if (action.type === "recitation.submit") {
-    const plan = state.quranPlans.find((item) => item.studentId === studentId);
-    if (!plan || plan.teacherId !== action.teacherId || !teacherOwnsStudent(state, action.teacherId, studentId)) {
-      throw new Error("Student can only submit recitations to their assigned Quran teacher.");
+    const plan = state.quranPlans.find(item => item.studentId === studentId);
+    if (
+      !plan ||
+      plan.teacherId !== action.teacherId ||
+      !teacherOwnsStudent(state, action.teacherId, studentId)
+    ) {
+      throw new Error(
+        "Student can only submit recitations to their assigned Quran teacher."
+      );
+    }
+  }
+  if (action.type === "attendance.exception.submit") {
+    const attendance = state.attendance.find(
+      item => item.id === action.attendanceRecordId
+    );
+    if (!attendance || attendance.studentId !== studentId) {
+      throw new Error(
+        "Student can only request exceptions for their own attendance."
+      );
     }
   }
   if (action.type === "notification.read") {
-    const notification = state.notifications.find((item) => item.id === action.notificationId);
-    if (notification?.userId !== session.userId) throw new Error("Student can only mark own notifications as read.");
+    const notification = state.notifications.find(
+      item => item.id === action.notificationId
+    );
+    if (notification?.userId !== session.userId)
+      throw new Error("Student can only mark own notifications as read.");
   }
 }
 
-function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction) {
-  const byRole: Record<ServerSession["activeRole"], PlatformWorkflowAction["type"][]> = {
+function roleCanRunAction(
+  session: ServerSession,
+  action: PlatformWorkflowAction
+) {
+  const byRole: Record<
+    ServerSession["activeRole"],
+    PlatformWorkflowAction["type"][]
+  > = {
     student: [
       "lesson.start",
       "lesson.complete",
@@ -184,16 +471,23 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "notification.read",
       "report.preset.save",
       "profile.update",
+      "attendance.exception.submit",
     ],
     teacher: [
       "assignment.create",
+      "assignment.update",
+      "assignment.status.update",
       "quiz.create",
+      "quiz.update",
+      "quiz.status.update",
       "question.create",
       "quiz.questions.set",
       "assignment.grade",
       "quiz.review",
       "attendance.save",
       "calendar.create",
+      "class.session.reschedule",
+      "class.session.cancel",
       "material.publish.update",
       "message.send",
       "quran.progress.update",
@@ -212,6 +506,8 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "student.create",
       "student.status.update",
       "enrollment.activate",
+      "enrollment.transfer",
+      "enrollment.status.update",
       "payment.record",
       "calendar.create",
       "message.send",
@@ -223,8 +519,12 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
     ],
     headofdepartment: [
       "assignment.create",
+      "assignment.update",
+      "assignment.status.update",
       "assignment.grade",
       "quiz.create",
+      "quiz.update",
+      "quiz.status.update",
       "question.create",
       "quiz.questions.set",
       "quiz.review",
@@ -237,6 +537,10 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "quran.progress.update",
       "recitation.review",
       "record.save",
+      "class.create",
+      "course-run.create",
+      "class.update",
+      "class.status.update",
       "notification.read",
       "report.preset.save",
       "portal.settings.save",
@@ -245,11 +549,17 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
     branchadmin: [
       "attendance.save",
       "calendar.create",
+      "class.session.reschedule",
+      "class.session.cancel",
       "message.send",
       "payment.record",
       "record.save",
       "room.create",
+      "class.create",
+      "class.update",
+      "class.status.update",
       "room.status.update",
+      "attendance.exception.review",
       "notification.read",
       "report.preset.save",
       "portal.settings.save",
@@ -266,6 +576,8 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "student.status.update",
       "application.convert",
       "enrollment.activate",
+      "enrollment.transfer",
+      "enrollment.status.update",
       "payment.record",
       "user.create",
       "user.update",
@@ -278,7 +590,23 @@ function roleCanRunAction(session: ServerSession, action: PlatformWorkflowAction
       "teacher.assign",
       "course.status.update",
       "room.create",
+      "class.create",
+      "course-run.create",
+      "class.update",
+      "class.status.update",
       "room.status.update",
+      "attendance.exception.review",
+      "class.session.reschedule",
+      "class.session.cancel",
+      "assignment.update",
+      "assignment.status.update",
+      "quiz.create",
+      "quiz.update",
+      "quiz.status.update",
+      "question.create",
+      "quiz.questions.set",
+      "assignment.grade",
+      "quiz.review",
       "message.send",
       "record.save",
       "notification.read",
@@ -301,308 +629,971 @@ function allowedReportTypesForRole(role: ServerSession["activeRole"]) {
   return byRole[role];
 }
 
-function assertScopedAction(state: PlatformState, action: PlatformWorkflowAction, session: ServerSession) {
+const SELF_SCOPED_ACTION = "self_scoped" as const;
+const RECORD_MODULE_ACTION = "record_module" as const;
+
+type ActionPermissionRule =
+  | Permission
+  | typeof SELF_SCOPED_ACTION
+  | typeof RECORD_MODULE_ACTION;
+
+const recordSavePermissionByRole: Record<
+  ServerSession["activeRole"],
+  Readonly<Record<string, Permission>>
+> = {
+  student: {},
+  teacher: {},
+  registrar: {
+    Leads: "students:write",
+    Applications: "students:write",
+    Students: "students:write",
+    "Placement tests": "students:write",
+    Enrollments: "students:write",
+    Classes: "classes:write",
+    Schedule: "schedule:write",
+    Payments: "payments:write",
+    Settings: "settings:write",
+  },
+  headofdepartment: {
+    Departments: "courses:write",
+    Programs: "courses:write",
+    Courses: "courses:write",
+    Levels: "courses:write",
+    Curriculum: "courses:write",
+    Teachers: "teachers:write",
+    Classes: "classes:write",
+    Assessments: "assessments:write",
+    Certificates: "certificates:approve",
+  },
+  branchadmin: {
+    Students: "students:write",
+    Teachers: "teachers:write",
+    Classes: "classes:write",
+    Rooms: "rooms:write",
+    Schedule: "schedule:write",
+    Attendance: "attendance:write",
+    Payments: "payments:write",
+    Settings: "settings:write",
+  },
+  superadmin: {
+    Users: "settings:write",
+    "User detail": "settings:write",
+    "Roles & access": "settings:write",
+    "Access rules": "settings:write",
+    Branches: "settings:write",
+    Settings: "settings:write",
+    Connections: "settings:write",
+    Health: "settings:write",
+    Departments: "courses:write",
+    Programs: "courses:write",
+    Courses: "courses:write",
+    Levels: "courses:write",
+    Curriculum: "courses:write",
+    Teachers: "teachers:write",
+    Students: "students:write",
+    Applications: "students:write",
+    Enrollments: "students:write",
+    Classes: "classes:write",
+    Rooms: "rooms:write",
+    Schedule: "schedule:write",
+    Attendance: "attendance:write",
+    Assessments: "assessments:write",
+    Payments: "payments:write",
+    Certificates: "certificates:approve",
+  },
+};
+
+const actionPermissionRuleByType = {
+  "lesson.start": SELF_SCOPED_ACTION,
+  "lesson.complete": SELF_SCOPED_ACTION,
+  "assignment.submit": SELF_SCOPED_ACTION,
+  "quiz.submit": SELF_SCOPED_ACTION,
+  "assignment.create": "assessments:write",
+  "assignment.update": "assessments:write",
+  "assignment.status.update": "assessments:write",
+  "quiz.create": "assessments:write",
+  "quiz.update": "assessments:write",
+  "quiz.status.update": "assessments:write",
+  "question.create": "assessments:write",
+  "quiz.questions.set": "assessments:write",
+  "assignment.grade": "assessments:write",
+  "quiz.review": "assessments:write",
+  "curriculum.module.create": "courses:write",
+  "course.status.update": "courses:write",
+  "material.publish.update": "courses:write",
+  "record.save": RECORD_MODULE_ACTION,
+  "certificate.approve": "certificates:approve",
+  "certificate.issue": "certificates:approve",
+  "certificate.reject": "certificates:approve",
+  "teacher.assign": "teachers:write",
+  "lead.create": "students:write",
+  "application.create": "students:write",
+  "placement.create": "students:write",
+  "placement.result.record": "students:write",
+  "lead.convert": "students:write",
+  "application.convert": "students:write",
+  "student.create": "students:write",
+  "student.status.update": "students:write",
+  "enrollment.activate": "students:write",
+  "enrollment.transfer": "students:write",
+  "enrollment.status.update": "students:write",
+  "calendar.create": "schedule:write",
+  "class.session.reschedule": "schedule:write",
+  "class.session.cancel": "schedule:write",
+  "room.create": "rooms:write",
+  "class.create": "classes:write",
+  "course-run.create": "courses:write",
+  "class.update": "classes:write",
+  "class.status.update": "classes:write",
+  "room.status.update": "rooms:write",
+  "attendance.save": "attendance:write",
+  "attendance.exception.submit": SELF_SCOPED_ACTION,
+  "attendance.exception.review": "attendance:write",
+  "payment.record": "payments:write",
+  "message.send": "messages:write",
+  "report.preset.save": "reports:read",
+  "staff.user.create": "settings:write",
+  "user.create": "settings:write",
+  "user.update": "settings:write",
+  "permission.update": "settings:write",
+  "settings.save": "settings:write",
+  "portal.settings.save": "settings:write",
+  "branch.update": "settings:write",
+  "integration.status.update": "settings:write",
+  "integration.local_check": "settings:write",
+  "system.health_check": "settings:write",
+  "quran.progress.update": "assessments:write",
+  "recitation.review": "assessments:write",
+  "recitation.submit": SELF_SCOPED_ACTION,
+  "notification.read": SELF_SCOPED_ACTION,
+  "profile.update": SELF_SCOPED_ACTION,
+} satisfies Record<PlatformWorkflowAction["type"], ActionPermissionRule>;
+
+function assertActionPermission(
+  state: PlatformState,
+  action: PlatformWorkflowAction,
+  session: ServerSession
+) {
+  const rule = actionPermissionRuleByType[action.type];
+  if (!rule) {
+    throw new Error(`No permission rule is configured for ${action.type}.`);
+  }
+  if (rule === SELF_SCOPED_ACTION) return;
+  const permission =
+    rule === RECORD_MODULE_ACTION
+      ? recordSavePermissionByRole[session.activeRole][
+          action.type === "record.save" ? action.module : ""
+        ]
+      : rule;
+  if (!permission) {
+    const module = action.type === "record.save" ? action.module : action.type;
+    throw new Error(
+      `Role ${session.activeRole} cannot save operational records for ${module}.`
+    );
+  }
+  if (!state.permissions[session.activeRole]?.includes(permission)) {
+    throw new Error(
+      `Role ${session.activeRole} lacks ${permission} for ${action.type}.`
+    );
+  }
+}
+
+function assertScopedAction(
+  state: PlatformState,
+  action: PlatformWorkflowAction,
+  session: ServerSession
+) {
   if (!roleCanRunAction(session, action)) {
     throw new Error(`Role ${session.activeRole} cannot run ${action.type}.`);
   }
+  assertActionPermission(state, action, session);
 
   if (action.type === "report.preset.save") {
-    if (action.role !== session.activeRole) throw new Error("Report preset role must match the active session role.");
+    if (action.role !== session.activeRole)
+      throw new Error("Report preset role must match the active session role.");
     if (!allowedReportTypesForRole(session.activeRole).has(action.reportType)) {
-      throw new Error(`Role ${session.activeRole} cannot save ${action.reportType} report views.`);
+      throw new Error(
+        `Role ${session.activeRole} cannot save ${action.reportType} report views.`
+      );
     }
   }
 
   if (action.type === "portal.settings.save") {
-    if (action.role !== session.activeRole) throw new Error("Settings role must match the active session role.");
-    const user = userForSession(state, session);
-    if (session.activeRole === "registrar" || session.activeRole === "branchadmin") {
-      if (!user?.branchId || action.scopeId !== user.branchId) {
+    if (action.role !== session.activeRole)
+      throw new Error("Settings role must match the active session role.");
+    if (
+      session.activeRole === "registrar" ||
+      session.activeRole === "branchadmin"
+    ) {
+      if (!branchIdsForSessionScope(state, session).has(action.scopeId)) {
         throw new Error("Portal settings are limited to your branch.");
       }
     }
     if (session.activeRole === "headofdepartment") {
-      const departmentIds = new Set(
-        state.departments
-          .filter((item) => item.ownerUserId === session.userId || item.id === user?.departmentId)
-          .map((item) => item.id),
-      );
-      if (!departmentIds.has(action.scopeId)) {
+      if (!departmentIdsForSessionScope(state, session).has(action.scopeId)) {
         throw new Error("Portal settings are limited to your department.");
       }
     }
   }
 
-  if (action.type === "profile.update" && (action.userId ?? session.userId) !== session.userId) {
+  if (
+    action.type === "profile.update" &&
+    (action.userId ?? session.userId) !== session.userId
+  ) {
     throw new Error("Users can only update their own profile.");
   }
 
   assertStudentScopedAction(state, action, session);
 
   if (session.activeRole === "teacher") {
-    if (action.type === "assignment.create" || action.type === "quiz.create" || action.type === "question.create") {
-      const run = state.courseRuns.find((item) => item.id === action.courseRunId);
-      if (run?.teacherId !== session.userId) throw new Error("Teacher can only create assessments for assigned course runs.");
+    if (
+      action.type === "assignment.create" ||
+      action.type === "quiz.create" ||
+      action.type === "question.create"
+    ) {
+      const run = state.courseRuns.find(item => item.id === action.courseRunId);
+      if (run?.teacherId !== session.userId)
+        throw new Error(
+          "Teacher can only create assessments for assigned course runs."
+        );
+    }
+    if (
+      action.type === "assignment.update" ||
+      action.type === "assignment.status.update"
+    ) {
+      const run = courseRunForAssignment(state, action.assignmentId);
+      if (run?.teacherId !== session.userId) {
+        throw new Error(
+          "Teacher can only manage assignments for assigned course runs."
+        );
+      }
+    }
+    if (
+      action.type === "quiz.update" ||
+      action.type === "quiz.status.update"
+    ) {
+      const run = courseRunForQuiz(state, action.quizId);
+      if (run?.teacherId !== session.userId) {
+        throw new Error(
+          "Teacher can only manage quizzes for assigned course runs."
+        );
+      }
     }
     if (action.type === "quiz.questions.set") {
       const run = courseRunForQuiz(state, action.quizId);
-      if (run?.teacherId !== session.userId) throw new Error("Teacher can only attach questions to assigned course quizzes.");
+      if (run?.teacherId !== session.userId)
+        throw new Error(
+          "Teacher can only attach questions to assigned course quizzes."
+        );
     }
     if (action.type === "assignment.grade") {
-      const submission = state.assignmentSubmissions.find((item) => item.id === action.submissionId);
-      const assignment = state.assignments.find((item) => item.id === submission?.assignmentId);
-      const run = state.courseRuns.find((item) => item.id === assignment?.courseRunId);
-      if (run?.teacherId !== session.userId || !submission || !teacherOwnsStudent(state, session.userId, submission.studentId)) {
+      const submission = state.assignmentSubmissions.find(
+        item => item.id === action.submissionId
+      );
+      const assignment = state.assignments.find(
+        item => item.id === submission?.assignmentId
+      );
+      const run = state.courseRuns.find(
+        item => item.id === assignment?.courseRunId
+      );
+      if (
+        run?.teacherId !== session.userId ||
+        !submission ||
+        !teacherOwnsStudent(state, session.userId, submission.studentId)
+      ) {
         throw new Error("Teacher can only grade assigned class submissions.");
       }
     }
     if (action.type === "quiz.review") {
-      const attempt = state.quizAttempts.find((item) => item.id === action.attemptId);
-      const quiz = state.quizzes.find((item) => item.id === attempt?.quizId);
-      const run = state.courseRuns.find((item) => item.id === quiz?.courseRunId);
-      if (run?.teacherId !== session.userId || !attempt || !teacherOwnsStudent(state, session.userId, attempt.studentId)) {
-        throw new Error("Teacher can only review assigned class quiz attempts.");
+      const attempt = state.quizAttempts.find(
+        item => item.id === action.attemptId
+      );
+      const quiz = state.quizzes.find(item => item.id === attempt?.quizId);
+      const run = state.courseRuns.find(item => item.id === quiz?.courseRunId);
+      if (
+        run?.teacherId !== session.userId ||
+        !attempt ||
+        !teacherOwnsStudent(state, session.userId, attempt.studentId)
+      ) {
+        throw new Error(
+          "Teacher can only review assigned class quiz attempts."
+        );
       }
     }
     if (action.type === "attendance.save") {
-      const group = state.classGroups.find((item) => item.id === action.classGroupId);
-      const run = state.courseRuns.find((item) => item.id === group?.courseRunId);
-      if (!group || !run || run.teacherId !== session.userId) throw new Error("Teacher can only save attendance for assigned classes.");
+      const group = state.classGroups.find(
+        item => item.id === action.classGroupId
+      );
+      const run = state.courseRuns.find(item => item.id === group?.courseRunId);
+      if (!group || !run || run.teacherId !== session.userId)
+        throw new Error(
+          "Teacher can only save attendance for assigned classes."
+        );
     }
     if (action.type === "material.publish.update") {
       if (!teacherOwnsResource(state, session.userId, action.id)) {
-        throw new Error("Teacher can only publish materials for assigned courses.");
+        throw new Error(
+          "Teacher can only publish materials for assigned courses."
+        );
       }
     }
     if (action.type === "calendar.create") {
-      const allowedTypes = new Set<CalendarEventType>(["class_session", "live_session", "assignment_due", "quiz_due", "reminder"]);
-      const group = action.classGroupId ? state.classGroups.find((item) => item.id === action.classGroupId) : undefined;
-      const run = group ? state.courseRuns.find((item) => item.id === group.courseRunId) : undefined;
-      const room = action.roomId ? state.rooms.find((item) => item.id === action.roomId) : undefined;
-      const branchIds = new Set(state.courseRuns.filter((item) => item.teacherId === session.userId).map((item) => item.branchId));
-      if (!allowedTypes.has(action.eventType)) throw new Error("Teacher can only schedule teaching calendar items.");
-      if (action.classGroupId && (!group || !run || run.teacherId !== session.userId)) throw new Error("Teacher can only schedule assigned classes.");
-      if (action.branchId && !branchIds.has(action.branchId)) throw new Error("Teacher can only schedule inside assigned branches.");
-      if (action.roomId && (!room || !branchIds.has(room.branchId))) throw new Error("Teacher can only book rooms in assigned branches.");
-      if (action.ownerId && action.ownerId !== session.userId) throw new Error("Teacher can only create own calendar events.");
+      const allowedTypes = new Set<CalendarEventType>([
+        "class_session",
+        "live_session",
+        "assignment_due",
+        "quiz_due",
+        "reminder",
+      ]);
+      const group = action.classGroupId
+        ? state.classGroups.find(item => item.id === action.classGroupId)
+        : undefined;
+      const run = group
+        ? state.courseRuns.find(item => item.id === group.courseRunId)
+        : undefined;
+      const room = action.roomId
+        ? state.rooms.find(item => item.id === action.roomId)
+        : undefined;
+      const branchIds = branchIdsForSessionScope(state, session);
+      if (!allowedTypes.has(action.eventType))
+        throw new Error("Teacher can only schedule teaching calendar items.");
+      if (
+        action.classGroupId &&
+        (!group || !run || run.teacherId !== session.userId)
+      )
+        throw new Error("Teacher can only schedule assigned classes.");
+      if (action.branchId && !branchIds.has(action.branchId))
+        throw new Error("Teacher can only schedule inside assigned branches.");
+      if (action.roomId && (!room || !branchIds.has(room.branchId)))
+        throw new Error("Teacher can only book rooms in assigned branches.");
+      if (action.ownerId && action.ownerId !== session.userId)
+        throw new Error("Teacher can only create own calendar events.");
+    }
+    if (
+      action.type === "class.session.reschedule" ||
+      action.type === "class.session.cancel"
+    ) {
+      const classSession = state.classSessions.find(
+        item =>
+          item.id === action.sessionId || item.eventId === action.sessionId
+      );
+      const group = state.classGroups.find(
+        item => item.id === classSession?.classGroupId
+      );
+      const run = state.courseRuns.find(item => item.id === group?.courseRunId);
+      if (!classSession || !group || !run || run.teacherId !== session.userId) {
+        throw new Error(
+          "Teacher can only manage sessions for assigned classes."
+        );
+      }
+      if (action.type === "class.session.reschedule" && action.roomId) {
+        const room = state.rooms.find(item => item.id === action.roomId);
+        const branchIds = branchIdsForSessionScope(state, session);
+        if (!room || !branchIds.has(room.branchId)) {
+          throw new Error("Teacher can only use rooms in assigned branches.");
+        }
+      }
     }
     if (action.type === "quran.progress.update") {
-      const record = state.quranProgress.find((item) => item.id === action.recordId);
-      if (!record || !teacherOwnsStudent(state, session.userId, record.studentId)) {
-        throw new Error("Teacher can only update Quran progress for assigned learners.");
+      const record = state.quranProgress.find(
+        item => item.id === action.recordId
+      );
+      if (
+        !record ||
+        !teacherOwnsStudent(state, session.userId, record.studentId)
+      ) {
+        throw new Error(
+          "Teacher can only update Quran progress for assigned learners."
+        );
       }
     }
     if (action.type === "recitation.review") {
-      const submission = state.recitationSubmissions.find((item) => item.id === action.submissionId);
-      if (submission?.teacherId !== session.userId) throw new Error("Teacher can only review assigned recitations.");
+      const submission = state.recitationSubmissions.find(
+        item => item.id === action.submissionId
+      );
+      if (submission?.teacherId !== session.userId)
+        throw new Error("Teacher can only review assigned recitations.");
     }
     if (action.type === "notification.read") {
-      const notification = state.notifications.find((item) => item.id === action.notificationId);
-      if (notification?.userId !== session.userId) throw new Error("Teacher can only mark own notifications as read.");
+      const notification = state.notifications.find(
+        item => item.id === action.notificationId
+      );
+      if (notification?.userId !== session.userId)
+        throw new Error("Teacher can only mark own notifications as read.");
     }
   }
 
   if (session.activeRole === "branchadmin") {
-    const user = userForSession(state, session);
+    const branchIds = branchIdsForSessionScope(state, session);
+    if (action.type === "attendance.exception.review") {
+      const request = state.attendanceExceptions.find(
+        item => item.id === action.requestId
+      );
+      const classGroup = state.classGroups.find(
+        item => item.id === request?.classGroupId
+      );
+      const courseRun = state.courseRuns.find(
+        item => item.id === classGroup?.courseRunId
+      );
+      if (
+        !request ||
+        !classGroup ||
+        !courseRun ||
+        !branchIds.has(courseRun.branchId)
+      ) {
+        throw new Error(
+          "Branch admin can only review attendance exceptions in their branch."
+        );
+      }
+    }
     if (action.type === "calendar.create") {
-      const allowedTypes = new Set<CalendarEventType>(["class_session", "live_session", "room_booking", "reminder"]);
-      if (!user?.branchId || action.branchId !== user.branchId) {
+      const allowedTypes = new Set<CalendarEventType>([
+        "class_session",
+        "live_session",
+        "room_booking",
+        "reminder",
+      ]);
+      if (!action.branchId || !branchIds.has(action.branchId)) {
         throw new Error("Branch admin can only schedule inside their branch.");
       }
-      if (!allowedTypes.has(action.eventType)) throw new Error("Branch admin can only schedule branch operations calendar items.");
-      const room = action.roomId ? state.rooms.find((item) => item.id === action.roomId) : undefined;
-      const group = action.classGroupId ? state.classGroups.find((item) => item.id === action.classGroupId) : undefined;
-      const run = group ? state.courseRuns.find((item) => item.id === group.courseRunId) : undefined;
-      if (action.roomId && (!room || room.branchId !== user.branchId)) throw new Error("Branch admin can only book rooms in their branch.");
-      if (action.classGroupId && (!group || !run || run.branchId !== user.branchId)) throw new Error("Branch admin can only schedule classes in their branch.");
+      if (!allowedTypes.has(action.eventType))
+        throw new Error(
+          "Branch admin can only schedule branch operations calendar items."
+        );
+      const room = action.roomId
+        ? state.rooms.find(item => item.id === action.roomId)
+        : undefined;
+      const group = action.classGroupId
+        ? state.classGroups.find(item => item.id === action.classGroupId)
+        : undefined;
+      const run = group
+        ? state.courseRuns.find(item => item.id === group.courseRunId)
+        : undefined;
+      if (action.roomId && (!room || !branchIds.has(room.branchId)))
+        throw new Error("Branch admin can only book rooms in their branch.");
+      if (
+        action.classGroupId &&
+        (!group || !run || !branchIds.has(run.branchId))
+      )
+        throw new Error(
+          "Branch admin can only schedule classes in their branch."
+        );
     }
     if (action.type === "attendance.save") {
-      const group = state.classGroups.find((item) => item.id === action.classGroupId);
-      const run = state.courseRuns.find((item) => item.id === group?.courseRunId);
-      if (!user?.branchId || !group || !run || run.branchId !== user.branchId) throw new Error("Branch admin can only save attendance in their branch.");
+      const group = state.classGroups.find(
+        item => item.id === action.classGroupId
+      );
+      const run = state.courseRuns.find(item => item.id === group?.courseRunId);
+      if (!group || !run || !branchIds.has(run.branchId))
+        throw new Error(
+          "Branch admin can only save attendance in their branch."
+        );
     }
-    if (action.type === "payment.record" && branchForInvoice(state, action.invoiceId) !== user?.branchId) {
-      throw new Error("Branch admin can only record payments for their branch.");
+    if (
+      action.type === "payment.record" &&
+      !branchIds.has(branchForInvoice(state, action.invoiceId) ?? "")
+    ) {
+      throw new Error(
+        "Branch admin can only record payments for their branch."
+      );
     }
     if (action.type === "room.status.update") {
-      const room = state.rooms.find((item) => item.id === action.roomId);
-      if (!user?.branchId || !room || room.branchId !== user.branchId) {
+      const room = state.rooms.find(item => item.id === action.roomId);
+      if (!room || !branchIds.has(room.branchId)) {
         throw new Error("Branch admin can only update rooms in their branch.");
       }
     }
-    if (action.type === "room.create" && (!user?.branchId || action.branchId !== user.branchId)) {
+    if (
+      action.type === "class.session.reschedule" ||
+      action.type === "class.session.cancel"
+    ) {
+      const classSession = state.classSessions.find(
+        item =>
+          item.id === action.sessionId || item.eventId === action.sessionId
+      );
+      const group = state.classGroups.find(
+        item => item.id === classSession?.classGroupId
+      );
+      const run = state.courseRuns.find(item => item.id === group?.courseRunId);
+      if (!classSession || !group || !run || !branchIds.has(run.branchId)) {
+        throw new Error(
+          "Branch admin can only manage sessions in their branch."
+        );
+      }
+      if (action.type === "class.session.reschedule" && action.roomId) {
+        const room = state.rooms.find(item => item.id === action.roomId);
+        if (!room || !branchIds.has(room.branchId)) {
+          throw new Error("Branch admin can only use rooms in their branch.");
+        }
+      }
+    }
+    if (action.type === "room.create" && !branchIds.has(action.branchId)) {
       throw new Error("Branch admin can only create rooms in their branch.");
     }
+    if (action.type === "class.create") {
+      const run = state.courseRuns.find(item => item.id === action.courseRunId);
+      if (!run || !branchIds.has(run.branchId)) {
+        throw new Error(
+          "Branch admin can only create classes in their branch."
+        );
+      }
+    }
+    if (
+      action.type === "class.update" ||
+      action.type === "class.status.update"
+    ) {
+      const group = state.classGroups.find(
+        item => item.id === action.classGroupId
+      );
+      const run = state.courseRuns.find(item => item.id === group?.courseRunId);
+      if (!group || !run || !branchIds.has(run.branchId)) {
+        throw new Error(
+          "Branch admin can only update classes in their branch."
+        );
+      }
+    }
     if (action.type === "notification.read") {
-      const notification = state.notifications.find((item) => item.id === action.notificationId);
-      if (notification?.userId !== session.userId) throw new Error("Branch admin can only mark own notifications as read.");
+      const notification = state.notifications.find(
+        item => item.id === action.notificationId
+      );
+      if (notification?.userId !== session.userId)
+        throw new Error(
+          "Branch admin can only mark own notifications as read."
+        );
     }
   }
 
   if (session.activeRole === "headofdepartment") {
     if (action.type === "curriculum.module.create") {
       if (!hodOwnsCourse(state, session, action.courseId)) {
-        throw new Error("HOD can only create curriculum modules in their department.");
+        throw new Error(
+          "HOD can only create curriculum modules in their department."
+        );
       }
     }
     if (action.type === "course.status.update") {
       if (!hodOwnsCourse(state, session, action.courseId)) {
-        throw new Error("HOD can only update course status in their department.");
+        throw new Error(
+          "HOD can only update course status in their department."
+        );
       }
     }
-    if (action.type === "certificate.approve" || action.type === "certificate.issue" || action.type === "certificate.reject") {
+    if (action.type === "class.create") {
+      const run = state.courseRuns.find(item => item.id === action.courseRunId);
+      if (!hodOwnsCourseRun(state, session, run)) {
+        throw new Error("HOD can only create classes in their department.");
+      }
+    }
+    if (action.type === "course-run.create") {
+      if (!hodOwnsCourse(state, session, action.courseId)) {
+        throw new Error("HOD can only create course runs in their department.");
+      }
+      const profile = activeStaffProfileForSession(state, session);
+      if (
+        !profile ||
+        (!profile.branchIds.includes("br_global") &&
+          !profile.branchIds.includes(action.branchId))
+      ) {
+        throw new Error(
+          "HOD can only create course runs in their branch scope."
+        );
+      }
+    }
+    if (
+      action.type === "class.update" ||
+      action.type === "class.status.update"
+    ) {
+      const group = state.classGroups.find(
+        item => item.id === action.classGroupId
+      );
+      const run = state.courseRuns.find(item => item.id === group?.courseRunId);
+      if (!group || !hodOwnsCourseRun(state, session, run)) {
+        throw new Error("HOD can only update classes in their department.");
+      }
+    }
+    if (
+      action.type === "certificate.approve" ||
+      action.type === "certificate.issue" ||
+      action.type === "certificate.reject"
+    ) {
       if (!hodOwnsCertificate(state, session, action.certificateId)) {
-        throw new Error("HOD can only manage certificates in their department.");
+        throw new Error(
+          "HOD can only manage certificates in their department."
+        );
       }
     }
-    if (action.type === "assignment.create" || action.type === "quiz.create" || action.type === "question.create") {
-      const run = state.courseRuns.find((item) => item.id === action.courseRunId);
-      if (!run || !hodOwnsCourse(state, session, run.courseId)) throw new Error("HOD can only create assessments in their department.");
+    if (
+      action.type === "assignment.create" ||
+      action.type === "quiz.create" ||
+      action.type === "question.create"
+    ) {
+      const run = state.courseRuns.find(item => item.id === action.courseRunId);
+      if (!hodOwnsCourseRun(state, session, run))
+        throw new Error("HOD can only create assessments in their department.");
+    }
+    if (
+      action.type === "assignment.update" ||
+      action.type === "assignment.status.update"
+    ) {
+      const run = courseRunForAssignment(state, action.assignmentId);
+      if (!hodOwnsCourseRun(state, session, run)) {
+        throw new Error(
+          "HOD can only manage assignments in their department."
+        );
+      }
+    }
+    if (
+      action.type === "quiz.update" ||
+      action.type === "quiz.status.update"
+    ) {
+      const run = courseRunForQuiz(state, action.quizId);
+      if (!hodOwnsCourseRun(state, session, run)) {
+        throw new Error("HOD can only manage quizzes in their department.");
+      }
     }
     if (action.type === "quiz.questions.set") {
       const run = courseRunForQuiz(state, action.quizId);
-      if (!run || !hodOwnsCourse(state, session, run.courseId)) throw new Error("HOD can only attach questions to department quizzes.");
+      if (!hodOwnsCourseRun(state, session, run))
+        throw new Error("HOD can only attach questions to department quizzes.");
     }
     if (action.type === "assignment.grade") {
-      const submission = state.assignmentSubmissions.find((item) => item.id === action.submissionId);
-      const assignment = state.assignments.find((item) => item.id === submission?.assignmentId);
-      const run = state.courseRuns.find((item) => item.id === assignment?.courseRunId);
-      if (!run || !hodOwnsCourse(state, session, run.courseId)) throw new Error("HOD can only grade department assignment submissions.");
+      const submission = state.assignmentSubmissions.find(
+        item => item.id === action.submissionId
+      );
+      const assignment = state.assignments.find(
+        item => item.id === submission?.assignmentId
+      );
+      const run = state.courseRuns.find(
+        item => item.id === assignment?.courseRunId
+      );
+      if (!hodOwnsCourseRun(state, session, run))
+        throw new Error(
+          "HOD can only grade department assignment submissions."
+        );
     }
     if (action.type === "quiz.review") {
-      const attempt = state.quizAttempts.find((item) => item.id === action.attemptId);
+      const attempt = state.quizAttempts.find(
+        item => item.id === action.attemptId
+      );
       const run = courseRunForQuiz(state, attempt?.quizId ?? "");
-      if (!run || !hodOwnsCourse(state, session, run.courseId)) throw new Error("HOD can only review department quiz attempts.");
+      if (!hodOwnsCourseRun(state, session, run))
+        throw new Error("HOD can only review department quiz attempts.");
     }
     if (action.type === "quran.progress.update") {
-      const record = state.quranProgress.find((item) => item.id === action.recordId);
-      if (!record || !hodOwnsStudent(state, session, record.studentId)) throw new Error("HOD can only update Quran progress in their department.");
+      const record = state.quranProgress.find(
+        item => item.id === action.recordId
+      );
+      if (!record || !hodOwnsStudent(state, session, record.studentId))
+        throw new Error(
+          "HOD can only update Quran progress in their department."
+        );
     }
     if (action.type === "recitation.review") {
-      const submission = state.recitationSubmissions.find((item) => item.id === action.submissionId);
-      if (!submission || !hodOwnsStudent(state, session, submission.studentId)) throw new Error("HOD can only review department recitations.");
+      const submission = state.recitationSubmissions.find(
+        item => item.id === action.submissionId
+      );
+      if (!submission || !hodOwnsStudent(state, session, submission.studentId))
+        throw new Error("HOD can only review department recitations.");
     }
     if (action.type === "notification.read") {
-      const notification = state.notifications.find((item) => item.id === action.notificationId);
-      if (notification?.userId !== session.userId) throw new Error("HOD can only mark own notifications as read.");
+      const notification = state.notifications.find(
+        item => item.id === action.notificationId
+      );
+      if (notification?.userId !== session.userId)
+        throw new Error("HOD can only mark own notifications as read.");
     }
   }
 
   if (session.activeRole === "registrar") {
-    const user = userForSession(state, session);
-    const branchIds = branchIdsForUserScope(state, user);
-    if (action.type === "application.create" && !branchIds.has(action.branchId)) {
-      throw new Error("Registrar can only create applications inside admissions branches.");
+    const branchIds = branchIdsForSessionScope(state, session);
+    if (
+      action.type === "application.create" &&
+      !branchIds.has(action.branchId)
+    ) {
+      throw new Error(
+        "Registrar can only create applications inside admissions branches."
+      );
     }
-    if (action.type === "placement.create" && action.branchId && !branchIds.has(action.branchId)) {
-      throw new Error("Registrar can only book placement tests inside admissions branches.");
+    if (
+      action.type === "placement.create" &&
+      action.branchId &&
+      !branchIds.has(action.branchId)
+    ) {
+      throw new Error(
+        "Registrar can only book placement tests inside admissions branches."
+      );
     }
     if (action.type === "placement.result.record") {
-      const booking = state.placementTests.find((item) => item.id === action.bookingId);
+      const booking = state.placementTests.find(
+        item => item.id === action.bookingId
+      );
       if (!booking || (booking.branchId && !branchIds.has(booking.branchId))) {
-        throw new Error("Registrar can only record placement results inside admissions branches.");
+        throw new Error(
+          "Registrar can only record placement results inside admissions branches."
+        );
+      }
+      if (action.score < 0 || action.score > 100) {
+        throw new Error("Placement score must be between 0 and 100.");
       }
     }
-    if (action.type === "lead.convert" && action.branchId && !branchIds.has(action.branchId)) {
-      throw new Error("Registrar can only convert leads inside admissions branches.");
+    if (action.type === "lead.convert") {
+      const lead = state.leads.find(item => item.id === action.leadId);
+      if (!lead) throw new Error(`Lead ${action.leadId} was not found.`);
+      if (action.branchId && !branchIds.has(action.branchId)) {
+        throw new Error(
+          "Registrar can only convert leads inside admissions branches."
+        );
+      }
     }
     if (action.type === "application.convert") {
-      const application = state.applications.find((item) => item.id === action.applicationId);
-      if (!application || (application.branchId && !branchIds.has(application.branchId))) {
-        throw new Error("Registrar can only convert applications inside admissions branches.");
+      const application = state.applications.find(
+        item => item.id === action.applicationId
+      );
+      if (
+        !application ||
+        (application.branchId && !branchIds.has(application.branchId))
+      ) {
+        throw new Error(
+          "Registrar can only convert applications inside admissions branches."
+        );
       }
     }
     if (action.type === "student.create") {
-      const courseRun = state.courseRuns.find((item) => item.id === action.courseRunId);
-      const classGroup = state.classGroups.find((item) => item.id === action.classGroupId);
-      const application = action.applicationId ? state.applications.find((item) => item.id === action.applicationId) : undefined;
-      const placement = action.placementTestId ? state.placementTests.find((item) => item.id === action.placementTestId) : undefined;
-      if (!branchIds.has(action.branchId) || !courseRun || !branchIds.has(courseRun.branchId)) {
-        throw new Error("Registrar can only create students inside admissions branches.");
+      const courseRun = state.courseRuns.find(
+        item => item.id === action.courseRunId
+      );
+      const classGroup = state.classGroups.find(
+        item => item.id === action.classGroupId
+      );
+      const application = action.applicationId
+        ? state.applications.find(item => item.id === action.applicationId)
+        : undefined;
+      const placement = action.placementTestId
+        ? state.placementTests.find(item => item.id === action.placementTestId)
+        : undefined;
+      if (
+        !branchIds.has(action.branchId) ||
+        !courseRun ||
+        !branchIds.has(courseRun.branchId)
+      ) {
+        throw new Error(
+          "Registrar can only create students inside admissions branches."
+        );
       }
       if (!classGroup || classGroup.courseRunId !== courseRun.id) {
         throw new Error("Registrar can only assign a matching class group.");
       }
       if (application?.branchId && !branchIds.has(application.branchId)) {
-        throw new Error("Registrar can only use applications inside admissions branches.");
+        throw new Error(
+          "Registrar can only use applications inside admissions branches."
+        );
       }
       if (placement?.branchId && !branchIds.has(placement.branchId)) {
-        throw new Error("Registrar can only use placement tests inside admissions branches.");
+        throw new Error(
+          "Registrar can only use placement tests inside admissions branches."
+        );
       }
     }
     if (action.type === "student.status.update") {
-      const student = state.students.find((item) => item.id === action.studentId);
-      const studentUser = state.users.find((item) => item.id === student?.userId);
+      const student = state.students.find(item => item.id === action.studentId);
+      const studentUser = state.users.find(item => item.id === student?.userId);
       if (!student || !branchIds.has(studentUser?.branchId ?? "")) {
-        throw new Error("Registrar can only update students inside admissions branches.");
+        throw new Error(
+          "Registrar can only update students inside admissions branches."
+        );
+      }
+      const enrollmentBranchIds = state.enrollments
+        .filter(item => item.studentId === student.id)
+        .map(
+          item =>
+            state.courseRuns.find(run => run.id === item.courseRunId)?.branchId
+        );
+      if (
+        enrollmentBranchIds.some(
+          branchId => !branchId || !branchIds.has(branchId)
+        )
+      ) {
+        throw new Error(
+          "Registrar cannot update a student whose enrollments extend outside admissions branch scope."
+        );
       }
     }
-    if (action.type === "payment.record" && !branchIds.has(branchForInvoice(state, action.invoiceId) ?? "")) {
-      throw new Error("Registrar can only record payments inside admissions branches.");
+    if (
+      action.type === "payment.record" &&
+      !branchIds.has(branchForInvoice(state, action.invoiceId) ?? "")
+    ) {
+      throw new Error(
+        "Registrar can only record payments inside admissions branches."
+      );
     }
     if (action.type === "enrollment.activate") {
-      const workflow = state.enrollmentWorkflows.find((item) => item.id === action.workflowId);
-      const courseRun =
-        state.courseRuns.find((item) => item.id === action.courseRunId && item.courseId === workflow?.targetCourseId) ??
-        state.courseRuns.find((item) => item.courseId === workflow?.targetCourseId && item.status === "active") ??
-        state.courseRuns.find((item) => item.courseId === workflow?.targetCourseId);
-      const classGroup = action.classGroupId ? state.classGroups.find((item) => item.id === action.classGroupId) : undefined;
-      if (!workflow || !courseRun || !branchIds.has(courseRun.branchId)) {
-        throw new Error("Registrar can only activate enrollments inside admissions branches.");
+      const workflow = state.enrollmentWorkflows.find(
+        item => item.id === action.workflowId
+      );
+      const exactCourseRunId = action.courseRunId ?? workflow?.courseRunId;
+      const exactClassGroupId = action.classGroupId ?? workflow?.classGroupId;
+      if (
+        workflow &&
+        !workflow.studentId &&
+        (!exactCourseRunId || !exactClassGroupId)
+      ) {
+        throw new Error(
+          "Enrollment activation requires an exact course run and class group."
+        );
       }
-      if (action.classGroupId && (!classGroup || classGroup.courseRunId !== courseRun.id)) {
+      const courseRun = exactCourseRunId
+        ? state.courseRuns.find(
+            item =>
+              item.id === exactCourseRunId &&
+              item.courseId === workflow?.targetCourseId
+          )
+        : undefined;
+      const classGroup = exactClassGroupId
+        ? state.classGroups.find(item => item.id === exactClassGroupId)
+        : undefined;
+      if (!workflow || !courseRun || !branchIds.has(courseRun.branchId)) {
+        throw new Error(
+          "Registrar can only activate enrollments inside admissions branches."
+        );
+      }
+      if (
+        exactClassGroupId &&
+        (!classGroup || classGroup.courseRunId !== courseRun.id)
+      ) {
         throw new Error("Registrar can only assign a matching class group.");
       }
     }
+    if (
+      action.type === "enrollment.transfer" ||
+      action.type === "enrollment.status.update"
+    ) {
+      const enrollment = state.enrollments.find(
+        item => item.id === action.enrollmentId
+      );
+      const sourceRun = state.courseRuns.find(
+        item => item.id === enrollment?.courseRunId
+      );
+      if (!enrollment || !sourceRun || !branchIds.has(sourceRun.branchId)) {
+        throw new Error(
+          "Registrar can only manage enrollments inside admissions branches."
+        );
+      }
+      if (action.type === "enrollment.transfer") {
+        const targetGroup = state.classGroups.find(
+          item => item.id === action.classGroupId
+        );
+        const targetRun = state.courseRuns.find(
+          item => item.id === targetGroup?.courseRunId
+        );
+        if (!targetGroup || !targetRun || !branchIds.has(targetRun.branchId)) {
+          throw new Error(
+            "Registrar can only transfer enrollments inside admissions branches."
+          );
+        }
+      }
+    }
     if (action.type === "calendar.create") {
-      const allowedTypes = new Set<CalendarEventType>(["placement_test", "trial_lesson", "room_booking", "reminder"]);
-      const room = action.roomId ? state.rooms.find((item) => item.id === action.roomId) : undefined;
-      if (!branchIds.size) throw new Error("Registrar calendar scope is not configured.");
-      if (!allowedTypes.has(action.eventType)) throw new Error("Registrar can only schedule admissions calendar items.");
-      if (action.classGroupId) throw new Error("Registrar cannot schedule class groups from this workspace.");
-      if (!action.branchId) throw new Error("Registrar calendar events require a branch.");
-      if (action.branchId && !branchIds.has(action.branchId)) throw new Error("Registrar can only schedule inside admissions branches.");
-      if (action.roomId && (!room || !branchIds.has(room.branchId))) throw new Error("Registrar can only book rooms inside admissions branches.");
+      const allowedTypes = new Set<CalendarEventType>([
+        "placement_test",
+        "trial_lesson",
+        "room_booking",
+        "reminder",
+      ]);
+      const room = action.roomId
+        ? state.rooms.find(item => item.id === action.roomId)
+        : undefined;
+      if (!branchIds.size)
+        throw new Error("Registrar calendar scope is not configured.");
+      if (!allowedTypes.has(action.eventType))
+        throw new Error(
+          "Registrar can only schedule admissions calendar items."
+        );
+      if (action.classGroupId)
+        throw new Error(
+          "Registrar cannot schedule class groups from this workspace."
+        );
+      if (!action.branchId)
+        throw new Error("Registrar calendar events require a branch.");
+      if (action.branchId && !branchIds.has(action.branchId))
+        throw new Error(
+          "Registrar can only schedule inside admissions branches."
+        );
+      if (action.roomId && (!room || !branchIds.has(room.branchId)))
+        throw new Error(
+          "Registrar can only book rooms inside admissions branches."
+        );
     }
     if (action.type === "notification.read") {
-      const notification = state.notifications.find((item) => item.id === action.notificationId);
-      if (notification?.userId !== session.userId) throw new Error("Registrar can only mark own notifications as read.");
+      const notification = state.notifications.find(
+        item => item.id === action.notificationId
+      );
+      if (notification?.userId !== session.userId)
+        throw new Error("Registrar can only mark own notifications as read.");
     }
   }
 
   if (action.type === "message.send") {
-    const recipientUserIds = action.recipientUserIds?.length
-      ? action.recipientUserIds
-      : [action.toUserId];
-    if (recipientUserIds.some((userId) => !canMessageRecipient(state, session, userId))) {
+    const recipientUserIds = Array.from(
+      new Set([action.toUserId, ...(action.recipientUserIds ?? [])])
+    ).filter(Boolean);
+    if (
+      recipientUserIds.some(
+        userId => !canMessageRecipient(state, session, userId)
+      )
+    ) {
       throw new Error("Message recipient is outside this role scope.");
     }
   }
 }
 
-function applyServerActor(action: PlatformWorkflowAction, session: ServerSession, state: PlatformState): PlatformWorkflowAction {
+function applyServerActor(
+  action: PlatformWorkflowAction,
+  session: ServerSession,
+  state: PlatformState
+): PlatformWorkflowAction {
   const actorId = session.userId;
-  const studentId = studentIdForSession(state, session);
   const user = userForSession(state, session);
   switch (action.type) {
     case "lesson.start":
     case "lesson.complete":
     case "assignment.submit":
     case "quiz.submit":
-      return { ...action, studentId, actorId };
+      return {
+        ...action,
+        studentId: requireStudentIdForSession(state, session),
+        actorId,
+      };
     case "recitation.submit":
-      return { ...action, studentId, actorId };
+      return {
+        ...action,
+        studentId: requireStudentIdForSession(state, session),
+        actorId,
+      };
+    case "attendance.exception.submit":
+      return {
+        ...action,
+        studentId: requireStudentIdForSession(state, session),
+        actorId,
+      };
     case "message.send":
       return { ...action, fromUserId: actorId, actorId };
     case "profile.update":
       return { ...action, userId: action.userId ?? actorId, actorId };
-    case "calendar.create":
+    case "calendar.create": {
+      const branchIds = branchIdsForSessionScope(state, session);
+      const defaultBranchId =
+        user?.branchId && branchIds.has(user.branchId)
+          ? user.branchId
+          : branchIds.size === 1
+            ? Array.from(branchIds)[0]
+            : undefined;
       return {
         ...action,
         ownerId: actorId,
-        branchId: action.branchId ?? user?.branchId,
+        branchId: action.branchId ?? defaultBranchId,
         actorId,
       };
+    }
     default:
       return { ...action, actorId };
   }
@@ -621,9 +1612,26 @@ const eventTypes = new Set<CalendarEventType>([
   "reminder",
 ]);
 
-const attendanceStatuses = new Set<AttendanceStatus>(["present", "late", "absent", "excused"]);
-const leadSources = new Set<Lead["source"]>(["website", "trial_form", "placement_form", "whatsapp", "manual"]);
-const communicationChannels = new Set<CommunicationLog["channel"]>(["in_app", "email", "whatsapp", "phone", "manual"]);
+const attendanceStatuses = new Set<AttendanceStatus>([
+  "present",
+  "late",
+  "absent",
+  "excused",
+]);
+const leadSources = new Set<Lead["source"]>([
+  "website",
+  "trial_form",
+  "placement_form",
+  "whatsapp",
+  "manual",
+]);
+const communicationChannels = new Set<CommunicationLog["channel"]>([
+  "in_app",
+  "email",
+  "whatsapp",
+  "phone",
+  "manual",
+]);
 const reportTypes = new Set(["enrollments", "attendance", "finance", "audit"]);
 const accountStatuses = new Set(["active", "pending", "paused"]);
 const studentStatuses = new Set<StudentStatus>([
@@ -638,14 +1646,57 @@ const studentStatuses = new Set<StudentStatus>([
   "completed",
   "cancelled",
 ]);
-const studentCreateStatuses = new Set<StudentStatus>(["ready_to_enroll", "enrolled", "active", "paused"]);
-const studentEntrySources = new Set<StudentEntrySource>(["direct", "lead", "application", "placement"]);
-const staffRoles = new Set<StaffRole>(["teacher", "registrar", "headofdepartment", "branchadmin", "superadmin"]);
-const staffPermissionScopes = new Set<StaffPermissionScope>(["department", "branch", "admissions", "operations", "global"]);
-const staffAvailabilityStatuses = new Set<StaffAvailabilityStatus>(["available", "limited", "unavailable", "not_applicable"]);
-const knownPermissions = new Set<Permission>(Object.values(rolePermissions).flatMap((permissions) => permissions));
-const integrationStatuses = new Set<IntegrationStatus>(["not_configured", "mock_mode", "connected", "error"]);
-const integrationIds = new Set<IntegrationConfig["id"]>(["supabase", "moodle", "ems", "email", "whatsapp", "meeting", "payment", "jotform"]);
+const studentCreateStatuses = new Set<StudentStatus>([
+  "ready_to_enroll",
+  "enrolled",
+  "active",
+  "paused",
+]);
+const studentEntrySources = new Set<StudentEntrySource>([
+  "direct",
+  "lead",
+  "application",
+  "placement",
+]);
+const staffRoles = new Set<StaffRole>([
+  "teacher",
+  "registrar",
+  "headofdepartment",
+  "branchadmin",
+  "superadmin",
+]);
+const staffPermissionScopes = new Set<StaffPermissionScope>([
+  "department",
+  "branch",
+  "admissions",
+  "operations",
+  "global",
+]);
+const staffAvailabilityStatuses = new Set<StaffAvailabilityStatus>([
+  "available",
+  "limited",
+  "unavailable",
+  "not_applicable",
+]);
+const knownPermissions = new Set<Permission>(
+  Object.values(rolePermissions).flatMap(permissions => permissions)
+);
+const integrationStatuses = new Set<IntegrationStatus>([
+  "not_configured",
+  "mock_mode",
+  "connected",
+  "error",
+]);
+const integrationIds = new Set<IntegrationConfig["id"]>([
+  "supabase",
+  "moodle",
+  "ems",
+  "email",
+  "whatsapp",
+  "meeting",
+  "payment",
+  "jotform",
+]);
 
 function stringValue(input: Record<string, unknown>, key: string) {
   return typeof input[key] === "string" ? input[key] : "";
@@ -656,45 +1707,68 @@ function optionalStringValue(input: Record<string, unknown>, key: string) {
 }
 
 function numberValue(input: Record<string, unknown>, key: string) {
-  return typeof input[key] === "number" && Number.isFinite(input[key]) ? input[key] : Number(input[key]);
+  return typeof input[key] === "number" && Number.isFinite(input[key])
+    ? input[key]
+    : Number(input[key]);
 }
 
 function stringArrayValue(value: unknown) {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }
 
 function stringRecordValue(value: unknown) {
   if (!value || typeof value !== "object") return {};
   return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    Object.entries(value as Record<string, unknown>).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string"
+    )
   );
 }
 
-function notificationPreferencesValue(value: unknown): Partial<UserNotificationPreferences> | undefined {
+function notificationPreferencesValue(
+  value: unknown
+): Partial<UserNotificationPreferences> | undefined {
   if (!value || typeof value !== "object") return undefined;
   const preferences = Object.fromEntries(
     Object.entries(value as Record<string, unknown>).filter(
       (entry): entry is [keyof UserNotificationPreferences, boolean] =>
-        ["messages", "schedule", "academic", "billing", "system"].includes(entry[0]) && typeof entry[1] === "boolean",
-    ),
+        ["messages", "schedule", "academic", "billing", "system"].includes(
+          entry[0]
+        ) && typeof entry[1] === "boolean"
+    )
   );
   return Object.keys(preferences).length ? preferences : undefined;
 }
 
-function messageAttachmentsValue(value: unknown): MessageAttachment[] | undefined {
+function messageAttachmentsValue(
+  value: unknown
+): MessageAttachment[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const attachments = value
     .slice(0, 6)
-    .map((item) => {
+    .map(item => {
       if (!item || typeof item !== "object") return null;
       const record = item as Record<string, unknown>;
       const name = typeof record.name === "string" ? record.name.trim() : "";
       const type = typeof record.type === "string" ? record.type.trim() : "";
-      const size = typeof record.size === "number" && Number.isFinite(record.size) ? record.size : Number(record.size);
+      const size =
+        typeof record.size === "number" && Number.isFinite(record.size)
+          ? record.size
+          : Number(record.size);
       const kind: MessageAttachment["kind"] | "" =
-        record.kind === "image" ? "image" : record.kind === "document" ? "document" : "";
-      const previewLabel = typeof record.previewLabel === "string" ? record.previewLabel.trim() : name;
-      if (!name || !type || !kind || !Number.isFinite(size) || size < 0) return null;
+        record.kind === "image"
+          ? "image"
+          : record.kind === "document"
+            ? "document"
+            : "";
+      const previewLabel =
+        typeof record.previewLabel === "string"
+          ? record.previewLabel.trim()
+          : name;
+      if (!name || !type || !kind || !Number.isFinite(size) || size < 0)
+        return null;
       return {
         name: name.slice(0, 120),
         type: type.slice(0, 80),
@@ -707,24 +1781,45 @@ function messageAttachmentsValue(value: unknown): MessageAttachment[] | undefine
   return attachments.length ? attachments : undefined;
 }
 
-function pendingMediaValue(value: unknown): PendingMediaAttachment[] | undefined {
+function pendingMediaValue(
+  value: unknown
+): PendingMediaAttachment[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const attachments = value
     .slice(0, 3)
-    .map((item) => {
+    .map(item => {
       if (!item || typeof item !== "object") return null;
       const record = item as Record<string, unknown>;
       const id = typeof record.id === "string" ? record.id.trim() : "";
       const name = typeof record.name === "string" ? record.name.trim() : "";
       const type = typeof record.type === "string" ? record.type.trim() : "";
-      const size = typeof record.size === "number" && Number.isFinite(record.size) ? record.size : Number(record.size);
+      const size =
+        typeof record.size === "number" && Number.isFinite(record.size)
+          ? record.size
+          : Number(record.size);
       const kind =
-        record.kind === "document" || record.kind === "image" || record.kind === "audio" || record.kind === "video"
+        record.kind === "document" ||
+        record.kind === "image" ||
+        record.kind === "audio" ||
+        record.kind === "video"
           ? record.kind
           : "";
-      const previewLabel = typeof record.previewLabel === "string" ? record.previewLabel.trim() : name;
-      const createdAt = typeof record.createdAt === "string" ? record.createdAt : now();
-      if (!id || !name || !type || !kind || !previewLabel || !Number.isFinite(size) || size <= 0 || size > 25 * 1024 * 1024) {
+      const previewLabel =
+        typeof record.previewLabel === "string"
+          ? record.previewLabel.trim()
+          : name;
+      const createdAt =
+        typeof record.createdAt === "string" ? record.createdAt : now();
+      if (
+        !id ||
+        !name ||
+        !type ||
+        !kind ||
+        !previewLabel ||
+        !Number.isFinite(size) ||
+        size <= 0 ||
+        size > 25 * 1024 * 1024
+      ) {
         return null;
       }
       return {
@@ -747,9 +1842,9 @@ function recipientUserIdsValue(value: unknown) {
   const userIds = Array.from(
     new Set(
       value
-        .map((item) => (typeof item === "string" ? item.trim() : ""))
-        .filter(Boolean),
-    ),
+        .map(item => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean)
+    )
   ).slice(0, 500);
   return userIds.length ? userIds : undefined;
 }
@@ -758,45 +1853,74 @@ function attendanceRecordValue(value: unknown) {
   if (!value || typeof value !== "object") return null;
   const entries = Object.entries(value as Record<string, unknown>);
   if (!entries.length) return null;
-  if (!entries.every((entry): entry is [string, AttendanceStatus] => typeof entry[1] === "string" && attendanceStatuses.has(entry[1] as AttendanceStatus))) {
+  if (
+    !entries.every(
+      (entry): entry is [string, AttendanceStatus] =>
+        typeof entry[1] === "string" &&
+        attendanceStatuses.has(entry[1] as AttendanceStatus)
+    )
+  ) {
     return null;
   }
   return Object.fromEntries(entries);
 }
 
-export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAction | null {
+export function parsePlatformWorkflowAction(
+  value: unknown
+): PlatformWorkflowAction | null {
   if (!value || typeof value !== "object") return null;
   const input = value as Record<string, unknown>;
   const type = input.type;
 
-  if ((type === "lesson.start" || type === "lesson.complete") && typeof input.lessonId === "string") {
+  if (
+    (type === "lesson.start" || type === "lesson.complete") &&
+    typeof input.lessonId === "string"
+  ) {
+    const enrollmentId =
+      typeof input.enrollmentId === "string"
+        ? input.enrollmentId.trim()
+        : undefined;
+    if (input.enrollmentId !== undefined && !enrollmentId) return null;
     return {
       type,
       lessonId: input.lessonId,
-      studentId: typeof input.studentId === "string" ? input.studentId : undefined,
+      enrollmentId,
+      studentId:
+        typeof input.studentId === "string" ? input.studentId : undefined,
       actorId: typeof input.actorId === "string" ? input.actorId : undefined,
     };
   }
 
-  if (type === "assignment.submit" && typeof input.assignmentId === "string" && typeof input.response === "string") {
+  if (
+    type === "assignment.submit" &&
+    typeof input.assignmentId === "string" &&
+    typeof input.response === "string"
+  ) {
     return {
       type,
       assignmentId: input.assignmentId,
       response: input.response,
       pendingMedia: pendingMediaValue(input.pendingMedia),
-      studentId: typeof input.studentId === "string" ? input.studentId : undefined,
+      studentId:
+        typeof input.studentId === "string" ? input.studentId : undefined,
       actorId: typeof input.actorId === "string" ? input.actorId : undefined,
     };
   }
 
-  if (type === "quiz.submit" && typeof input.quizId === "string" && input.answers && typeof input.answers === "object") {
+  if (
+    type === "quiz.submit" &&
+    typeof input.quizId === "string" &&
+    input.answers &&
+    typeof input.answers === "object"
+  ) {
     const answers = stringRecordValue(input.answers);
     return {
       type,
       quizId: input.quizId,
       answers,
       pendingMedia: pendingMediaValue(input.pendingMedia),
-      studentId: typeof input.studentId === "string" ? input.studentId : undefined,
+      studentId:
+        typeof input.studentId === "string" ? input.studentId : undefined,
       actorId: typeof input.actorId === "string" ? input.actorId : undefined,
     };
   }
@@ -823,7 +1947,9 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       subject,
       notes: optionalStringValue(input, "notes"),
       country: optionalStringValue(input, "country"),
-      source: leadSources.has(input.source as Lead["source"]) ? (input.source as Lead["source"]) : undefined,
+      source: leadSources.has(input.source as Lead["source"])
+        ? (input.source as Lead["source"])
+        : undefined,
     };
   }
 
@@ -834,7 +1960,15 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const branchId = stringValue(input, "branchId");
     const courseInterest = stringValue(input, "courseInterest");
     const schedulePreference = stringValue(input, "schedulePreference");
-    if (!fullName || !email || !phone || !branchId || !courseInterest || !schedulePreference) return null;
+    if (
+      !fullName ||
+      !email ||
+      !phone ||
+      !branchId ||
+      !courseInterest ||
+      !schedulePreference
+    )
+      return null;
     return {
       type,
       fullName,
@@ -845,7 +1979,9 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       schedulePreference,
       notes: optionalStringValue(input, "notes"),
       country: optionalStringValue(input, "country"),
-      source: leadSources.has(input.source as Lead["source"]) ? (input.source as Lead["source"]) : undefined,
+      source: leadSources.has(input.source as Lead["source"])
+        ? (input.source as Lead["source"])
+        : undefined,
     };
   }
 
@@ -856,7 +1992,15 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const subject = stringValue(input, "subject");
     const preferredDate = stringValue(input, "preferredDate");
     const currentLevel = stringValue(input, "currentLevel");
-    if (!fullName || !email || !phone || !subject || !preferredDate || !currentLevel) return null;
+    if (
+      !fullName ||
+      !email ||
+      !phone ||
+      !subject ||
+      !preferredDate ||
+      !currentLevel
+    )
+      return null;
     return {
       type,
       fullName,
@@ -866,6 +2010,7 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       preferredDate,
       currentLevel,
       branchId: optionalStringValue(input, "branchId"),
+      leadId: optionalStringValue(input, "leadId"),
     };
   }
 
@@ -885,7 +2030,10 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     return {
       type,
       courseId,
-      status: status as Extract<PlatformWorkflowAction, { type: "course.status.update" }>["status"],
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "course.status.update" }
+      >["status"],
     };
   }
 
@@ -896,7 +2044,7 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
   }
 
   if (type === "record.save") {
-    const module = stringValue(input, "module");
+    const module = stringValue(input, "module").trim();
     const payload = stringRecordValue(input.payload);
     if (!module) return null;
     return { type, module, payload };
@@ -909,7 +2057,8 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const role = stringValue(input, "role");
     const status = optionalStringValue(input, "status");
     const validAccountStatuses = new Set(["active", "pending", "paused"]);
-    if (!name || !email || !phone || !role || !roleOrder.includes(role as Role)) return null;
+    if (!name || !email || !phone || !role || !roleOrder.includes(role as Role))
+      return null;
     if (status && !validAccountStatuses.has(status)) return null;
     return {
       type,
@@ -919,7 +2068,10 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       role: role as Role,
       branchId: optionalStringValue(input, "branchId"),
       departmentId: optionalStringValue(input, "departmentId"),
-      status: status as Extract<PlatformWorkflowAction, { type: "user.create" }>["status"],
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "user.create" }
+      >["status"],
       preferredLanguage: optionalStringValue(input, "preferredLanguage"),
       courseRunId: optionalStringValue(input, "courseRunId"),
       classGroupId: optionalStringValue(input, "classGroupId"),
@@ -943,8 +2095,18 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const availabilityStatus = optionalStringValue(input, "availabilityStatus");
     if (!name || !email || !staffRoles.has(role as StaffRole)) return null;
     if (status && !accountStatuses.has(status)) return null;
-    if (permissionScope && !staffPermissionScopes.has(permissionScope as StaffPermissionScope)) return null;
-    if (availabilityStatus && !staffAvailabilityStatuses.has(availabilityStatus as StaffAvailabilityStatus)) return null;
+    if (
+      permissionScope &&
+      !staffPermissionScopes.has(permissionScope as StaffPermissionScope)
+    )
+      return null;
+    if (
+      availabilityStatus &&
+      !staffAvailabilityStatuses.has(
+        availabilityStatus as StaffAvailabilityStatus
+      )
+    )
+      return null;
     return {
       type,
       name,
@@ -953,11 +2115,20 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       role: role as StaffRole,
       branchId: optionalStringValue(input, "branchId"),
       departmentId: optionalStringValue(input, "departmentId"),
-      status: status as Extract<PlatformWorkflowAction, { type: "staff.user.create" }>["status"],
-      permissionScope: permissionScope as Extract<PlatformWorkflowAction, { type: "staff.user.create" }>["permissionScope"],
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "staff.user.create" }
+      >["status"],
+      permissionScope: permissionScope as Extract<
+        PlatformWorkflowAction,
+        { type: "staff.user.create" }
+      >["permissionScope"],
       subjects: stringArrayValue(input.subjects),
       teachingLevels: stringArrayValue(input.teachingLevels),
-      availabilityStatus: availabilityStatus as Extract<PlatformWorkflowAction, { type: "staff.user.create" }>["availabilityStatus"],
+      availabilityStatus: availabilityStatus as Extract<
+        PlatformWorkflowAction,
+        { type: "staff.user.create" }
+      >["availabilityStatus"],
       operationalScope: stringArrayValue(input.operationalScope),
       notes: optionalStringValue(input, "notes"),
     };
@@ -975,11 +2146,23 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const classGroupId = stringValue(input, "classGroupId");
     const status = optionalStringValue(input, "status");
     const source = optionalStringValue(input, "source");
-    if (!fullName || !email || !phone || !branchId || !preferredLanguage || !courseInterest || !ageGroup || !courseRunId || !classGroupId) {
+    if (
+      !fullName ||
+      !email ||
+      !phone ||
+      !branchId ||
+      !preferredLanguage ||
+      !courseInterest ||
+      !ageGroup ||
+      !courseRunId ||
+      !classGroupId
+    ) {
       return null;
     }
-    if (status && !studentCreateStatuses.has(status as StudentStatus)) return null;
-    if (source && !studentEntrySources.has(source as StudentEntrySource)) return null;
+    if (status && !studentCreateStatuses.has(status as StudentStatus))
+      return null;
+    if (source && !studentEntrySources.has(source as StudentEntrySource))
+      return null;
     return {
       type,
       fullName,
@@ -993,11 +2176,17 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       guardianPhone: optionalStringValue(input, "guardianPhone"),
       currentLevel: optionalStringValue(input, "currentLevel"),
       placementResult: optionalStringValue(input, "placementResult"),
-      status: status as Extract<PlatformWorkflowAction, { type: "student.create" }>["status"],
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "student.create" }
+      >["status"],
       notes: optionalStringValue(input, "notes"),
       courseRunId,
       classGroupId,
-      source: source as Extract<PlatformWorkflowAction, { type: "student.create" }>["source"],
+      source: source as Extract<
+        PlatformWorkflowAction,
+        { type: "student.create" }
+      >["source"],
       leadId: optionalStringValue(input, "leadId"),
       applicationId: optionalStringValue(input, "applicationId"),
       placementTestId: optionalStringValue(input, "placementTestId"),
@@ -1007,31 +2196,53 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
   if (type === "student.status.update") {
     const studentId = stringValue(input, "studentId");
     const status = stringValue(input, "status");
-    if (!studentId || !studentStatuses.has(status as StudentStatus)) return null;
+    if (!studentId || !studentStatuses.has(status as StudentStatus))
+      return null;
     return {
       type,
       studentId,
-      status: status as Extract<PlatformWorkflowAction, { type: "student.status.update" }>["status"],
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "student.status.update" }
+      >["status"],
       notes: optionalStringValue(input, "notes"),
     };
   }
 
   if (type === "profile.update") {
     const availabilityStatus = optionalStringValue(input, "availabilityStatus");
-    if (availabilityStatus && !staffAvailabilityStatuses.has(availabilityStatus as StaffAvailabilityStatus)) return null;
+    if (
+      availabilityStatus &&
+      !staffAvailabilityStatuses.has(
+        availabilityStatus as StaffAvailabilityStatus
+      )
+    )
+      return null;
     return {
       type,
       userId: optionalStringValue(input, "userId"),
       name: typeof input.name === "string" ? input.name : undefined,
       phone: typeof input.phone === "string" ? input.phone : undefined,
-      preferredLanguage: typeof input.preferredLanguage === "string" ? input.preferredLanguage : undefined,
+      preferredLanguage:
+        typeof input.preferredLanguage === "string"
+          ? input.preferredLanguage
+          : undefined,
       timezone: typeof input.timezone === "string" ? input.timezone : undefined,
-      notificationPreferences: notificationPreferencesValue(input.notificationPreferences),
+      notificationPreferences: notificationPreferencesValue(
+        input.notificationPreferences
+      ),
       country: typeof input.country === "string" ? input.country : undefined,
-      guardianName: typeof input.guardianName === "string" ? input.guardianName : undefined,
-      guardianPhone: typeof input.guardianPhone === "string" ? input.guardianPhone : undefined,
+      guardianName:
+        typeof input.guardianName === "string" ? input.guardianName : undefined,
+      guardianPhone:
+        typeof input.guardianPhone === "string"
+          ? input.guardianPhone
+          : undefined,
       title: typeof input.title === "string" ? input.title : undefined,
-      availabilityStatus: availabilityStatus as Extract<PlatformWorkflowAction, { type: "profile.update" }>["availabilityStatus"],
+      availabilityStatus: availabilityStatus as Extract<
+        PlatformWorkflowAction,
+        { type: "profile.update" }
+      >["availabilityStatus"],
     };
   }
 
@@ -1039,7 +2250,9 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const userId = stringValue(input, "userId");
     const activeRole = optionalStringValue(input, "activeRole");
     const status = optionalStringValue(input, "status");
-    const roles = stringArrayValue(input.roles).filter((role): role is Role => roleOrder.includes(role as Role));
+    const roles = stringArrayValue(input.roles).filter((role): role is Role =>
+      roleOrder.includes(role as Role)
+    );
     const validAccountStatuses = new Set(["active", "pending", "paused"]);
     if (!userId) return null;
     if (activeRole && !roleOrder.includes(activeRole as Role)) return null;
@@ -1047,11 +2260,17 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     return {
       type,
       userId,
-      activeRole: activeRole as Extract<PlatformWorkflowAction, { type: "user.update" }>["activeRole"],
+      activeRole: activeRole as Extract<
+        PlatformWorkflowAction,
+        { type: "user.update" }
+      >["activeRole"],
       roles: roles.length ? roles : undefined,
       branchId: optionalStringValue(input, "branchId"),
       departmentId: optionalStringValue(input, "departmentId"),
-      status: status as Extract<PlatformWorkflowAction, { type: "user.update" }>["status"],
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "user.update" }
+      >["status"],
     };
   }
 
@@ -1059,7 +2278,12 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const role = stringValue(input, "role");
     const permission = stringValue(input, "permission");
     const granted = input.granted;
-    if (!roleOrder.includes(role as Role) || !knownPermissions.has(permission as Permission) || typeof granted !== "boolean") return null;
+    if (
+      !roleOrder.includes(role as Role) ||
+      !knownPermissions.has(permission as Permission) ||
+      typeof granted !== "boolean"
+    )
+      return null;
     return {
       type,
       role: role as Role,
@@ -1075,7 +2299,10 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     return {
       type,
       branchId,
-      status: status as Extract<PlatformWorkflowAction, { type: "branch.update" }>["status"],
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "branch.update" }
+      >["status"],
     };
   }
 
@@ -1086,7 +2313,10 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     return {
       type,
       roomId,
-      status: status as Extract<PlatformWorkflowAction, { type: "room.status.update" }>["status"],
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "room.status.update" }
+      >["status"],
     };
   }
 
@@ -1104,10 +2334,93 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     };
   }
 
+  if (type === "class.create") {
+    const courseRunId = stringValue(input, "courseRunId");
+    const name = stringValue(input, "name");
+    const capacity = numberValue(input, "capacity");
+    const schedule = stringValue(input, "schedule");
+    const roomId = stringValue(input, "roomId");
+    if (
+      !courseRunId ||
+      !name ||
+      !Number.isFinite(capacity) ||
+      !schedule ||
+      !roomId
+    ) {
+      return null;
+    }
+    return { type, courseRunId, name, capacity, schedule, roomId };
+  }
+
+  if (type === "course-run.create") {
+    const courseId = stringValue(input, "courseId");
+    const branchId = stringValue(input, "branchId");
+    const teacherId = stringValue(input, "teacherId");
+    const term = stringValue(input, "term");
+    const startsOn = stringValue(input, "startsOn");
+    const endsOn = stringValue(input, "endsOn");
+    const status = optionalStringValue(input, "status");
+    if (!courseId || !branchId || !teacherId || !term || !startsOn || !endsOn)
+      return null;
+    if (status && !new Set(["pending", "active"]).has(status)) return null;
+    return {
+      type,
+      courseId,
+      branchId,
+      teacherId,
+      term,
+      startsOn,
+      endsOn,
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "course-run.create" }
+      >["status"],
+    };
+  }
+
+  if (type === "class.update") {
+    const classGroupId = stringValue(input, "classGroupId");
+    const name = stringValue(input, "name");
+    const capacity = numberValue(input, "capacity");
+    const schedule = stringValue(input, "schedule");
+    const roomId = stringValue(input, "roomId");
+    if (
+      !classGroupId ||
+      !name ||
+      !Number.isFinite(capacity) ||
+      !schedule ||
+      !roomId
+    )
+      return null;
+    return { type, classGroupId, name, capacity, schedule, roomId };
+  }
+
+  if (type === "class.status.update") {
+    const classGroupId = stringValue(input, "classGroupId");
+    const status = stringValue(input, "status");
+    if (
+      !classGroupId ||
+      !new Set(["active", "paused", "completed", "cancelled"]).has(status)
+    )
+      return null;
+    return {
+      type,
+      classGroupId,
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "class.status.update" }
+      >["status"],
+    };
+  }
+
   if (type === "integration.status.update") {
     const integrationId = stringValue(input, "integrationId");
     const status = stringValue(input, "status");
-    if (!integrationIds.has(integrationId as IntegrationConfig["id"]) || !integrationStatuses.has(status as IntegrationStatus)) return null;
+    if (
+      !integrationIds.has(integrationId as IntegrationConfig["id"]) ||
+      !integrationStatuses.has(status as IntegrationStatus)
+    )
+      return null;
     return {
       type,
       integrationId: integrationId as IntegrationConfig["id"],
@@ -1117,7 +2430,8 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
 
   if (type === "integration.local_check") {
     const integrationId = stringValue(input, "integrationId");
-    if (!integrationIds.has(integrationId as IntegrationConfig["id"])) return null;
+    if (!integrationIds.has(integrationId as IntegrationConfig["id"]))
+      return null;
     return {
       type,
       integrationId: integrationId as IntegrationConfig["id"],
@@ -1138,7 +2452,13 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const defaultLanguage = stringValue(input, "defaultLanguage").trim();
     const academicTerm = stringValue(input, "academicTerm").trim();
     const retentionDays = numberValue(input, "retentionDays");
-    if (!organization || !defaultLanguage || !academicTerm || !Number.isFinite(retentionDays)) return null;
+    if (
+      !organization ||
+      !defaultLanguage ||
+      !academicTerm ||
+      !Number.isFinite(retentionDays)
+    )
+      return null;
     return {
       type,
       organization,
@@ -1154,13 +2474,32 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const label = stringValue(input, "label").trim();
     const language = stringValue(input, "language").trim();
     const timezone = stringValue(input, "timezone").trim();
-    const reviewCadenceDays = input.reviewCadenceDays === undefined ? undefined : numberValue(input, "reviewCadenceDays");
-    const paymentReminderDays = input.paymentReminderDays === undefined ? undefined : numberValue(input, "paymentReminderDays");
-    const attendanceCutoffMinutes = input.attendanceCutoffMinutes === undefined ? undefined : numberValue(input, "attendanceCutoffMinutes");
-    if (!["registrar", "headofdepartment", "branchadmin"].includes(role) || !scopeId || !label || !language || !timezone) return null;
+    const reviewCadenceDays =
+      input.reviewCadenceDays === undefined
+        ? undefined
+        : numberValue(input, "reviewCadenceDays");
+    const paymentReminderDays =
+      input.paymentReminderDays === undefined
+        ? undefined
+        : numberValue(input, "paymentReminderDays");
+    const attendanceCutoffMinutes =
+      input.attendanceCutoffMinutes === undefined
+        ? undefined
+        : numberValue(input, "attendanceCutoffMinutes");
+    if (
+      !["registrar", "headofdepartment", "branchadmin"].includes(role) ||
+      !scopeId ||
+      !label ||
+      !language ||
+      !timezone
+    )
+      return null;
     return {
       type,
-      role: role as Extract<PlatformWorkflowAction, { type: "portal.settings.save" }>["role"],
+      role: role as Extract<
+        PlatformWorkflowAction,
+        { type: "portal.settings.save" }
+      >["role"],
       scopeId,
       label,
       language,
@@ -1177,7 +2516,13 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const title = stringValue(input, "title");
     const dueAt = stringValue(input, "dueAt");
     const submissionType = stringValue(input, "submissionType");
-    if (!courseRunId || !title || !dueAt || !["text", "file", "audio", "video"].includes(submissionType)) return null;
+    if (
+      !courseRunId ||
+      !title ||
+      !dueAt ||
+      !["text", "file", "audio", "video"].includes(submissionType)
+    )
+      return null;
     return {
       type,
       courseRunId,
@@ -1188,13 +2533,60 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     };
   }
 
+  if (type === "assignment.update") {
+    const assignmentId = stringValue(input, "assignmentId");
+    const title = stringValue(input, "title");
+    const dueAt = stringValue(input, "dueAt");
+    const submissionType = stringValue(input, "submissionType");
+    if (
+      !assignmentId ||
+      !title ||
+      !dueAt ||
+      !["text", "file", "audio", "video"].includes(submissionType)
+    ) {
+      return null;
+    }
+    return {
+      type,
+      assignmentId,
+      title,
+      dueAt,
+      submissionType: submissionType as "text" | "file" | "audio" | "video",
+      rubric: stringArrayValue(input.rubric),
+    };
+  }
+
+  if (type === "assignment.status.update") {
+    const assignmentId = stringValue(input, "assignmentId");
+    const status = stringValue(input, "status");
+    if (
+      !assignmentId ||
+      !["active", "completed", "cancelled"].includes(status)
+    ) {
+      return null;
+    }
+    return {
+      type,
+      assignmentId,
+      status: status as "active" | "completed" | "cancelled",
+      reason: optionalStringValue(input, "reason"),
+    };
+  }
+
   if (type === "quiz.create") {
     const courseRunId = stringValue(input, "courseRunId");
     const title = stringValue(input, "title");
     const dueAt = stringValue(input, "dueAt");
     const durationMinutes = numberValue(input, "durationMinutes");
     const attemptsAllowed = numberValue(input, "attemptsAllowed");
-    if (!courseRunId || !title || !dueAt || !Number.isFinite(durationMinutes) || !Number.isFinite(attemptsAllowed)) return null;
+    if (
+      !courseRunId ||
+      !title ||
+      !dueAt ||
+      !Number.isFinite(durationMinutes) ||
+      !Number.isFinite(attemptsAllowed)
+    )
+      return null;
     return {
       type,
       courseRunId,
@@ -1204,6 +2596,48 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       questionTypes: stringArrayValue(input.questionTypes),
       questionIds: stringArrayValue(input.questionIds),
       attemptsAllowed,
+    };
+  }
+
+  if (type === "quiz.update") {
+    const quizId = stringValue(input, "quizId");
+    const title = stringValue(input, "title");
+    const dueAt = stringValue(input, "dueAt");
+    const durationMinutes = numberValue(input, "durationMinutes");
+    const attemptsAllowed = numberValue(input, "attemptsAllowed");
+    if (
+      !quizId ||
+      !title ||
+      !dueAt ||
+      !Number.isFinite(durationMinutes) ||
+      !Number.isFinite(attemptsAllowed)
+    ) {
+      return null;
+    }
+    return {
+      type,
+      quizId,
+      title,
+      dueAt,
+      durationMinutes,
+      attemptsAllowed,
+    };
+  }
+
+  if (type === "quiz.status.update") {
+    const quizId = stringValue(input, "quizId");
+    const status = stringValue(input, "status");
+    if (
+      !quizId ||
+      !["active", "completed", "cancelled"].includes(status)
+    ) {
+      return null;
+    }
+    return {
+      type,
+      quizId,
+      status: status as "active" | "completed" | "cancelled",
+      reason: optionalStringValue(input, "reason"),
     };
   }
 
@@ -1224,8 +2658,14 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       type,
       courseRunId,
       prompt,
-      questionType: questionType as Extract<PlatformWorkflowAction, { type: "question.create" }>["questionType"],
-      difficulty: difficulty as Extract<PlatformWorkflowAction, { type: "question.create" }>["difficulty"],
+      questionType: questionType as Extract<
+        PlatformWorkflowAction,
+        { type: "question.create" }
+      >["questionType"],
+      difficulty: difficulty as Extract<
+        PlatformWorkflowAction,
+        { type: "question.create" }
+      >["difficulty"],
       tags: stringArrayValue(input.tags),
       choices: stringArrayValue(input.choices),
       answerKey: optionalStringValue(input, "answerKey"),
@@ -1246,7 +2686,38 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const sessionId = stringValue(input, "sessionId");
     const statuses = attendanceRecordValue(input.statuses);
     if (!classGroupId || !sessionId || !statuses) return null;
-    return { type, classGroupId, sessionId, statuses, notes: stringRecordValue(input.notes) };
+    return {
+      type,
+      classGroupId,
+      sessionId,
+      statuses,
+      notes: stringRecordValue(input.notes),
+    };
+  }
+
+  if (type === "attendance.exception.submit") {
+    const attendanceRecordId = stringValue(input, "attendanceRecordId");
+    const reason = stringValue(input, "reason").trim();
+    if (!attendanceRecordId || reason.length < 10) return null;
+    return { type, attendanceRecordId, reason };
+  }
+
+  if (type === "attendance.exception.review") {
+    const requestId = stringValue(input, "requestId");
+    const decision = stringValue(input, "decision");
+    const reviewNote = stringValue(input, "reviewNote").trim();
+    if (
+      !requestId ||
+      (decision !== "approved" && decision !== "rejected") ||
+      reviewNote.length < 5
+    )
+      return null;
+    return {
+      type,
+      requestId,
+      decision,
+      reviewNote,
+    };
   }
 
   if (type === "calendar.create") {
@@ -1255,7 +2726,13 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const startsAt = stringValue(input, "startsAt");
     const endsAt = stringValue(input, "endsAt");
     const ownerId = optionalStringValue(input, "ownerId");
-    if (!eventTypes.has(eventType as CalendarEventType) || !title || !startsAt || !endsAt) return null;
+    if (
+      !eventTypes.has(eventType as CalendarEventType) ||
+      !title ||
+      !startsAt ||
+      !endsAt
+    )
+      return null;
     return {
       type,
       eventType: eventType as CalendarEventType,
@@ -1267,6 +2744,29 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       roomId: optionalStringValue(input, "roomId"),
       classGroupId: optionalStringValue(input, "classGroupId"),
     };
+  }
+
+  if (type === "class.session.reschedule") {
+    const sessionId = stringValue(input, "sessionId");
+    const startsAt = stringValue(input, "startsAt");
+    const endsAt = stringValue(input, "endsAt");
+    const reason = stringValue(input, "reason").trim();
+    if (!sessionId || !startsAt || !endsAt || reason.length < 5) return null;
+    return {
+      type,
+      sessionId,
+      startsAt,
+      endsAt,
+      roomId: optionalStringValue(input, "roomId"),
+      reason,
+    };
+  }
+
+  if (type === "class.session.cancel") {
+    const sessionId = stringValue(input, "sessionId");
+    const reason = stringValue(input, "reason").trim();
+    if (!sessionId || reason.length < 5) return null;
+    return { type, sessionId, reason };
   }
 
   if (type === "message.send") {
@@ -1281,7 +2781,9 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       subject,
       body,
       attachments: messageAttachmentsValue(input.attachments),
-      channel: communicationChannels.has(input.channel as CommunicationLog["channel"])
+      channel: communicationChannels.has(
+        input.channel as CommunicationLog["channel"]
+      )
         ? (input.channel as CommunicationLog["channel"])
         : undefined,
     };
@@ -1309,7 +2811,12 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       type,
       invoiceId,
       amount: Number.isFinite(amount) ? amount : undefined,
-      method: allowedMethods.has(method) ? method as Extract<PlatformWorkflowAction, { type: "payment.record" }>["method"] : undefined,
+      method: allowedMethods.has(method)
+        ? (method as Extract<
+            PlatformWorkflowAction,
+            { type: "payment.record" }
+          >["method"])
+        : undefined,
       reference,
     };
   }
@@ -1319,13 +2826,23 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const recommendedLevel = stringValue(input, "recommendedLevel");
     const score = numberValue(input, "score");
     const notes = stringValue(input, "notes");
-    if (!bookingId || !recommendedLevel || !Number.isFinite(score) || !notes) return null;
+    if (
+      !bookingId ||
+      !recommendedLevel ||
+      !Number.isFinite(score) ||
+      score < 0 ||
+      score > 100 ||
+      !notes
+    )
+      return null;
     return { type, bookingId, recommendedLevel, score, notes };
   }
 
   if (type === "lead.convert") {
     const leadId = stringValue(input, "leadId");
-    return leadId ? { type, leadId, branchId: optionalStringValue(input, "branchId") } : null;
+    return leadId
+      ? { type, leadId, branchId: optionalStringValue(input, "branchId") }
+      : null;
   }
 
   if (type === "application.convert") {
@@ -1345,6 +2862,33 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     };
   }
 
+  if (type === "enrollment.transfer") {
+    const enrollmentId = stringValue(input, "enrollmentId");
+    const classGroupId = stringValue(input, "classGroupId");
+    const reason = stringValue(input, "reason");
+    return enrollmentId && classGroupId && reason
+      ? { type, enrollmentId, classGroupId, reason }
+      : null;
+  }
+
+  if (type === "enrollment.status.update") {
+    const enrollmentId = stringValue(input, "enrollmentId");
+    const status = stringValue(input, "status");
+    const reason = optionalStringValue(input, "reason");
+    const statuses = new Set(["active", "paused", "completed", "cancelled"]);
+    if (!enrollmentId || !statuses.has(status)) return null;
+    if ((status === "paused" || status === "cancelled") && !reason) return null;
+    return {
+      type,
+      enrollmentId,
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "enrollment.status.update" }
+      >["status"],
+      reason,
+    };
+  }
+
   if (type === "teacher.assign") {
     const userId = stringValue(input, "userId");
     const courseRunId = stringValue(input, "courseRunId");
@@ -1356,9 +2900,13 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
       type,
       userId,
       courseRunId,
-      status: status as Extract<PlatformWorkflowAction, { type: "teacher.assign" }>["status"],
+      status: status as Extract<
+        PlatformWorkflowAction,
+        { type: "teacher.assign" }
+      >["status"],
       departmentId: optionalStringValue(input, "departmentId"),
       specialties: stringArrayValue(input.specialties),
+      teachingLevels: stringArrayValue(input.teachingLevels),
       availability: stringArrayValue(input.availability),
     };
   }
@@ -1368,7 +2916,12 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const memorizedPercent = numberValue(input, "memorizedPercent");
     const tajweedScore = numberValue(input, "tajweedScore");
     const notes = stringValue(input, "notes");
-    if (!recordId || !Number.isFinite(memorizedPercent) || !Number.isFinite(tajweedScore)) return null;
+    if (
+      !recordId ||
+      !Number.isFinite(memorizedPercent) ||
+      !Number.isFinite(tajweedScore)
+    )
+      return null;
     return { type, recordId, memorizedPercent, tajweedScore, notes };
   }
 
@@ -1382,7 +2935,15 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const studentId = stringValue(input, "studentId");
     const teacherId = stringValue(input, "teacherId");
     const title = stringValue(input, "title");
-    return studentId && teacherId && title ? { type, studentId, teacherId, title, pendingMedia: pendingMediaValue(input.pendingMedia) } : null;
+    return studentId && teacherId && title
+      ? {
+          type,
+          studentId,
+          teacherId,
+          title,
+          pendingMedia: pendingMediaValue(input.pendingMedia),
+        }
+      : null;
   }
 
   if (type === "notification.read") {
@@ -1395,12 +2956,23 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
     const label = stringValue(input, "label");
     const reportType = stringValue(input, "reportType");
     const rowCount = numberValue(input, "rowCount");
-    if (!roleOrder.includes(role as Role) || !label || !reportTypes.has(reportType)) return null;
+    if (
+      !roleOrder.includes(role as Role) ||
+      !label ||
+      !reportTypes.has(reportType)
+    )
+      return null;
     return {
       type,
-      role: role as Extract<PlatformWorkflowAction, { type: "report.preset.save" }>["role"],
+      role: role as Extract<
+        PlatformWorkflowAction,
+        { type: "report.preset.save" }
+      >["role"],
       label,
-      reportType: reportType as Extract<PlatformWorkflowAction, { type: "report.preset.save" }>["reportType"],
+      reportType: reportType as Extract<
+        PlatformWorkflowAction,
+        { type: "report.preset.save" }
+      >["reportType"],
       search: optionalStringValue(input, "search"),
       status: optionalStringValue(input, "status"),
       rowCount: Number.isFinite(rowCount) ? rowCount : undefined,
@@ -1413,13 +2985,26 @@ export function parsePlatformWorkflowAction(value: unknown): PlatformWorkflowAct
 
 export const parsePlatformLearningAction = parsePlatformWorkflowAction;
 
-export async function applyPlatformWorkflowAction(action: PlatformWorkflowAction, session: ServerSession) {
+export async function applyPlatformWorkflowAction(
+  action: PlatformWorkflowAction,
+  session: ServerSession
+) {
+  if (session.authorizationModel === "normalized") {
+    throw new Error(
+      "Normalized workflow persistence is not active for durable sessions."
+    );
+  }
   const snapshot = await getPlatformStateSnapshot();
   const nextState = normalizePlatformState(snapshot.state);
+  assertSnapshotSessionAuthority(nextState, session);
   const serverAction = applyServerActor(action, session, nextState);
   assertScopedAction(nextState, serverAction, session);
-  const result = applyWorkflowMutation(nextState, serverAction, { createId, now });
-  const persistence = await getPlatformStateRepository().writeSnapshot(nextState);
+  const result = applyWorkflowMutation(nextState, serverAction, {
+    createId,
+    now,
+  });
+  const persistence =
+    await getPlatformStateRepository().writeSnapshot(nextState);
 
   try {
     await getPlatformStateRepository().recordEvent({

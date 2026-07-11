@@ -1,16 +1,8 @@
 import { useEffect, useState } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  BookOpen,
-  CalendarDays,
-  CheckCircle2,
-  ClipboardList,
-  FileText,
-  Users,
-} from "lucide-react";
+import { ArrowLeft, BookOpen, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
+import { TeacherClassNavigation } from "@/components/platform/TeacherClassNavigation";
 import { DetailLayout } from "@/components/platform/PlatformLayouts";
 import { StatusBadge } from "@/components/platform/PlatformPrimitives";
 import { runPlatformWorkflowActionRequest } from "@/lib/backend/api";
@@ -25,7 +17,8 @@ type TeacherClassDetailPageProps = {
 function statusTone(status: EntityStatus): "green" | "amber" | "red" | "slate" {
   if (status === "active" || status === "completed") return "green";
   if (status === "pending" || status === "draft") return "amber";
-  if (status === "paused" || status === "cancelled" || status === "overdue") return "red";
+  if (status === "paused" || status === "cancelled" || status === "overdue")
+    return "red";
   return "slate";
 }
 
@@ -41,7 +34,9 @@ function formatDateTime(value?: string) {
   }).format(date);
 }
 
-export default function TeacherClassDetailPage({ classId }: TeacherClassDetailPageProps) {
+export default function TeacherClassDetailPage({
+  classId,
+}: TeacherClassDetailPageProps) {
   const [state, setState] = useState(() => platformStore.getState());
   const [reminderSaving, setReminderSaving] = useState(false);
   const activeUser = getActiveUser();
@@ -52,26 +47,49 @@ export default function TeacherClassDetailPage({ classId }: TeacherClassDetailPa
     window.addEventListener("nilelearn:platform-state-updated", refreshState);
     window.addEventListener("storage", refreshState);
     return () => {
-      window.removeEventListener("nilelearn:platform-state-updated", refreshState);
+      window.removeEventListener(
+        "nilelearn:platform-state-updated",
+        refreshState
+      );
       window.removeEventListener("storage", refreshState);
     };
   }, []);
 
   const classGroup = state.classGroups.find(item => item.id === classId);
-  const run = state.courseRuns.find(item => item.id === classGroup?.courseRunId);
+  const run = state.courseRuns.find(
+    item => item.id === classGroup?.courseRunId
+  );
   const course = state.courses.find(item => item.id === run?.courseId);
   const branch = state.branches.find(item => item.id === run?.branchId);
   const room = state.rooms.find(item => item.id === classGroup?.roomId);
-  const enrollments = state.enrollments.filter(item => item.classGroupId === classGroup?.id);
+  const enrollments = state.enrollments.filter(
+    item => item.classGroupId === classGroup?.id
+  );
   const sessions = state.classSessions
     .filter(item => item.classGroupId === classGroup?.id)
-    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
-  const upcomingSession = sessions.find(item => new Date(item.startsAt).getTime() >= Date.now());
+    .sort(
+      (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+    );
+  const upcomingSession = sessions.find(
+    item => new Date(item.startsAt).getTime() >= Date.now()
+  );
   const attendanceQueue = sessions.filter(item => !item.attendanceSaved).length;
-  const assignments = state.assignments.filter(item => item.courseRunId === run?.id);
-  const moduleIds = new Set(state.modules.filter(item => item.courseId === course?.id).map(item => item.id));
-  const lessonIds = new Set(state.lessons.filter(item => moduleIds.has(item.moduleId)).map(item => item.id));
-  const resourceCount = state.resources.filter(item => lessonIds.has(item.lessonId)).length;
+  const assignments = state.assignments.filter(
+    item => item.courseRunId === run?.id
+  );
+  const moduleIds = new Set(
+    state.modules
+      .filter(item => item.courseId === course?.id)
+      .map(item => item.id)
+  );
+  const lessonIds = new Set(
+    state.lessons
+      .filter(item => moduleIds.has(item.moduleId))
+      .map(item => item.id)
+  );
+  const resourceCount = state.resources.filter(item =>
+    lessonIds.has(item.lessonId)
+  ).length;
   const status = run?.status ?? "active";
 
   if (!classGroup) {
@@ -83,48 +101,31 @@ export default function TeacherClassDetailPage({ classId }: TeacherClassDetailPa
           title="Class not found"
           description="Return to the class list and choose an assigned class."
           actions={
-            <Link className="platform-secondary-button" href="/app/teacher/classes">
+            <Link
+              className="platform-secondary-button"
+              href="/app/teacher/classes"
+            >
               <ArrowLeft size={15} />
               All classes
             </Link>
           }
-          main={<div className="portal-simple-form-card">This class is not available for the current workspace.</div>}
+          main={
+            <div className="portal-simple-form-card">
+              This class is not available for the current workspace.
+            </div>
+          }
         />
       </PlatformShell>
     );
   }
 
   const currentClass = classGroup;
-  const firstStudentId = enrollments[0]?.studentId ?? currentClass.studentIds[0];
+  const firstStudentId =
+    enrollments[0]?.studentId ?? currentClass.studentIds[0];
   const firstStudent = state.students.find(item => item.id === firstStudentId);
-  const firstStudentUser = state.users.find(item => item.id === firstStudent?.userId);
-
-  const taskLinks = [
-    {
-      href: `/app/teacher/classes/${currentClass.id}/sessions`,
-      icon: CalendarDays,
-      title: "Sessions",
-      detail: `${sessions.length} scheduled`,
-    },
-    {
-      href: `/app/teacher/classes/${currentClass.id}/attendance`,
-      icon: CheckCircle2,
-      title: "Attendance",
-      detail: attendanceQueue ? `${attendanceQueue} to check` : "Up to date",
-    },
-    {
-      href: `/app/teacher/classes/${currentClass.id}/students`,
-      icon: Users,
-      title: "Students",
-      detail: `${enrollments.length || currentClass.studentIds.length} enrolled`,
-    },
-    {
-      href: `/app/teacher/classes/${currentClass.id}/materials`,
-      icon: FileText,
-      title: "Materials",
-      detail: `${resourceCount} resources`,
-    },
-  ];
+  const firstStudentUser = state.users.find(
+    item => item.id === firstStudent?.userId
+  );
 
   const sendClassReminder = async () => {
     if (!firstStudentUser) return;
@@ -152,79 +153,84 @@ export default function TeacherClassDetailPage({ classId }: TeacherClassDetailPa
         title={currentClass.name}
         description={`${course?.title ?? "Course"} · ${currentClass.schedule}`}
         actions={
-          <>
-            <Link className="platform-secondary-button" href="/app/teacher/classes">
-              <ArrowLeft size={15} />
-              All classes
-            </Link>
-            <Link className="platform-primary-button" href={`/app/teacher/classes/${currentClass.id}/sessions`}>
-              Open sessions
-              <ArrowRight size={15} />
-            </Link>
-            <button
-              className="platform-secondary-button teacher-class-reminder-button"
-              type="button"
-              onClick={() => void sendClassReminder()}
-              disabled={reminderSaving || !firstStudentUser}
-            >
-              {reminderSaving ? "Sending..." : "Send reminder"}
-            </button>
-          </>
+          <Link
+            className="platform-secondary-button"
+            href="/app/teacher/classes"
+          >
+            <ArrowLeft size={15} />
+            All classes
+          </Link>
+        }
+        toolbar={
+          <TeacherClassNavigation classId={currentClass.id} active="overview" />
         }
         main={
-          <div className="portal-simple-stack">
-            <section className="portal-simple-form-card teacher-class-overview">
-              <div className="teacher-class-section-heading">
-                <span>
-                  <BookOpen size={16} />
-                  Class overview
-                </span>
-                <StatusBadge tone={statusTone(status)}>{status}</StatusBadge>
-              </div>
-              <div className="teacher-class-facts">
-                <div>
-                  <span>Course</span>
-                  <strong>{course?.title ?? "Course"}</strong>
-                </div>
-                <div>
-                  <span>Branch</span>
-                  <strong>{branch?.name ?? "Branch"}</strong>
-                </div>
-                <div>
-                  <span>Room</span>
-                  <strong>{room?.name ?? "Room not set"}</strong>
-                </div>
-                <div>
-                  <span>Next session</span>
-                  <strong>{formatDateTime(upcomingSession?.startsAt)}</strong>
-                </div>
-              </div>
-            </section>
+          <section
+            className="teacher-class-overview-v3"
+            data-testid="teacher-class-overview"
+          >
+            <div className="teacher-class-overview-heading">
+              <span>
+                <BookOpen size={16} />
+                Class overview
+              </span>
+              <StatusBadge tone={statusTone(status)}>{status}</StatusBadge>
+            </div>
 
-            <section className="portal-simple-form-card teacher-class-task-card">
-              <div className="teacher-class-section-heading">
-                <span>
-                  <ClipboardList size={16} />
-                  Class workspaces
-                </span>
+            <div className="teacher-class-overview-next">
+              <div>
+                <span>Up next</span>
+                <h2>{upcomingSession?.title ?? "No upcoming session"}</h2>
+                <p>{formatDateTime(upcomingSession?.startsAt)}</p>
               </div>
-              <div className="teacher-class-task-grid">
-                {taskLinks.map(item => {
-                  const Icon = item.icon;
-                  return (
-                    <Link key={item.href} className="teacher-class-task-link" href={item.href}>
-                      <span>
-                        <Icon size={16} />
-                      </span>
-                      <strong>{item.title}</strong>
-                      <small>{item.detail}</small>
-                      <ArrowRight size={15} />
-                    </Link>
-                  );
-                })}
+              <div className="teacher-class-overview-actions">
+                <button
+                  className="platform-secondary-button"
+                  type="button"
+                  onClick={() => void sendClassReminder()}
+                  disabled={reminderSaving || !firstStudentUser}
+                >
+                  {reminderSaving ? "Sending..." : "Send reminder"}
+                </button>
+                <Link
+                  className="platform-primary-button"
+                  href={`/app/teacher/classes/${currentClass.id}/attendance`}
+                >
+                  <CheckCircle2 size={15} />
+                  Mark attendance
+                </Link>
               </div>
-            </section>
-          </div>
+            </div>
+
+            <dl className="teacher-class-fact-grid">
+              <div>
+                <dt>Course</dt>
+                <dd>{course?.title ?? "Course"}</dd>
+              </div>
+              <div>
+                <dt>Branch</dt>
+                <dd>{branch?.name ?? "Branch"}</dd>
+              </div>
+              <div>
+                <dt>Room</dt>
+                <dd>{room?.name ?? "Room not set"}</dd>
+              </div>
+              <div>
+                <dt>Learners</dt>
+                <dd>{enrollments.length || currentClass.studentIds.length}</dd>
+              </div>
+            </dl>
+
+            <div className="teacher-class-overview-footer">
+              <span>
+                {attendanceQueue
+                  ? `${attendanceQueue} session${attendanceQueue === 1 ? "" : "s"} need attendance.`
+                  : "Attendance is up to date."}
+              </span>
+              <span>{resourceCount} learning resources</span>
+              <span>{assignments.length} active assignments</span>
+            </div>
+          </section>
         }
       />
     </PlatformShell>

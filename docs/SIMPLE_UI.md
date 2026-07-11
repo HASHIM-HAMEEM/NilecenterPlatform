@@ -64,7 +64,7 @@ Avoid technical words in normal school-facing UI:
 | Permission Matrix     | Access rules     |
 | Audit Trail           | Activity         |
 | Integration Readiness | Connections      |
-| Moodle Source         | Moodle           |
+| Moodle Source         | Moodle mapping   |
 | Platform State        | System data      |
 | Mock Mode             | Test mode        |
 | Server-only           | Protected        |
@@ -78,6 +78,11 @@ Avoid technical words in normal school-facing UI:
 
 Technical terms may appear only on advanced admin, activity, connection, or system-health pages where they are necessary for the job.
 
+Use **Course map** for the student's learning sequence, **Moodle mapping** for
+staff reconciliation, and **Connections** for provider configuration and
+observed status. Never show `connected`, `synced`, or `healthy` unless the
+server has current evidence for that exact state.
+
 ## 4. Preferred Page Types
 
 Use explicit page types instead of one generic layout for everything.
@@ -90,10 +95,12 @@ Required structure:
 
 - clear page title;
 - one short description;
-- one clear primary action;
+- one clear primary action when the workflow supports one and the role is
+  authorized;
 - three to four simple metrics when useful;
 - one main work queue or work summary;
-- one small side panel for upcoming items, needs attention, or messages.
+- at most one small side panel for upcoming items, needs attention, or messages
+  when it improves the main job.
 
 Do not use dashboards for system dumps, debug metrics, or large analytics walls.
 
@@ -105,7 +112,7 @@ Required structure:
 
 - title;
 - short description;
-- one primary create button;
+- one primary create button when creation is supported and authorized;
 - search;
 - two to four filters maximum;
 - clean table or list;
@@ -125,7 +132,7 @@ Required structure:
 - status;
 - important summary;
 - tabs or sections for related information;
-- one primary action;
+- one primary action when an action is appropriate;
 - right-side action panel only if it helps the job.
 
 Do not turn detail pages into card walls. Related information should be grouped by user task, not database model.
@@ -202,10 +209,12 @@ Preferred navigation names:
 
 ## 6. Visual Rules
 
-- Use a neutral white or gray background for work areas.
+- Use the canonical warm neutral canvas and surface tokens from `DESIGN.md` for
+  work areas.
 - Remove noisy grid backgrounds from internal work screens.
 - Reduce beige and brown overuse.
-- Use one primary brand color for main actions.
+- Use the canonical charcoal/foreground action token for main actions and the
+  established role accent only when it communicates scope or state.
 - Use role color only for subtle orientation and status.
 - Use clear spacing before adding borders.
 - Use fewer borders and fewer cards.
@@ -332,7 +341,7 @@ Before finishing any UI page, check:
 
 - Does the page have one main job?
 - Can a non-technical school manager understand it in five seconds?
-- Is there one primary action?
+- Is there one primary action when this page and role support one?
 - Are list, detail, create, audit, permissions, and settings separated?
 - Are there four or fewer KPI cards?
 - Are there fewer cards than the old version?

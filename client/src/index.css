@@ -3501,10 +3501,10 @@
   }
 
   .teacher-plan-copy h2 {
-    max-width: 14ch;
-    font-size: clamp(30px, 4.2vw, 52px);
-    line-height: 0.98;
-    overflow-wrap: anywhere;
+    max-width: 24ch;
+    font-size: clamp(27px, 2.6vw, 36px);
+    line-height: 1.12;
+    overflow-wrap: normal;
   }
 
   .teacher-plan-copy p {
@@ -4583,23 +4583,59 @@
   }
 
   .admin-users-simple-table-wrap table {
-    min-width: 980px;
+    min-width: 860px;
+    table-layout: fixed;
+  }
+
+  .admin-users-col-name {
+    width: 27%;
+  }
+
+  .admin-users-col-role {
+    width: 13%;
+  }
+
+  .admin-users-col-branch {
+    width: 14%;
+  }
+
+  .admin-users-col-department {
+    width: 17%;
+  }
+
+  .admin-users-col-status {
+    width: 12%;
+  }
+
+  .admin-users-col-activity {
+    width: 12%;
+  }
+
+  .admin-users-col-actions {
+    width: 5%;
+  }
+
+  .admin-users-simple-table-wrap th,
+  .admin-users-simple-table-wrap td {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .admin-users-simple-person {
     width: 100%;
-    min-height: 46px;
+    min-height: 38px;
     color: var(--foreground);
     display: flex;
     gap: 9px;
     align-items: center;
     text-decoration: none;
+    min-width: 0;
   }
 
   .admin-users-simple-person > span:first-child {
-    flex: 0 0 34px;
-    width: 34px;
-    height: 34px;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
     border-radius: 8px;
     display: inline-flex;
     align-items: center;
@@ -4613,7 +4649,10 @@
   .admin-users-simple-person small {
     display: block;
     min-width: 0;
-    overflow-wrap: anywhere;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .admin-users-simple-person strong {
@@ -4627,11 +4666,66 @@
     color: var(--muted-foreground);
     font-size: 11px;
     line-height: 1.3;
-    word-break: break-word;
   }
 
   .admin-users-simple-table-wrap .platform-row-actions {
     justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+
+  .admin-users-open-link {
+    width: 36px;
+    min-width: 36px;
+    padding: 0;
+  }
+
+  .admin-users-open-link span {
+    display: none;
+  }
+
+  @media (min-width: 1180px) {
+    .admin-users-open-link {
+      width: auto;
+      min-width: 78px;
+      padding: 0 11px;
+    }
+
+    .admin-users-open-link span {
+      display: inline;
+    }
+  }
+
+  @media (max-width: 1180px) and (min-width: 821px) {
+    .admin-users-col-name {
+      width: 34%;
+    }
+
+    .admin-users-col-role {
+      width: 15%;
+    }
+
+    .admin-users-col-branch {
+      width: 17%;
+    }
+
+    .admin-users-col-status {
+      width: 14%;
+    }
+
+    .admin-users-col-actions {
+      width: 8%;
+    }
+
+    .admin-users-simple-table-wrap table {
+      min-width: 720px;
+    }
+
+    .admin-users-simple-table-wrap th:nth-child(4),
+    .admin-users-simple-table-wrap td:nth-child(4),
+    .admin-users-simple-table-wrap th:nth-child(6),
+    .admin-users-simple-table-wrap td:nth-child(6) {
+      display: none;
+    }
   }
 
   .admin-users-create-card {
@@ -16693,6 +16787,78 @@
       border-bottom: 0;
     }
 
+    .admin-users-simple-card {
+      box-shadow: none;
+    }
+
+    .admin-users-simple-table-wrap {
+      overflow: visible;
+    }
+
+    .admin-users-simple-table-wrap table {
+      min-width: 0;
+    }
+
+    .admin-users-simple-table-wrap tbody {
+      gap: 8px;
+    }
+
+    .admin-users-simple-table-wrap tr {
+      border-radius: 10px;
+      box-shadow: none;
+    }
+
+    .admin-users-simple-table-wrap td {
+      padding: 9px 12px;
+      grid-template-columns: 86px minmax(0, 1fr);
+    }
+
+    .admin-users-simple-table-wrap td:nth-child(1) {
+      grid-template-columns: 1fr;
+      padding-top: 12px;
+      padding-bottom: 10px;
+    }
+
+    .admin-users-simple-table-wrap td:nth-child(1)::before {
+      display: none;
+    }
+
+    .admin-users-simple-table-wrap td:nth-child(4),
+    .admin-users-simple-table-wrap td:nth-child(6) {
+      display: none;
+    }
+
+    .admin-users-simple-person {
+      min-height: 34px;
+      gap: 10px;
+    }
+
+    .admin-users-simple-person > span:first-child {
+      flex-basis: 32px;
+      width: 32px;
+      height: 32px;
+    }
+
+    .admin-users-simple-person strong,
+    .admin-users-simple-person small {
+      white-space: nowrap;
+    }
+
+    .admin-users-simple-table-wrap .platform-row-actions {
+      justify-content: stretch;
+    }
+
+    .admin-users-open-link {
+      width: 100%;
+      min-width: 0;
+      padding: 0 11px;
+      justify-content: space-between;
+    }
+
+    .admin-users-open-link span {
+      display: inline;
+    }
+
     .platform-table-card td::before {
       color: var(--muted-foreground);
       content: "Record";
@@ -20052,9 +20218,10 @@
 .profile-section-title span {
   color: var(--muted-foreground);
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 760;
+  letter-spacing: 0;
   line-height: 1.2;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .profile-identity-strip strong {
@@ -21852,5 +22019,274 @@
 
   .admin-ia-control-row .admin-ia-toolbar {
     flex-basis: auto;
+  }
+}
+
+/*
+  UI V2 authenticated shell.
+  Operational workspaces use the available canvas; readable route content
+  keeps its own local max-width instead of constraining the whole portal.
+*/
+.platform-main {
+  container-name: platform-main;
+  container-type: inline-size;
+}
+
+.platform-skip-link {
+  position: fixed;
+  inset-block-start: 10px;
+  inset-inline-start: 10px;
+  z-index: 120;
+  min-height: 40px;
+  border: 1px solid var(--foreground);
+  border-radius: 8px;
+  background: var(--foreground);
+  color: var(--background);
+  padding: 9px 13px;
+  font-size: 13px;
+  font-weight: 850;
+  text-decoration: none;
+  transform: translateY(calc(-100% - 20px));
+  transition: transform 150ms ease;
+}
+
+.platform-skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+.platform-topbar {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.platform-breadcrumb strong {
+  display: block;
+  min-width: 0;
+  max-width: min(32vw, 260px);
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.platform-search-disclosure {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.platform-language-control {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.platform-language-control > svg {
+  display: none;
+}
+
+.platform-search-trigger[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--role-color) 30%, var(--border));
+  background: color-mix(in srgb, var(--role-tint) 56%, white);
+  color: var(--role-color);
+}
+
+.platform-search {
+  position: absolute;
+  inset-block-start: calc(100% + 10px);
+  inset-inline-end: 0;
+  z-index: 48;
+  width: min(420px, calc(100vw - 32px));
+  min-width: min(320px, calc(100vw - 32px));
+  height: 42px;
+  min-height: 42px;
+  border-color: var(--border);
+  background: #fffefa;
+  box-shadow: 0 18px 44px rgba(26, 26, 26, 0.12);
+  padding-inline: 13px;
+}
+
+.platform-search input {
+  min-height: 40px;
+}
+
+.platform-search-results {
+  inset-block-start: calc(100% + 7px);
+  inset-inline: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(420px, calc(100vh - 120px));
+  overflow-y: auto;
+}
+
+.platform-search-results li {
+  margin: 0;
+  padding: 0;
+}
+
+.platform-content {
+  width: 100%;
+  max-width: none;
+  align-self: stretch;
+  padding-inline: clamp(18px, 2.4cqi, 52px);
+}
+
+@container platform-main (max-width: 1100px) {
+  .platform-v2-role-main,
+  .teacher-dashboard-main,
+  .platform-v2-summary-body,
+  .platform-v2-layout-grid,
+  .platform-v2-layout-footer .platform-v2-layout-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .platform-v2-layout-side,
+  .teacher-attention-panel {
+    position: static;
+  }
+
+  .teacher-plan-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1100px) {
+  .platform-topbar {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    min-height: 50px;
+    padding-block: 5px;
+  }
+
+  .platform-breadcrumb,
+  .platform-topbar-actions {
+    grid-row: 1;
+  }
+
+  .platform-breadcrumb {
+    grid-column: 1;
+    max-width: none;
+  }
+
+  .platform-topbar-actions {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 820px) {
+  .platform-topbar {
+    grid-template-columns: auto minmax(0, 1fr) max-content;
+    margin: 8px 16px 0;
+    padding: 5px 6px;
+    min-height: 52px;
+  }
+
+  .platform-menu-button {
+    grid-column: 1;
+  }
+
+  .platform-breadcrumb {
+    grid-column: 2;
+  }
+
+  .platform-topbar-actions {
+    grid-column: 3;
+  }
+
+  .platform-icon-button,
+  .platform-sidebar-toggle,
+  .platform-mobile-close,
+  .platform-language {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .platform-icon-button,
+  .platform-sidebar-toggle,
+  .platform-mobile-close {
+    width: 40px;
+    height: 40px;
+  }
+
+  .platform-mobile-sidebar {
+    width: min(300px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+
+  .platform-mobile-sidebar .platform-nav-item {
+    min-height: 40px;
+  }
+
+  .platform-mobile-sidebar .platform-logo,
+  .platform-mobile-sidebar .platform-brand > a {
+    width: 40px;
+    height: 40px;
+  }
+
+  .platform-content {
+    padding: 16px 16px 28px;
+  }
+
+  .platform-search {
+    position: fixed;
+    inset-block-start: 66px;
+    inset-inline: 16px;
+    width: auto;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .platform-breadcrumb strong {
+    display: none;
+  }
+
+  .platform-language-control {
+    width: 40px;
+    height: 40px;
+  }
+
+  .platform-language-control > svg {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    z-index: 1;
+    display: block;
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+    color: var(--muted-foreground);
+    transform: translate(-50%, -50%);
+  }
+
+  .platform-language-control .platform-language {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 40px;
+    padding: 0;
+    appearance: none;
+    color: transparent;
+    cursor: pointer;
+    font-size: 0;
+    text-indent: 100%;
+  }
+
+  .platform-language-control .platform-language option {
+    color: var(--foreground);
+    font-size: 14px;
+  }
+
+  .platform-user-pill {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 40px;
+  }
+
+  .platform-user-avatar {
+    width: 32px;
+    height: 32px;
   }
 }

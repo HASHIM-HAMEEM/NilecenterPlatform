@@ -22,10 +22,18 @@ UI V2 does not mean:
 
 Rule hierarchy:
 
-1. `AGENTS.md`, `CLAUDE.md`, RBAC, security, and backend correctness always win.
-2. `DESIGN.md` defines the Nile Learn brand language, tokens, and landing-page visual foundation.
-3. `docs/DESIGN_V2.md` defines the stricter internal portal reset: shell, hierarchy, density, dashboard limits, copy limits, and rollout order.
-4. Existing app behavior should be preserved unless the task explicitly changes behavior.
+1. `docs/NILE_LEARN_MASTER_PLAN.md` and
+   `docs/MODERNIZATION_EXECUTION_CONTRACT.md` decide whether a UI slice is
+   currently approved and which completion gates apply.
+2. `AGENTS.md`, `CLAUDE.md`, RBAC, security, and backend correctness always win.
+3. `DESIGN.md` defines the Nile Learn brand language, tokens, and landing-page visual foundation.
+4. `docs/SIMPLE_UI.md` defines one page, one main job and user-facing
+   terminology.
+5. `docs/UI_INFORMATION_ARCHITECTURE.md` defines route and page ownership.
+6. `docs/DESIGN_V2.md` defines the stricter internal portal reset: shell,
+   hierarchy, density, dashboard limits, copy limits, and rollout order.
+7. Existing app behavior should be preserved unless the task explicitly
+   changes behavior.
 
 ## 2. UI V2 Goal
 
@@ -55,10 +63,10 @@ Approved UI V2 page pattern:
 
 1. Clear page title.
 2. One short subtitle.
-3. One primary action.
+3. One primary action when the workflow supports one and the role is authorized.
 4. Three to four useful metrics only when they support the page job.
 5. One primary work area.
-6. One secondary side panel when useful.
+6. At most one secondary side panel when useful.
 7. Calm spacing and clear hierarchy.
 
 This pattern is mandatory for dashboards and should guide lists, workspaces, forms, reports, and settings pages. Do not return to the old pattern of a header, five stat cards, a huge card grid, long text, a side panel, and badges everywhere.
@@ -72,7 +80,7 @@ This pattern is mandatory for dashboards and should guide lists, workspaces, for
 5. Cleaner top header.
 6. More whitespace.
 7. Better grouping.
-8. One clear primary action per page.
+8. One clear primary action per page when an action is appropriate.
 9. Dashboards show work that matters, not debug data.
 10. Internal pages should feel like a premium learning platform, not a system dump.
 
@@ -327,7 +335,8 @@ Required page structure:
 
 Common page shapes:
 
-- Dashboard: page header, compact metrics, one work summary, one primary task panel, one secondary side panel.
+- Dashboard: page header, compact metrics, one work summary, one primary task
+  panel, and at most one secondary side panel.
 - List/table page: page header, compact toolbar, `DataTableCard`, pagination or short summary, empty/error states.
 - Form page: page header, `FormSection` groups, sticky or final action row, success/error state.
 - Detail page: identity header, main details, related activity, right-side context or actions.
@@ -344,9 +353,9 @@ Required dashboard composition:
 - Maximum 4 main KPI cards at the top.
 - One strong hero or work summary card.
 - One primary task panel.
-- One secondary side panel.
+- At most one secondary side panel when it supports the main job.
 - No more than 3 main content sections above the fold.
-- One clear primary action.
+- One clear primary action when the role can take a meaningful action.
 - Role-specific personality and priorities.
 
 Dashboard content must focus on:
@@ -604,7 +613,31 @@ Rules:
 - Avoid portal hero scale on mobile.
 - Test overflow for rosters, schedules, forms, dashboards, and action bars.
 
-## 19. Arabic And RTL Rules
+## 19. Large Displays And Container Behavior
+
+Operational pages must use available space without becoming either a narrow
+centered strip or an unreadably stretched line.
+
+Rules:
+
+- Test at 1280, 1440, 1920, 2560, and 3840 CSS-pixel widths, plus the supported
+  mobile breakpoints.
+- The shell and primary operational workspace are fluid. Do not impose a global
+  1200-1320px content cap on tables, schedules, class workspaces, reports, or
+  split operational views.
+- Use responsive grid tracks with `minmax()` and explicit minimum widths so
+  columns grow deliberately instead of leaving large empty edge gutters.
+- Constrain readable text, profile forms, and long prose inside the fluid page;
+  do not constrain the entire application to achieve readable line length.
+- Tables and timelines may scroll inside their owned region when necessary;
+  the document itself must not gain horizontal overflow.
+- On 5K/6K and ultrawide displays, increase useful workspace capacity, column
+  count, or contextual separation. Do not scale font size with viewport width.
+- On classroom boards, keep controls, player surfaces, attendance rosters, and
+  learning content legible from distance without turning ordinary portal copy
+  into hero typography.
+
+## 20. Arabic And RTL Rules
 
 UI V2 must remain English-first and Arabic/RTL-ready.
 
@@ -617,7 +650,7 @@ Rules:
 - Keep numbers, dates, emails, codes, and IDs readable in RTL.
 - Do not use Arabic calligraphy as operational UI text decoration.
 
-## 20. Strict Limits
+## 21. Strict Limits
 
 These limits are mandatory for UI V2:
 
@@ -636,7 +669,7 @@ These limits are mandatory for UI V2:
 - No debug/system data outside admin, audit, integration, or system-health contexts.
 - No route-wide UI V2 rollout before one reference dashboard has been visually reviewed.
 
-## 21. Components To Replace Instead Of Patch
+## 22. Components To Replace Instead Of Patch
 
 Replace shared UI architecture when it forces generic output.
 
@@ -662,7 +695,7 @@ Do not patch these issues with only:
 
 UI V2 requires replacing the structure when the structure is the problem.
 
-## 22. Controlled Implementation Order
+## 23. Controlled Implementation Order
 
 Do not apply UI V2 to all pages at once.
 
@@ -679,11 +712,11 @@ Build and review in this order:
 Reference dashboard rule:
 
 - Pick one dashboard as the standard before applying V2 elsewhere.
-- The current approved reference is the Super Admin dashboard because it exercises shell navigation, access governance, audit, integrations, and system status without changing workflows.
+- The current design reference is the Super Admin dashboard because it exercises shell navigation, access governance, audit, integrations, and system status without changing workflows. A design reference does not approve a UI implementation slice; the master-plan checkpoint does.
 - The reference dashboard must include a page header, KPI strip, primary work area, secondary panel, lower summary area where useful, responsive state, loading state, empty state, and error state.
 - Do not migrate other dashboards or route families until the shell and Super Admin reference are visually reviewed.
 
-## 23. Page Acceptance Checklist
+## 24. Page Acceptance Checklist
 
 Before a UI V2 page is considered complete, verify:
 

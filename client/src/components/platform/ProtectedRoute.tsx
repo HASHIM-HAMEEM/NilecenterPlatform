@@ -3,33 +3,97 @@ import { Link } from "wouter";
 import { LockKeyhole, ShieldAlert } from "lucide-react";
 import PlatformShell from "./PlatformShell";
 import { canAccessRole, getStoredRole, refreshServerSession } from "@/lib/auth/session";
+import { fetchPlatformStateRequest } from "@/lib/backend/api";
+import { platformStore } from "@/lib/domain/store";
 import { roleMeta, type Role } from "@/lib/platformData";
 import { canOpenPage, getRequiredPermissionForPage } from "@/lib/rbac";
 
 export default function ProtectedRoute({ role, pageId = "dashboard", children }: { role: Role; pageId?: string; children: ReactNode }) {
   const [activeRole, setActiveRole] = useState<Role | null>(() => getStoredRole());
-  const [checkedSession, setCheckedSession] = useState(Boolean(getStoredRole()));
+  const [checkedSession, setCheckedSession] = useState(false);
+  const [scopeStatus, setScopeStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [scopeError, setScopeError] = useState("");
+  const [hydratedRole, setHydratedRole] = useState<Role | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     const listener = () => setActiveRole(getStoredRole());
     window.addEventListener("storage", listener);
     window.addEventListener("nilelearn:session", listener);
-    refreshServerSession()
-      .then((session) => {
-        setActiveRole(session?.activeRole ?? getStoredRole());
-      })
-      .finally(() => setCheckedSession(true));
+    const hydrateScope = async () => {
+      setScopeStatus("loading");
+      setScopeError("");
+      setHydratedRole(null);
+      const session = await refreshServerSession();
+      if (cancelled) return;
+      const storedRole = getStoredRole();
+      setActiveRole(session?.activeRole ?? storedRole);
+      setCheckedSession(true);
+      if (!session) {
+        if (storedRole) {
+          setScopeStatus("error");
+          setScopeError("The authenticated server session could not be verified.");
+        } else {
+          setScopeStatus("ready");
+        }
+        return;
+      }
+      const response = await fetchPlatformStateRequest();
+      if (cancelled) return;
+      if (!response.ok || !response.data) {
+        setScopeStatus("error");
+        setScopeError(response.error ?? "The scoped workspace could not be loaded.");
+        return;
+      }
+      platformStore.setState(response.data.state);
+      setHydratedRole(session.activeRole);
+      setScopeStatus("ready");
+    };
+    void hydrateScope();
     return () => {
+      cancelled = true;
       window.removeEventListener("storage", listener);
       window.removeEventListener("nilelearn:session", listener);
     };
-  }, []);
+  }, [retryVersion, role]);
 
-  if (!checkedSession && !activeRole) {
+  if (
+    !checkedSession ||
+    (activeRole &&
+      (scopeStatus === "loading" ||
+        (scopeStatus === "ready" && hydratedRole !== activeRole)))
+  ) {
     return (
       <main className="platform-route-loading" aria-live="polite">
         <span />
-        <strong>Checking session</strong>
+        <strong>{checkedSession ? "Loading scoped workspace" : "Checking session"}</strong>
+      </main>
+    );
+  }
+
+  if (activeRole && scopeStatus === "error") {
+    return (
+      <main className="auth-flow-page">
+        <section className="platform-access-denied" role="alert">
+          <span>
+            <ShieldAlert size={26} />
+          </span>
+          <h1>Workspace unavailable</h1>
+          <p>{scopeError}</p>
+          <div>
+            <button
+              type="button"
+              className="platform-primary-button"
+              onClick={() => setRetryVersion(value => value + 1)}
+            >
+              Retry
+            </button>
+            <Link href="/auth/login" className="platform-secondary-button">
+              Sign in again
+            </Link>
+          </div>
+        </section>
       </main>
     );
   }

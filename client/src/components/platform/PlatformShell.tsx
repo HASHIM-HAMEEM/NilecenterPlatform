@@ -29,6 +29,7 @@ import {
   GraduationCap,
   KeyRound,
   Layers,
+  Languages,
   LayoutDashboard,
   Library,
   LifeBuoy,
@@ -147,7 +148,7 @@ const sidebarWorkflowGroups: Record<Role, SidebarSection[]> = {
       ],
     },
     { label: "Progress", items: ["Grades", "Attendance", "Certificates"] },
-    { label: "Help", items: ["Messages", "Reports", "Support", "Profile"] },
+    { label: "Help", items: ["Forms", "Messages", "Reports", "Support", "Profile"] },
   ],
   teacher: [
     { label: "Today", items: ["Dashboard", "Classes", "Calendar"] },
@@ -158,11 +159,11 @@ const sidebarWorkflowGroups: Record<Role, SidebarSection[]> = {
         "Assignments",
         "Grading",
         "Quizzes",
+        "Question Bank",
         "Quran Review",
       ],
     },
-    { label: "Students", items: ["Question Bank"] },
-    { label: "Help", items: ["Messages", "Reports", "Profile"] },
+    { label: "More", items: ["Forms", "Messages", "Reports", "Profile"] },
     { label: "Advanced", items: ["Moodle"], collapsible: true },
   ],
   registrar: [
@@ -175,7 +176,7 @@ const sidebarWorkflowGroups: Record<Role, SidebarSection[]> = {
       label: "Students",
       items: ["Students", "Enrollments", "Classes", "Schedule"],
     },
-    { label: "Office", items: ["Payments", "Messages", "Reports", "Settings"] },
+    { label: "Office", items: ["Forms", "Payments", "Messages", "Reports", "Settings"] },
   ],
   headofdepartment: [
     { label: "Today", items: ["Dashboard"] },
@@ -186,7 +187,7 @@ const sidebarWorkflowGroups: Record<Role, SidebarSection[]> = {
     { label: "Teachers", items: ["Teachers", "Classes", "Schedule"] },
     {
       label: "Review",
-      items: ["Assessments", "Certificates", "Reports", "Messages"],
+      items: ["Assessments", "Forms", "Certificates", "Reports", "Messages"],
     },
     { label: "Advanced", items: ["Moodle"], collapsible: true },
   ],
@@ -194,23 +195,33 @@ const sidebarWorkflowGroups: Record<Role, SidebarSection[]> = {
     { label: "Today", items: ["Dashboard", "Classes", "Rooms", "Schedule"] },
     { label: "People", items: ["Students", "Teachers"] },
     { label: "Operations", items: ["Attendance", "Payments"] },
-    { label: "Office", items: ["Reports", "Messages", "Settings"] },
+    { label: "Office", items: ["Forms", "Reports", "Messages", "Settings"] },
   ],
   superadmin: [
     { items: ["Dashboard"] },
-    { label: "People", items: ["Users", "Roles & access"] },
+    {
+      label: "People",
+      items: ["Users", "Roles & access", "Access rules", "Messages"],
+    },
     {
       label: "Learning",
-      items: ["Courses", "Certificates"],
+      items: ["Programs", "Courses", "Moodle", "Certificates"],
     },
     {
       label: "Operations",
-      items: ["Branches", "Departments", "Schedule"],
+      items: ["Branches", "Departments", "Schedule", "Forms"],
     },
     { label: "Business", items: ["Reports"] },
     {
       label: "System",
-      items: ["Connections", "Activity log", "Settings"],
+      items: [
+        "Blueprint",
+        "Connections",
+        "Activity log",
+        "Health",
+        "Settings",
+        "Profile",
+      ],
       collapsible: true,
     },
   ],
@@ -342,6 +353,7 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [notificationVersion, setNotificationVersion] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileDrawerRef = useRef<HTMLElement | null>(null);
@@ -350,6 +362,8 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
   const accountButtonRef = useRef<HTMLButtonElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
+  const searchButtonRef = useRef<HTMLButtonElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const user = getDemoUser(role);
   const meta = roleMeta[role];
   const inspiration = roleInspirations[role];
@@ -362,16 +376,7 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
     () => getScopeConfig(role, meta.branchLabel),
     [meta.branchLabel, role]
   );
-  const branchOptions = useMemo(
-    () => Array.from(new Set(scopeConfig.options)),
-    [scopeConfig.options]
-  );
-  const showScopeSelector = branchOptions.length > 1;
-  const [branch, setBranch] = useState(() => {
-    if (typeof window === "undefined") return branchOptions[0];
-    const saved = window.localStorage.getItem(`nilelearn.branch.${role}`);
-    return saved && branchOptions.includes(saved) ? saved : branchOptions[0];
-  });
+  const scopeValue = scopeConfig.options[0] ?? meta.branchLabel;
   const sidebar = getSidebarForRole(role);
   const sidebarSections = useMemo(
     () => groupSidebarItems(role, sidebar),
@@ -381,14 +386,6 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
   const profileHref =
     sidebar.find(item => item.label === "Profile")?.href ?? meta.defaultRoute;
   const hasSearchQuery = Boolean(query.trim());
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem(`nilelearn.branch.${role}`);
-    setBranch(
-      saved && branchOptions.includes(saved) ? saved : branchOptions[0]
-    );
-  }, [branchOptions, role]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -417,6 +414,7 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
     setMobileOpen(false);
     setNotificationsOpen(false);
     setAccountOpen(false);
+    setSearchOpen(false);
     setQuery("");
   }, [location]);
 
@@ -430,13 +428,29 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
       "select:not([disabled])",
       "textarea:not([disabled])",
       "input:not([disabled])",
+      "summary",
+      "[contenteditable='true']",
       "[tabindex]:not([tabindex='-1'])",
     ].join(",");
     const drawer = mobileDrawerRef.current;
-    const focusable = Array.from(
-      drawer?.querySelectorAll<HTMLElement>(focusableSelector) ?? []
-    );
-    focusable[0]?.focus();
+    const getFocusableElements = () =>
+      Array.from(
+        drawer?.querySelectorAll<HTMLElement>(focusableSelector) ?? []
+      ).filter(element => {
+        const style = window.getComputedStyle(element);
+        return (
+          !element.closest("[inert]") &&
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          element.getClientRects().length > 0
+        );
+      });
+    const focusFrame = window.requestAnimationFrame(() => {
+      const closeButton = drawer?.querySelector<HTMLButtonElement>(
+        ".platform-mobile-close"
+      );
+      (closeButton ?? drawer)?.focus();
+    });
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -444,19 +458,30 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
         setMobileOpen(false);
         return;
       }
-      if (event.key !== "Tab" || !focusable.length) return;
+      if (event.key !== "Tab") return;
+      const focusable = getFocusableElements();
+      if (!focusable.length) {
+        event.preventDefault();
+        drawer?.focus();
+        return;
+      }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      const activeElement = document.activeElement as HTMLElement | null;
+      if (!activeElement || !drawer?.contains(activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && activeElement === first) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && activeElement === last) {
         event.preventDefault();
         first.focus();
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
       menuButtonRef.current?.focus();
@@ -464,12 +489,21 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
   }, [mobileOpen]);
 
   useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
+
+  useEffect(() => {
     if (typeof document === "undefined") return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setNotificationsOpen(false);
         setAccountOpen(false);
-        setQuery("");
+        if (searchOpen) {
+          event.preventDefault();
+          setSearchOpen(false);
+          setQuery("");
+          searchButtonRef.current?.focus();
+        }
       }
     };
     const onPointerDown = (event: PointerEvent) => {
@@ -481,7 +515,8 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
       ) {
         setNotificationsOpen(false);
       }
-      if (hasSearchQuery && !searchWrapRef.current?.contains(target)) {
+      if (searchOpen && !searchWrapRef.current?.contains(target)) {
+        setSearchOpen(false);
         setQuery("");
       }
       if (
@@ -498,7 +533,7 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("pointerdown", onPointerDown);
     };
-  }, [accountOpen, hasSearchQuery, notificationsOpen]);
+  }, [accountOpen, notificationsOpen, searchOpen]);
 
   const sidebarMarkup = (
     <div className="platform-sidebar-inner">
@@ -533,6 +568,7 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
           )}
         </button>
         <button
+          type="button"
           className="platform-icon-button platform-mobile-close"
           aria-label={t(locale, "closeMenu")}
           onClick={() => setMobileOpen(false)}
@@ -541,31 +577,13 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
         </button>
       </div>
 
-      {showScopeSelector ? (
-        <div className="platform-selector-row">
+      {scopeValue ? (
+        <div className="platform-selector-row platform-scope-summary">
           <div>
             <label>{translateUiLabel(locale, scopeConfig.label)}</label>
             <small>{translateUiLabel(locale, scopeConfig.description)}</small>
           </div>
-          <select
-            aria-label={translateUiLabel(locale, scopeConfig.label)}
-            value={branch}
-            onChange={event => {
-              const nextBranch = event.target.value;
-              setBranch(nextBranch);
-              window.localStorage.setItem(
-                `nilelearn.branch.${role}`,
-                nextBranch
-              );
-              toast.success(
-                `${translateUiLabel(locale, scopeConfig.label)}: ${nextBranch}`
-              );
-            }}
-          >
-            {branchOptions.map(option => (
-              <option key={option}>{option}</option>
-            ))}
-          </select>
+          <strong>{translateUiLabel(locale, scopeValue)}</strong>
         </div>
       ) : null}
 
@@ -596,6 +614,13 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
                     href={item.href}
                     className={`platform-nav-item ${active ? "active" : ""}`}
                     aria-label={displayLabel}
+                    aria-current={
+                      active
+                        ? location === item.href
+                          ? "page"
+                          : "location"
+                        : undefined
+                    }
                     title={displayLabel}
                     onClick={() => setMobileOpen(false)}
                   >
@@ -649,6 +674,7 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
     <UiLanguageProvider locale={locale}>
       <div
         className="platform-shell"
+        data-role={role}
         dir={dir}
         style={
           {
@@ -657,308 +683,362 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
           } as CSSProperties
         }
       >
-      <motion.aside
-        className={`platform-desktop-sidebar ${sidebarExpanded ? "expanded" : "collapsed"}`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.38, ease: [0.23, 1, 0.32, 1] }}
-      >
-        {sidebarMarkup}
-      </motion.aside>
-
-      <AnimatePresence>
-        {mobileOpen ? (
-          <motion.div
-            className="platform-mobile-overlay"
-            role="presentation"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-          >
-            <button
-              className="platform-mobile-backdrop"
-              aria-label="Close menu"
-              onClick={() => setMobileOpen(false)}
-            />
-            <motion.aside
-              id="platform-mobile-sidebar"
-              ref={mobileDrawerRef}
-              className="platform-mobile-sidebar"
-              role="dialog"
-              aria-modal="true"
-              aria-label={`${translateUiLabel(locale, meta.label)} ${translateUiLabel(locale, "navigation menu")}`}
-              initial={{ x: dir === "rtl" ? 280 : -280 }}
-              animate={{ x: 0 }}
-              exit={{ x: dir === "rtl" ? 280 : -280 }}
-              transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
-            >
-              {sidebarMarkup}
-            </motion.aside>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      <div className="platform-main">
-        <motion.header
-          className="platform-topbar"
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.34, ease: [0.23, 1, 0.32, 1], delay: 0.04 }}
+        <a
+          className="platform-skip-link"
+          href="#platform-main-content"
+          onClick={event => {
+            event.preventDefault();
+            document.getElementById("platform-main-content")?.focus();
+          }}
         >
-          <button
-            ref={menuButtonRef}
-            className="platform-icon-button platform-menu-button"
-            aria-label={t(locale, "openMenu")}
-            aria-expanded={mobileOpen}
-            aria-controls="platform-mobile-sidebar"
-            onClick={() => setMobileOpen(true)}
-          >
-            <Menu size={18} />
-          </button>
+          {translateUiLabel(locale, "Skip to main content")}
+        </a>
 
-          <div className="platform-breadcrumb">
-            <span style={{ background: meta.tint, color: meta.color }}>
-              {meta.shortLabel}
-            </span>
-            <strong>{translateUiLabel(locale, title ?? meta.label)}</strong>
-          </div>
+        <motion.aside
+          className={`platform-desktop-sidebar ${sidebarExpanded ? "expanded" : "collapsed"}`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.38, ease: [0.23, 1, 0.32, 1] }}
+        >
+          {sidebarMarkup}
+        </motion.aside>
 
-          <div className="platform-search" ref={searchWrapRef}>
-            <Search size={15} />
-            <input
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-              placeholder={t(locale, "search")}
-              aria-label={t(locale, "globalSearch")}
-              aria-expanded={hasSearchQuery}
-              aria-controls="platform-search-results"
-            />
-            {hasSearchQuery ? (
-              <div
-                className="platform-search-results"
-                id="platform-search-results"
-                role="listbox"
-                aria-label={t(locale, "searchResults")}
+        <AnimatePresence>
+          {mobileOpen ? (
+            <motion.div
+              className="platform-mobile-overlay"
+              role="presentation"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
+              <button
+                className="platform-mobile-backdrop"
+                aria-label="Close menu"
+                onClick={() => setMobileOpen(false)}
+              />
+              <motion.aside
+                id="platform-mobile-sidebar"
+                ref={mobileDrawerRef}
+                className="platform-mobile-sidebar"
+                role="dialog"
+                tabIndex={-1}
+                aria-modal="true"
+                aria-label={`${translateUiLabel(locale, meta.label)} ${translateUiLabel(locale, "navigation menu")}`}
+                initial={{ x: dir === "rtl" ? 280 : -280 }}
+                animate={{ x: 0 }}
+                exit={{ x: dir === "rtl" ? 280 : -280 }}
+                transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
               >
-                {searchResults.length ? (
-                  searchResults.map(item => (
-                    <button
-                      key={`${item.type}-${item.label}`}
-                      onClick={() => {
-                        setQuery("");
-                        navigate(item.href);
-                      }}
-                    >
-                      <strong>{item.type}</strong> {item.label}
-                    </button>
-                  ))
-                ) : (
-                  <div className="platform-search-empty">
-                    {t(locale, "noMatchingRecords")}
-                  </div>
-                )}
-              </div>
-            ) : null}
-          </div>
+                {sidebarMarkup}
+              </motion.aside>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
-          <div className="platform-topbar-actions">
-            <select
-              className="platform-language"
-              value={locale}
-              aria-label={t(locale, "language")}
-              onChange={event => {
-                const nextLocale = event.target.value as Locale;
-                setLocale(nextLocale);
-                window.localStorage.setItem("nilelearn.locale", nextLocale);
-              }}
-            >
-              {localeOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
+        <div className="platform-main">
+          <motion.header
+            className="platform-topbar"
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: 0.34,
+              ease: [0.23, 1, 0.32, 1],
+              delay: 0.04,
+            }}
+          >
             <button
-              ref={notificationButtonRef}
-              className="platform-icon-button"
-              aria-label={t(locale, "notifications")}
-              aria-expanded={notificationsOpen}
-              aria-controls="platform-notifications-popover"
-              onClick={() => setNotificationsOpen(open => !open)}
+              ref={menuButtonRef}
+              className="platform-icon-button platform-menu-button"
+              aria-label={t(locale, "openMenu")}
+              aria-expanded={mobileOpen}
+              aria-controls="platform-mobile-sidebar"
+              onClick={() => setMobileOpen(true)}
             >
-              <Bell size={17} />
-              {unreadCount ? (
-                <span
-                  className="platform-notification-dot"
-                  style={{ background: meta.accent }}
-                />
-              ) : null}
+              <Menu size={18} />
             </button>
 
-            {notificationsOpen ? (
-              <div
-                className="platform-notification-popover"
-                id="platform-notifications-popover"
-                ref={notificationPopoverRef}
-                role="menu"
-                aria-label={t(locale, "notifications")}
-              >
-                <div className="platform-popover-title">
-                  <strong>{t(locale, "notifications")}</strong>
-                  <button
-                    onClick={() => {
-                      notificationItems.forEach(notification =>
-                        platformStore.markNotificationRead(notification.id)
-                      );
-                      setNotificationVersion(version => version + 1);
-                      toast.success(t(locale, "notificationsMarkedRead"));
-                    }}
+            <div
+              className="platform-breadcrumb"
+              aria-label={translateUiLabel(locale, meta.label)}
+            >
+              <span style={{ background: meta.tint, color: meta.color }}>
+                {meta.shortLabel}
+              </span>
+              <strong>{translateUiLabel(locale, title ?? meta.label)}</strong>
+            </div>
+
+            <div className="platform-topbar-actions">
+              <div className="platform-search-disclosure" ref={searchWrapRef}>
+                <button
+                  ref={searchButtonRef}
+                  type="button"
+                  className="platform-icon-button platform-search-trigger"
+                  aria-label={t(locale, "globalSearch")}
+                  aria-expanded={searchOpen}
+                  aria-controls="platform-global-search"
+                  onClick={() => {
+                    if (searchOpen) setQuery("");
+                    setSearchOpen(open => !open);
+                  }}
+                >
+                  <Search size={17} />
+                </button>
+
+                {searchOpen ? (
+                  <div
+                    id="platform-global-search"
+                    className="platform-search"
+                    role="search"
+                    aria-label={t(locale, "globalSearch")}
                   >
-                    {t(locale, "markRead")}
-                  </button>
-                </div>
-                {notificationItems.map(item => (
-                  <button
-                    key={item.id}
-                    className="platform-notification-item"
-                    role="menuitem"
-                    onClick={() => {
-                      platformStore.markNotificationRead(item.id);
-                      setNotificationVersion(version => version + 1);
-                      setNotificationsOpen(false);
-                      navigate(item.href);
-                    }}
-                  >
-                    <span
-                      style={{
-                        background: roleMeta[role].tint,
-                        color: roleMeta[role].color,
-                      }}
-                    >
-                      {item.read ? t(locale, "read") : t(locale, "unread")}
-                    </span>
-                    <strong>{item.title}</strong>
-                    <small>{item.body}</small>
-                  </button>
-                ))}
-                {!notificationItems.length ? (
-                  <div className="platform-notification-empty">
-                    {t(locale, "noNotifications")}
+                    <Search size={15} aria-hidden="true" />
+                    <input
+                      ref={searchInputRef}
+                      type="search"
+                      value={query}
+                      onChange={event => setQuery(event.target.value)}
+                      placeholder={t(locale, "search")}
+                      aria-label={t(locale, "globalSearch")}
+                      aria-controls={
+                        hasSearchQuery ? "platform-search-results" : undefined
+                      }
+                    />
+                    {hasSearchQuery ? (
+                      <ul
+                        className="platform-search-results"
+                        id="platform-search-results"
+                        aria-label={t(locale, "searchResults")}
+                      >
+                        {searchResults.length ? (
+                          searchResults.map(item => (
+                            <li key={`${item.type}-${item.label}`}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSearchOpen(false);
+                                  setQuery("");
+                                  navigate(item.href);
+                                }}
+                              >
+                                <strong>{item.type}</strong> {item.label}
+                              </button>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="platform-search-empty">
+                            {t(locale, "noMatchingRecords")}
+                          </li>
+                        )}
+                      </ul>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
-            ) : null}
 
-            <div className="platform-account">
-              <button
-                ref={accountButtonRef}
-                type="button"
-                className="platform-user-pill"
-                aria-label={`${user.name} ${t(locale, "accountMenu")}`}
-                aria-expanded={accountOpen}
-                aria-controls="platform-account-menu"
-                onClick={() => setAccountOpen(open => !open)}
-              >
-                <span
-                  className="platform-user-avatar"
-                  style={
-                    role === "superadmin"
-                      ? { background: meta.tint, color: meta.color }
-                      : { background: meta.color }
-                  }
+              <div className="platform-language-control">
+                <Languages aria-hidden="true" size={16} />
+                <select
+                  className="platform-language"
+                  value={locale}
+                  aria-label={t(locale, "language")}
+                  onChange={event => {
+                    const nextLocale = event.target.value as Locale;
+                    setLocale(nextLocale);
+                    window.localStorage.setItem("nilelearn.locale", nextLocale);
+                  }}
                 >
-                  {role === "superadmin" ? (
-                    <ShieldCheck size={16} />
-                  ) : (
-                    user.avatar
-                  )}
-                </span>
-                <span className="platform-user-copy">
-                  <strong>{user.name}</strong>
-                  <small>{translateUiLabel(locale, meta.label)}</small>
-                </span>
-                <ChevronDown size={14} />
+                  {localeOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                ref={notificationButtonRef}
+                className="platform-icon-button"
+                aria-label={t(locale, "notifications")}
+                aria-expanded={notificationsOpen}
+                aria-controls="platform-notifications-popover"
+                onClick={() => setNotificationsOpen(open => !open)}
+              >
+                <Bell size={17} />
+                {unreadCount ? (
+                  <span
+                    className="platform-notification-dot"
+                    style={{ background: meta.accent }}
+                  />
+                ) : null}
               </button>
 
-              {accountOpen ? (
+              {notificationsOpen ? (
                 <div
-                  id="platform-account-menu"
-                  ref={accountMenuRef}
-                  className="platform-account-menu"
+                  className="platform-notification-popover"
+                  id="platform-notifications-popover"
+                  ref={notificationPopoverRef}
                   role="menu"
-                  aria-label={`${user.name} ${t(locale, "accountActions")}`}
+                  aria-label={t(locale, "notifications")}
                 >
-                  <div className="platform-account-menu-head">
-                    <span
-                      className="platform-user-avatar"
-                      style={
-                        role === "superadmin"
-                          ? { background: meta.tint, color: meta.color }
-                          : { background: meta.color }
-                      }
+                  <div className="platform-popover-title">
+                    <strong>{t(locale, "notifications")}</strong>
+                    <button
+                      onClick={() => {
+                        notificationItems.forEach(notification =>
+                          platformStore.markNotificationRead(notification.id)
+                        );
+                        setNotificationVersion(version => version + 1);
+                        toast.success(t(locale, "notificationsMarkedRead"));
+                      }}
                     >
-                      {role === "superadmin" ? (
-                        <ShieldCheck size={16} />
-                      ) : (
-                        user.avatar
-                      )}
-                    </span>
-                    <div>
-                      <strong>{user.name}</strong>
-                      <small>{translateUiLabel(locale, meta.label)}</small>
-                    </div>
+                      {t(locale, "markRead")}
+                    </button>
                   </div>
-                  <Link
-                    href={profileHref}
-                    className="platform-account-menu-item"
-                    role="menuitem"
-                  >
-                    <UserCircle size={15} />
-                    {t(locale, "profile")}
-                  </Link>
-                  <Link
-                    href="/auth/logout"
-                    className="platform-account-menu-item danger"
-                    role="menuitem"
-                  >
-                    <LogOut size={15} />
-                    {t(locale, "signOut")}
-                  </Link>
+                  {notificationItems.map(item => (
+                    <button
+                      key={item.id}
+                      className="platform-notification-item"
+                      role="menuitem"
+                      onClick={() => {
+                        platformStore.markNotificationRead(item.id);
+                        setNotificationVersion(version => version + 1);
+                        setNotificationsOpen(false);
+                        navigate(item.href);
+                      }}
+                    >
+                      <span
+                        style={{
+                          background: roleMeta[role].tint,
+                          color: roleMeta[role].color,
+                        }}
+                      >
+                        {item.read ? t(locale, "read") : t(locale, "unread")}
+                      </span>
+                      <strong>{item.title}</strong>
+                      <small>{item.body}</small>
+                    </button>
+                  ))}
+                  {!notificationItems.length ? (
+                    <div className="platform-notification-empty">
+                      {t(locale, "noNotifications")}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
+
+              <div className="platform-account">
+                <button
+                  ref={accountButtonRef}
+                  type="button"
+                  className="platform-user-pill"
+                  aria-label={`${user.name} ${t(locale, "accountMenu")}`}
+                  aria-expanded={accountOpen}
+                  aria-controls="platform-account-menu"
+                  onClick={() => setAccountOpen(open => !open)}
+                >
+                  <span
+                    className="platform-user-avatar"
+                    style={
+                      role === "superadmin"
+                        ? { background: meta.tint, color: meta.color }
+                        : { background: meta.color }
+                    }
+                  >
+                    {role === "superadmin" ? (
+                      <ShieldCheck size={16} />
+                    ) : (
+                      user.avatar
+                    )}
+                  </span>
+                  <span className="platform-user-copy">
+                    <strong>{user.name}</strong>
+                    <small>{translateUiLabel(locale, meta.label)}</small>
+                  </span>
+                  <ChevronDown size={14} />
+                </button>
+
+                {accountOpen ? (
+                  <div
+                    id="platform-account-menu"
+                    ref={accountMenuRef}
+                    className="platform-account-menu"
+                    role="menu"
+                    aria-label={`${user.name} ${t(locale, "accountActions")}`}
+                  >
+                    <div className="platform-account-menu-head">
+                      <span
+                        className="platform-user-avatar"
+                        style={
+                          role === "superadmin"
+                            ? { background: meta.tint, color: meta.color }
+                            : { background: meta.color }
+                        }
+                      >
+                        {role === "superadmin" ? (
+                          <ShieldCheck size={16} />
+                        ) : (
+                          user.avatar
+                        )}
+                      </span>
+                      <div>
+                        <strong>{user.name}</strong>
+                        <small>{translateUiLabel(locale, meta.label)}</small>
+                      </div>
+                    </div>
+                    <Link
+                      href={profileHref}
+                      className="platform-account-menu-item"
+                      role="menuitem"
+                    >
+                      <UserCircle size={15} />
+                      {t(locale, "profile")}
+                    </Link>
+                    <Link
+                      href="/auth/logout"
+                      className="platform-account-menu-item danger"
+                      role="menuitem"
+                    >
+                      <LogOut size={15} />
+                      {t(locale, "signOut")}
+                    </Link>
+                  </div>
+                ) : null}
+              </div>
             </div>
-          </div>
-        </motion.header>
+          </motion.header>
 
-        <section
-          className="platform-context-quote platform-context-quote-a11y"
-          aria-label={`${translateUiLabel(locale, meta.label)} inspiration`}
-        >
-          <span className="platform-quote-mark" aria-hidden="true">
-            ۞
-          </span>
-          <div>
-            <small>{inspiration.theme}</small>
-            <strong lang="ar" dir="rtl">
-              {inspiration.arabic}
-            </strong>
-            <p>{inspiration.meaning}</p>
-          </div>
-          <em>{inspiration.source}</em>
-        </section>
+          <section
+            className="platform-context-quote platform-context-quote-a11y"
+            aria-label={`${translateUiLabel(locale, meta.label)} inspiration`}
+          >
+            <span className="platform-quote-mark" aria-hidden="true">
+              ۞
+            </span>
+            <div>
+              <small>{inspiration.theme}</small>
+              <strong lang="ar" dir="rtl">
+                {inspiration.arabic}
+              </strong>
+              <p>{inspiration.meaning}</p>
+            </div>
+            <em>{inspiration.source}</em>
+          </section>
 
-        <motion.main
-          key={location}
-          className="platform-content"
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.36, ease: [0.23, 1, 0.32, 1] }}
-        >
-          {children}
-        </motion.main>
-      </div>
+          <motion.main
+            key={location}
+            id="platform-main-content"
+            className="platform-content"
+            tabIndex={-1}
+            aria-label={translateUiLabel(locale, title ?? meta.label)}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.36, ease: [0.23, 1, 0.32, 1] }}
+          >
+            {children}
+          </motion.main>
+        </div>
       </div>
     </UiLanguageProvider>
   );

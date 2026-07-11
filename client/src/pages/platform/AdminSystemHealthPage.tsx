@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Activity, RefreshCcw, Server, ShieldCheck } from "lucide-react";
+import { RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 import PlatformShell from "@/components/platform/PlatformShell";
 import { ReportLayout } from "@/components/platform/PlatformLayouts";
@@ -12,6 +12,7 @@ import { platformStore } from "@/lib/domain/store";
 import type { IntegrationStatus } from "@/lib/domain/types";
 
 function formatConnectionStatus(status: IntegrationStatus) {
+  if (status === "connected") return "Ready";
   return status === "mock_mode" ? "Test mode" : status.replace("_", " ");
 }
 
@@ -102,10 +103,6 @@ export default function AdminSystemHealthPage() {
       healthChecks.length) *
       100
   );
-  const latestHealthAudit = state.auditLogs.find(
-    audit => audit.action === "system.health_checked"
-  );
-
   const runHealthChecks = async () => {
     if (saving) return;
     setSaving(true);
@@ -132,8 +129,8 @@ export default function AdminSystemHealthPage() {
     <PlatformShell role="superadmin" title="System health">
       <ReportLayout
         className="admin-system-health-page"
-        title="System health"
-        description="Run and review internal platform readiness checks."
+        title="Health"
+        description="Review application and connection readiness."
         context="Admin"
         actions={
           <button
@@ -143,89 +140,43 @@ export default function AdminSystemHealthPage() {
             disabled={saving}
           >
             <RefreshCcw size={15} />
-            {saving ? "Checking" : "Run checks"}
+            {saving ? "Checking" : "Run check"}
           </button>
         }
         main={
-          <DataTableCard
-            title="Operational checks"
-            subtitle={`${healthScore}% readiness`}
-          >
+          <DataTableCard title="Readiness" subtitle={`${healthScore}% ready`}>
             {error ? (
               <div className="platform-empty-state error">
                 <strong>Health check was not saved</strong>
                 <span>{error}</span>
               </div>
             ) : null}
-            <table>
-              <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Check</th>
-                  <th>Signal</th>
-                  <th>Metric</th>
-                </tr>
-              </thead>
-              <tbody>
-                {healthChecks.map(check => (
-                  <tr key={check.id}>
-                    <td>
-                      <StatusBadge tone={integrationTone(check.status)}>
-                        {formatConnectionStatus(check.status)}
-                      </StatusBadge>
-                    </td>
-                    <td>
-                      <strong>{check.label}</strong>
-                    </td>
-                    <td>{check.detail}</td>
-                    <td>{check.metric}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div
+              className="admin-record-list admin-health-record-list"
+              data-testid="admin-health-list"
+            >
+              {healthChecks.map(check => (
+                <article key={check.id}>
+                  <div className="admin-record-list-copy">
+                    <span>Readiness check</span>
+                    <strong>{check.label}</strong>
+                    <p>{check.detail}</p>
+                  </div>
+                  <dl className="admin-record-list-facts">
+                    <div>
+                      <dt>Summary</dt>
+                      <dd>{check.metric}</dd>
+                    </div>
+                  </dl>
+                  <div className="admin-record-list-meta">
+                    <StatusBadge tone={integrationTone(check.status)}>
+                      {formatConnectionStatus(check.status)}
+                    </StatusBadge>
+                  </div>
+                </article>
+              ))}
+            </div>
           </DataTableCard>
-        }
-        side={
-          <div className="portal-simple-stack">
-            <section className="portal-simple-side-card">
-              <span>
-                <Activity size={15} />
-                Readiness score
-              </span>
-              <strong>{healthScore}%</strong>
-              <p>
-                Connected and test-mode checks count as usable during internal
-                alpha stabilization.
-              </p>
-            </section>
-
-            <section className="portal-simple-side-card">
-              <span>
-                <Server size={15} />
-                Data surface
-              </span>
-              <strong>{platformEntityTotal} records</strong>
-              <p>
-                Users, courses, classes, enrollments, events, and audit rows
-                are included in the current local platform state check.
-              </p>
-            </section>
-
-            <section className="portal-simple-side-card">
-              <span>
-                <ShieldCheck size={15} />
-                Latest health audit
-              </span>
-              {latestHealthAudit ? (
-                <>
-                  <strong>{latestHealthAudit.action}</strong>
-                  <p>{latestHealthAudit.summary}</p>
-                </>
-              ) : (
-                <p>Run checks to write the first health audit row.</p>
-              )}
-            </section>
-          </div>
         }
       />
     </PlatformShell>

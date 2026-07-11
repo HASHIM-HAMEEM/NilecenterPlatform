@@ -2,9 +2,12 @@
 
 ## Purpose
 
-This is a planning artifact for moving Nile Learn from snapshot/demo persistence toward production Supabase/Postgres persistence. It does not implement schema changes, migrations, RLS policies, seed scripts, or external integrations.
+This document governs the move from snapshot/demo persistence toward production
+Supabase/Postgres persistence. Phase 1 now has a local-only migration, RLS
+contract, rollback, assertions, and fake seed; it does not change application
+runtime behavior or authorize remote application or external integrations.
 
-The detailed table design draft remains in `docs/production-persistence-architecture.md`. This plan defines the safe execution sequence, authority boundaries, validation gates, and rollback posture.
+The detailed table design draft remains in `docs/production-persistence-architecture.md`. `docs/NILE_LEARN_MASTER_PLAN.md` is the authoritative phase sequence; this file summarizes its persistence-specific gates and must not define a competing rollout order.
 
 ## Current Snapshot
 
@@ -16,16 +19,30 @@ Current runtime persistence is intentionally conservative:
 - Optional Supabase snapshot mode writes the same denormalized state to `SUPABASE_PLATFORM_STATE_TABLE`.
 - Optional repository events write to `SUPABASE_PLATFORM_EVENTS_TABLE`.
 - `server/platformState.ts` is the server-side workflow gate: it derives the actor from the session, checks role and scope, applies domain mutations, writes the next snapshot, and records audit/event evidence.
-- `server/auth.ts` supports Supabase password sign-in when configured, but demo auth and in-memory sessions are still part of the alpha flow.
-- `server/sessionStore.ts` is in-memory only.
+- `server/auth.ts` supports Supabase password sign-in when configured, but demo auth and memory-backed sessions are still part of the alpha flow.
+- `server/sessionRepository.ts` owns the asynchronous session repository,
+  memory default, and non-default Supabase durable adapter.
+- `server/sessionStore.ts` is a compatibility re-export only.
 - `client/src/lib/domain/store.ts` may cache demo/scoped state locally, but client state is not an authorization boundary.
 
 Current Supabase posture:
 
 - Supabase browser config accepts only public browser keys through `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, or `VITE_SUPABASE_ANON_KEY`.
 - Server Supabase REST calls require server-only credentials through `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY`.
-- `docs/supabase-phase-1-identity-session-rls-draft.sql` is a draft only, not an applied production migration.
+- The reviewed Phase 1 SQL is promoted locally as
+  `supabase/migrations/20260710053837_phase1_identity_scope_session_audit_mapping.sql`.
+- The migration and fake-only seed pass static, PGlite, disposable local
+  Supabase reset, assertion, rollback, reapply, and database-lint gates.
+- The non-default session adapter passes a real disposable-local PostgREST gate
+  for create, hashed-token storage, atomic resolve, expiry, live scope refresh,
+  revocation, and browser-role denial.
+- The migration is not applied to the linked or any shared Supabase project.
 - Normalized Supabase/Postgres tables and complete RLS policies are not yet the production source of truth.
+- Memory-backed Supabase Auth sessions still derive compatibility roles from
+  server-validated `app_metadata`; this is not the normalized production
+  authority model.
+- Durable normalized sessions intentionally receive `503` for legacy snapshot
+  workflow reads and writes until normalized workflow repositories exist.
 
 ## Target Authority Model
 
@@ -72,14 +89,14 @@ Use `docs/production-persistence-architecture.md` as the source for table-level 
 
 ## RLS Plan
 
-RLS should be implemented only with normalized tables and indexed predicate columns.
+RLS should be implemented only with normalized tables and indexed authority columns. Phase 1 base tables are server-only: browser roles receive no direct table grants or policies. Later browser-readable projections require a separate accepted decision and active-session-safe scope design.
 
 Global rules:
 
 - Enable RLS on every application table exposed through Supabase APIs.
-- Avoid broad `TO authenticated` policies without row predicates.
-- Resolve identity from `app_users.auth_user_id = auth.uid()`.
-- Resolve role/scope from server-owned tables, not user-editable metadata.
+- Revoke direct `anon` and `authenticated` access to Phase 1 base tables.
+- Resolve identity and the one active role grant through the opaque Nile application session in the server layer.
+- Resolve role/scope from server-owned tables, not Auth claims or user-editable metadata.
 - Use `USING` and `WITH CHECK` policies for writable tables.
 - Index all foreign keys and every policy predicate column.
 - Keep service credentials server-side only.
@@ -120,89 +137,24 @@ Target interface direction:
 - `recordPayment(input, actor)`
 - `savePortalSettings(input, actor)`
 
-Do not expose table names to page components. Pages and workflow components should continue to call domain actions/server actions, while repository adapters decide whether the backing store is snapshot, dual-write, or normalized Postgres.
+Do not expose table names to page components. Pages and workflow components continue to call domain actions/server actions. A workflow has one writable authority at a time; compatibility projections may be compared but are not independently writable.
 
 ## Migration Phases
 
-### Phase 0: Preserve The Alpha Baseline
+The canonical sequence is defined in `docs/NILE_LEARN_MASTER_PLAN.md`:
 
-Status: current operating mode.
+1. **Phase 0 - Authority and baseline:** approve ADRs, preserve the accepted portal QA baseline, and resolve ownership conflicts.
+2. **Phase 1 - Identity, organization, audit, and mapping schema:** prove the additive migration, rollback, indexes, browser denials, command evidence, and fake fixtures on a disposable database.
+3. **Phase 2 - Durable authentication and scope authority:** map Supabase Auth exactly, resolve one active grant per opaque session, revoke rather than mutate sessions, and fail closed in production.
+4. **Phase 3 - Repository read migration:** introduce normalized server reads behind a flag and compare them to snapshot compatibility output. Snapshot remains the only writable authority during parity work.
+5. **Phases 4-5 - Student lifecycle, course delivery, and scheduling:** cut over one bounded workflow transactionally; its normalized service becomes the sole writable authority while snapshot data is generated only as a compatibility read model.
+6. **Phase 6 - Read-only Moodle projection:** ingest approved Moodle content/activity projections with checkpoints and reconciliation; no Moodle writes.
+7. **Phases 7-9 - Teacher, HOD, branch, and super-admin operations:** migrate one scoped workflow family at a time with server authorization, audit/outbox evidence, parity, and portal QA.
+8. **Phase 10 - Controlled Moodle writes:** requires a later accepted ADR and a migration that deliberately widens the read-only connection constraint.
+9. **Phase 11 - Finite legacy EMS migration:** dry run, reconciliation, approved import, final delta, cutover, rollback evidence, and credential retirement. No recurring EMS sync or writeback.
+10. **Phase 12 - Route-by-route UI completion:** complete Simple UI after the underlying workflows and authority boundaries are stable.
 
-- Keep snapshot/local fallback default.
-- Keep portal QA green.
-- Keep demo auth and local fixtures available.
-- Do not connect external systems.
-- Do not widen RBAC to make persistence work easier.
-
-### Phase 1: Identity, Scope, Session, And Audit Draft
-
-Planning and dry-run only.
-
-- Review `docs/supabase-phase-1-identity-session-rls-draft.sql`.
-- Convert the draft into a real migration only after review.
-- Add RLS policy tests before runtime adoption.
-- Add fake demo seed data only.
-- Keep production service keys out of browser-visible code.
-
-### Phase 2: Read-Only Normalized Mirror
-
-No UI behavior change.
-
-- Create normalized tables in a local/dev Supabase environment.
-- Seed fake demo data mapped from the current snapshot.
-- Add a read-only adapter that maps normalized rows back into the existing `PlatformState` read model.
-- Add parity tests comparing snapshot reads to normalized reads.
-- Keep snapshot as the runtime source of truth.
-
-### Phase 3: Dual-Write Low-Risk Modules
-
-Controlled workflow migration.
-
-- Start with audit logs, report presets, portal settings, and branch/room operations.
-- Write both snapshot and normalized tables.
-- Compare resulting read models.
-- Keep rollback to snapshot immediate through an env flag.
-
-### Phase 4: Dual-Write Core School Operations
-
-Move one workflow at a time:
-
-- attendance
-- admissions lifecycle
-- user/staff/student lifecycle
-- enrollments and class rosters
-- assignments, quiz attempts, grading, and feedback
-- certificates
-- Quran progress and recitation review
-- invoices and internal payment records
-
-Each workflow must have focused tests, role-scope tests, audit evidence checks, and browser workflow QA before the next workflow starts.
-
-### Phase 5: Normalized Read Cutover
-
-Only after parity is proven:
-
-- Make normalized Postgres the source for selected read models.
-- Keep snapshot export for debug/rollback.
-- Avoid loading the entire platform state for normal page reads.
-- Paginate large tables and reports.
-
-### Phase 6: Durable Session Cutover
-
-Only after identity and role/scope tables are stable:
-
-- Replace in-memory session storage or verify Supabase sessions server-side.
-- Map Supabase identities to `app_users`.
-- Refresh role and scope server-side on sensitive actions.
-- Keep role/scope authority in server-owned tables.
-
-### Phase 7: Snapshot Retirement
-
-Only after full parity and QA stability:
-
-- Stop treating the snapshot as production state.
-- Keep snapshot export/import as a local QA/debug tool if useful.
-- Remove assumptions that the full platform can be loaded as one object.
+At every cutover there is one writable authority. The previous adapter remains available only as a read-only rollback/export source until the slice is accepted.
 
 ## What Stays Local Or Demo
 
@@ -227,19 +179,24 @@ Every persistence slice must support immediate rollback:
 - Export the current snapshot before data backfill or adapter cutover.
 - Prefer additive migrations and reversible local/dev migrations during early phases.
 - Run parity tests before enabling new reads.
-- If dual-write diverges, disable the normalized adapter, preserve the snapshot, inspect the workflow, and do not continue to the next slice.
+- If a shadow read comparison diverges, keep the current writable adapter active, disable the normalized read adapter, preserve the snapshot, and stop before cutover.
 
 ## Validation Gates
 
 Before any runtime persistence change:
 
 - `npm run check`
+- `npm run check:phase1-schema`
+- `npm run check:phase1-schema:runtime`
+- `npm run check:phase2-session:supabase` when the approved slice touches the
+  durable session adapter
 - `npm test -- --run`
 - `npm run build`
 - focused repository parity tests
 - focused RBAC/scope tests
 - migration dry run in local/dev Supabase
-- RLS policy tests for each role
+- direct browser-denial tests for Phase 1 base tables
+- server action and scope tests for each role
 - full portal QA with 0 failures
 
 Manual/browser validation must be done per workflow using Aside when available:
@@ -264,14 +221,9 @@ Manual/browser validation must be done per workflow using Aside when available:
 - Do not make RLS permissive to simplify QA.
 - Do not remove snapshot fallback until normalized reads, writes, RLS, sessions, and QA are proven stable.
 
-## First Safe Implementation Slice
+## Current Slice Authority
 
-The first implementation slice after this plan should be small:
-
-1. Convert the identity/scope/session/audit SQL draft into a real local-only migration.
-2. Add fake seed rows for demo users, branches, departments, roles, scopes, and permissions.
-3. Add tests that prove RLS denies cross-role and cross-scope reads.
-4. Do not change app runtime persistence yet.
-5. Run full validation and browser QA.
-
-Only after that passes should a read-only normalized adapter be introduced.
+The authoritative current status, next slice, and slice-specific constraints
+live only in `docs/NILE_LEARN_MASTER_PLAN.md` under **Current Modernization
+Checkpoint**. This persistence plan does not duplicate or independently approve
+that work.

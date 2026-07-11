@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, Presentation, Search, Users } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
 import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
@@ -108,16 +108,11 @@ export default function RegistrarClassesPage() {
     const matchesStatus = status === "all" || row.status === status;
     return matchesQuery && matchesStatus;
   });
-  const totalOpenSeats = classRows.reduce((sum, row) => sum + row.seatsOpen, 0);
-  const fullClasses = classRows.filter(row => row.seatsOpen === 0).length;
-  const activeClasses = classRows.filter(row => row.status === "active").length;
-  const visibleBranches = state.branches.filter(branch =>
-    branchIds.size ? branchIds.has(branch.id) : true
-  );
 
   return (
     <PlatformShell role="registrar" title="Registrar classes">
       <WorkspaceLayout
+        className="registrar-classes-page"
         title="Classes"
         description="Find class capacity before assigning students."
         context="Registrar"
@@ -128,20 +123,18 @@ export default function RegistrarClassesPage() {
           </Link>
         }
         toolbar={
-          <div className="simple-portal-toolbar">
-            <label>
-              Search
-              <span>
-                <Search size={15} />
-                <input
-                  value={query}
-                  onChange={event => setQuery(event.target.value)}
-                  placeholder="Class, course, teacher, room"
-                />
-              </span>
+          <div className="registrar-list-toolbar-v3">
+            <label className="registrar-list-search">
+              <span className="sr-only">Search classes</span>
+              <Search size={15} />
+              <input
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Search classes"
+              />
             </label>
-            <label>
-              Status
+            <label className="registrar-list-select">
+              <span>Status</span>
               <select
                 value={status}
                 onChange={event =>
@@ -162,100 +155,55 @@ export default function RegistrarClassesPage() {
           <DataTableCard
             title="Class capacity"
             subtitle={`${filteredRows.length} classes`}
+            className="registrar-record-card registrar-classes-record-card"
           >
-            <table className="simple-portal-table">
-              <thead>
-                <tr>
-                  <th>Class</th>
-                  <th>Schedule</th>
-                  <th>Capacity</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.length ? (
-                  filteredRows.map(row => (
-                    <tr key={row.id}>
-                      <td>
-                        <strong>{row.name}</strong>
-                        <small>
-                          {row.course} · {row.branch}
-                        </small>
-                      </td>
-                      <td>
-                        <strong>{row.schedule}</strong>
-                        <small>
-                          {row.teacher} · {row.room}
-                        </small>
-                      </td>
-                      <td>
-                        <strong>
-                          {row.seatsUsed}/{row.capacity}
-                        </strong>
-                        <small>{row.seatsOpen} seat(s) open</small>
-                      </td>
-                      <td>
-                        <StatusBadge tone={statusTone(row.status)}>
-                          {humanize(row.status)}
-                        </StatusBadge>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4}>
-                      <strong>No classes found</strong>
-                      <small>
-                        Try a different search or review branch access.
-                      </small>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div
+              className="registrar-record-list registrar-classes-record-list"
+              data-testid="registrar-classes-list"
+            >
+              {filteredRows.map(row => (
+                <article
+                  key={row.id}
+                  className="registrar-record-row registrar-class-record"
+                  data-class-id={row.id}
+                >
+                  <div className="registrar-record-primary">
+                    <strong>{row.name}</strong>
+                    <span>
+                      {row.course} · {row.branch}
+                    </span>
+                  </div>
+                  <dl className="registrar-record-facts">
+                    <div>
+                      <dt>Schedule</dt>
+                      <dd>{row.schedule}</dd>
+                    </div>
+                    <div>
+                      <dt>Teacher</dt>
+                      <dd>
+                        {row.teacher} · {row.room}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Seats</dt>
+                      <dd>
+                        {row.seatsUsed}/{row.capacity} · {row.seatsOpen} open
+                      </dd>
+                    </div>
+                  </dl>
+                  <StatusBadge tone={statusTone(row.status)}>
+                    {humanize(row.status)}
+                  </StatusBadge>
+                </article>
+              ))}
+              {!filteredRows.length ? (
+                <div className="platform-empty-state">
+                  <strong>No classes found</strong>
+                  <span>Try a different search or review branch access.</span>
+                </div>
+              ) : null}
+            </div>
           </DataTableCard>
-        }
-        side={
-          <section className="registrar-panel">
-            <div className="registrar-panel-head">
-              <div>
-                <span>Assignment readiness</span>
-                <strong>{totalOpenSeats} open seats</strong>
-              </div>
-              <Presentation size={18} />
-            </div>
-            <div className="registrar-operations-list">
-              <article>
-                <Users size={15} />
-                <div>
-                  <strong>{activeClasses} active classes</strong>
-                  <small>
-                    {fullClasses} full · {classRows.length} visible total
-                  </small>
-                </div>
-              </article>
-              <article>
-                <div>
-                  <strong>Branch access</strong>
-                  <small>
-                    {visibleBranches.map(branch => branch.name).join(", ") ||
-                      "No branch assigned"}
-                  </small>
-                </div>
-                <span>{visibleBranches.length || 0}</span>
-              </article>
-              <article>
-                <div>
-                  <strong>Next step</strong>
-                  <small>
-                    Choose a class here, then activate the student from
-                    Enrollments.
-                  </small>
-                </div>
-                <span>ready</span>
-              </article>
-            </div>
-          </section>
         }
       />
     </PlatformShell>

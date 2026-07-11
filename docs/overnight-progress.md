@@ -1,5 +1,9 @@
 # Overnight Progress
 
+> Historical progress log captured on 2026-07-08. It does not define current
+> architecture status or the next implementation slice. Use
+> `docs/NILE_LEARN_MASTER_PLAN.md` under **Current Modernization Checkpoint**.
+
 This document tracks the controlled beta-readiness build loop for Nile Learn. It is intentionally module-based: finish a safe slice, validate it, then continue.
 
 ## Current Snapshot

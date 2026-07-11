@@ -67,7 +67,7 @@ export default function PlatformBlueprintPage() {
       <PlatformWorkspaceHeader
         className="platform-blueprint-hero"
         title="Designed as a long-lived LMS plus EMS platform."
-        description="Public website intake, registrar operations, student learning, teaching tools, academic management, branch operations, certificates, reporting, and integrations are separated by ownership and data boundaries. The current app uses local mock storage with server-only integration placeholders."
+        description="Public intake, learning, academic management, branch operations, certificates, reports, and connections each have a clear owner."
         context={<span>System model</span>}
         actionsClassName="platform-blueprint-kpis"
         actions={

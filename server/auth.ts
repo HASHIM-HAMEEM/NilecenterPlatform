@@ -1,7 +1,34 @@
 import crypto from "node:crypto";
-import { getSessionStore } from "./sessionStore.js";
+import {
+  getSessionRepository,
+  SessionAuthorityDeniedError,
+} from "./sessionRepository.js";
 
-export type ServerRole = "student" | "teacher" | "registrar" | "headofdepartment" | "branchadmin" | "superadmin";
+export class AuthenticationAuthorityError extends Error {
+  constructor(
+    message = "This account is not authorized for the requested role."
+  ) {
+    super(message);
+    this.name = "AuthenticationAuthorityError";
+  }
+}
+
+export class AuthenticationProviderUnavailableError extends Error {
+  constructor(
+    message = "The authentication provider is temporarily unavailable."
+  ) {
+    super(message);
+    this.name = "AuthenticationProviderUnavailableError";
+  }
+}
+
+export type ServerRole =
+  | "student"
+  | "teacher"
+  | "registrar"
+  | "headofdepartment"
+  | "branchadmin"
+  | "superadmin";
 
 export type ServerSession = {
   id: string;
@@ -10,7 +37,12 @@ export type ServerSession = {
   name: string;
   roles: ServerRole[];
   activeRole: ServerRole;
+  authUserId?: string;
+  activeRoleGrantId?: string;
+  branchIds?: string[];
+  departmentIds?: string[];
   provider: "supabase" | "demo";
+  authorizationModel?: "snapshot" | "normalized";
   createdAt: string;
   expiresAt: string;
 };
@@ -18,13 +50,40 @@ export type ServerSession = {
 const COOKIE_NAME = "nilelearn_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 
-const demoUsers: Record<ServerRole, { id: string; email: string; name: string }> = {
-  student: { id: "usr_student_demo", email: "student.demo@nilelearn.local", name: "Student Demo" },
-  teacher: { id: "usr_teacher_demo", email: "teacher.demo@nilelearn.local", name: "Teacher Demo" },
-  registrar: { id: "usr_registrar_demo", email: "registrar.demo@nilelearn.local", name: "Registrar Demo" },
-  headofdepartment: { id: "usr_hod_demo", email: "hod.demo@nilelearn.local", name: "HOD Demo" },
-  branchadmin: { id: "usr_branch_demo", email: "branch.demo@nilelearn.local", name: "Branch Demo" },
-  superadmin: { id: "usr_admin_demo", email: "admin.demo@nilelearn.local", name: "Admin Demo" },
+const demoUsers: Record<
+  ServerRole,
+  { id: string; email: string; name: string }
+> = {
+  student: {
+    id: "usr_student_demo",
+    email: "student.demo@nilelearn.local",
+    name: "Student Demo",
+  },
+  teacher: {
+    id: "usr_teacher_demo",
+    email: "teacher.demo@nilelearn.local",
+    name: "Teacher Demo",
+  },
+  registrar: {
+    id: "usr_registrar_demo",
+    email: "registrar.demo@nilelearn.local",
+    name: "Registrar Demo",
+  },
+  headofdepartment: {
+    id: "usr_hod_demo",
+    email: "hod.demo@nilelearn.local",
+    name: "HOD Demo",
+  },
+  branchadmin: {
+    id: "usr_branch_demo",
+    email: "branch.demo@nilelearn.local",
+    name: "Branch Demo",
+  },
+  superadmin: {
+    id: "usr_admin_demo",
+    email: "admin.demo@nilelearn.local",
+    name: "Admin Demo",
+  },
 };
 const demoEmailAliases: Record<ServerRole, string> = {
   student: "s@nl.test",
@@ -35,7 +94,10 @@ const demoEmailAliases: Record<ServerRole, string> = {
   superadmin: "a@nl.test",
 };
 const DEMO_RESET_TTL_MS = 1000 * 60 * 20;
-const demoResetTokens = new Map<string, { email: string; role: ServerRole; expiresAt: number }>();
+const demoResetTokens = new Map<
+  string,
+  { email: string; role: ServerRole; expiresAt: number }
+>();
 const demoPasswordOverrides = new Map<string, string>();
 
 type SessionCookieRequest = {
@@ -57,19 +119,45 @@ export function isServerRole(value: unknown): value is ServerRole {
 }
 
 function demoAuthEnabled() {
-  const explicit = process.env.DEMO_AUTH_ENABLED ?? process.env.VITE_DEMO_AUTH_ENABLED;
-  if (explicit !== undefined) return explicit === "true";
+  const explicit =
+    process.env.DEMO_AUTH_ENABLED ?? process.env.VITE_DEMO_AUTH_ENABLED;
+  if (explicit !== undefined) {
+    if (explicit !== "true") return false;
+    if (process.env.NODE_ENV === "production") {
+      return clean(process.env.NILE_DEMO_PASSWORD).length >= 8;
+    }
+    return true;
+  }
   return process.env.NODE_ENV !== "production";
 }
 
+export function validateAuthConfiguration() {
+  const demoEnabled =
+    (process.env.DEMO_AUTH_ENABLED ?? process.env.VITE_DEMO_AUTH_ENABLED) ===
+    "true";
+  if (
+    process.env.NODE_ENV === "production" &&
+    demoEnabled &&
+    clean(process.env.NILE_DEMO_PASSWORD).length < 8
+  ) {
+    throw new Error(
+      "Production demo authentication requires an explicit NILE_DEMO_PASSWORD with at least 8 characters."
+    );
+  }
+}
+
 function demoEmailCandidates(role: ServerRole) {
-  return [demoUsers[role].email, demoEmailAliases[role]].map((value) => value.toLowerCase());
+  return [demoUsers[role].email, demoEmailAliases[role]].map(value =>
+    value.toLowerCase()
+  );
 }
 
 function findDemoRoleByEmail(email: string, requestedRole?: ServerRole) {
   const emailValue = clean(email).toLowerCase();
-  const roles = requestedRole ? [requestedRole] : (Object.keys(demoUsers) as ServerRole[]);
-  return roles.find((role) => demoEmailCandidates(role).includes(emailValue));
+  const roles = requestedRole
+    ? [requestedRole]
+    : (Object.keys(demoUsers) as ServerRole[]);
+  return roles.find(role => demoEmailCandidates(role).includes(emailValue));
 }
 
 function demoPasswordAccepted(password: string, role?: ServerRole) {
@@ -86,19 +174,19 @@ function parseCookies(req: SessionCookieRequest) {
   return Object.fromEntries(
     (req.headers.cookie ?? "")
       .split(";")
-      .map((part) => part.trim())
+      .map(part => part.trim())
       .filter(Boolean)
-      .map((part) => {
+      .map(part => {
         const [name, ...rest] = part.split("=");
         return [decodeURIComponent(name), decodeURIComponent(rest.join("="))];
-      }),
+      })
   );
 }
 
 function writeSessionCookie(res: SessionCookieResponse, sessionId: string) {
   res.setHeader(
     "Set-Cookie",
-    `${COOKIE_NAME}=${encodeURIComponent(sessionId)}; Path=/; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}; HttpOnly; SameSite=Lax${secureCookieAttribute()}`,
+    `${COOKIE_NAME}=${encodeURIComponent(sessionId)}; Path=/; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}; HttpOnly; SameSite=Lax${secureCookieAttribute()}`
   );
 }
 
@@ -107,34 +195,57 @@ function secureCookieAttribute() {
 }
 
 export function clearSessionCookie(res: SessionCookieResponse) {
-  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureCookieAttribute()}`);
+  res.setHeader(
+    "Set-Cookie",
+    `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureCookieAttribute()}`
+  );
 }
 
-function createSession(input: Omit<ServerSession, "id" | "createdAt" | "expiresAt">) {
-  const id = crypto.randomUUID();
+async function createSession(
+  input: Omit<
+    ServerSession,
+    "id" | "createdAt" | "expiresAt" | "authorizationModel"
+  >
+) {
+  const repository = getSessionRepository();
+  const id = crypto.randomBytes(32).toString("base64url");
   const createdAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-  const session: ServerSession = { id, createdAt, expiresAt, ...input };
-  getSessionStore().create(session);
-  return session;
+  const session: ServerSession = {
+    id,
+    createdAt,
+    expiresAt,
+    authorizationModel:
+      repository.kind === "supabase" ? "normalized" : "snapshot",
+    ...input,
+  };
+  const persistedTiming = await repository.create(session);
+  return persistedTiming ? { ...session, ...persistedTiming } : session;
 }
 
-export function getRequestSession(req: SessionCookieRequest) {
+export async function getRequestSession(req: SessionCookieRequest) {
   const sessionId = parseCookies(req)[COOKIE_NAME];
   if (!sessionId) return null;
-  const session = getSessionStore().get(sessionId);
+  const repository = getSessionRepository();
+  const session = await repository.get(sessionId);
   if (!session) return null;
   if (Date.parse(session.expiresAt) <= Date.now()) {
-    getSessionStore().delete(sessionId);
+    await repository.delete(sessionId);
     return null;
   }
   return session;
 }
 
-export function endRequestSession(req: SessionCookieRequest, res: SessionCookieResponse) {
+export async function endRequestSession(
+  req: SessionCookieRequest,
+  res: SessionCookieResponse
+) {
   const sessionId = parseCookies(req)[COOKIE_NAME];
-  if (sessionId) getSessionStore().delete(sessionId);
-  clearSessionCookie(res);
+  try {
+    if (sessionId) await getSessionRepository().delete(sessionId);
+  } finally {
+    clearSessionCookie(res);
+  }
 }
 
 type SupabaseAuthUser = {
@@ -152,8 +263,14 @@ type SupabaseAuthUser = {
 };
 
 function getSupabaseAuthConfig() {
-  const url = clean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL).replace(/\/+$/, "");
-  const key = clean(process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY);
+  const url = clean(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  ).replace(/\/+$/, "");
+  const key = clean(
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+      process.env.VITE_SUPABASE_ANON_KEY
+  );
   return { url, key };
 }
 
@@ -166,32 +283,85 @@ function rolesFromAppMetadata(user: SupabaseAuthUser) {
   return rawRoles.filter(isServerRole);
 }
 
-async function signInWithSupabase(email: string, password: string, requestedRole: ServerRole) {
+async function signInWithSupabase(
+  email: string,
+  password: string,
+  requestedRole: ServerRole
+) {
   const config = getSupabaseAuthConfig();
   if (!config.url || !config.key) return null;
 
-  const response = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: {
-      apikey: config.key,
-      Authorization: `Bearer ${config.key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!response.ok) return null;
+  let response: Response;
+  try {
+    response = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: {
+        apikey: config.key,
+        Authorization: `Bearer ${config.key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    throw new AuthenticationProviderUnavailableError();
+  }
+  if (!response.ok) {
+    if (response.status >= 500 || response.status === 429) {
+      throw new AuthenticationProviderUnavailableError();
+    }
+    return null;
+  }
 
-  const payload = (await response.json()) as { user?: SupabaseAuthUser };
+  let payload: { user?: SupabaseAuthUser };
+  try {
+    payload = (await response.json()) as { user?: SupabaseAuthUser };
+  } catch {
+    throw new AuthenticationProviderUnavailableError();
+  }
   const user = payload.user;
-  if (!user) return null;
+  if (!user) throw new AuthenticationProviderUnavailableError();
+
+  const repository = getSessionRepository();
+  if (repository.kind === "supabase") {
+    let identity;
+    try {
+      identity = await repository.resolveSupabaseIdentity?.(
+        user.id,
+        requestedRole
+      );
+    } catch (error) {
+      if (error instanceof SessionAuthorityDeniedError) {
+        throw new AuthenticationAuthorityError();
+      }
+      throw error;
+    }
+    if (!identity) {
+      throw new AuthenticationAuthorityError();
+    }
+    return createSession({
+      userId: identity.userId,
+      authUserId: identity.authUserId,
+      email: identity.email,
+      name: identity.name,
+      roles: [identity.activeRole],
+      activeRole: identity.activeRole,
+      activeRoleGrantId: identity.activeRoleGrantId,
+      branchIds: identity.branchIds,
+      departmentIds: identity.departmentIds,
+      provider: "supabase",
+    });
+  }
 
   const roles = rolesFromAppMetadata(user);
   if (!roles.includes(requestedRole)) {
-    throw new Error("Your Supabase account is missing the requested role in app_metadata.");
+    throw new AuthenticationAuthorityError();
   }
 
+  const compatibilityUserId = clean(user.app_metadata?.demo_user_id);
+  if (!compatibilityUserId) throw new AuthenticationAuthorityError();
+
   return createSession({
-    userId: clean(user.app_metadata?.demo_user_id) || user.id,
+    userId: compatibilityUserId,
     email: user.email ?? email,
     name: user.app_metadata?.full_name ?? user.app_metadata?.name ?? email,
     roles,
@@ -200,11 +370,19 @@ async function signInWithSupabase(email: string, password: string, requestedRole
   });
 }
 
-function signInWithDemo(email: string, password: string, requestedRole: ServerRole) {
+async function signInWithDemo(
+  email: string,
+  password: string,
+  requestedRole: ServerRole
+) {
   if (!demoAuthEnabled()) return null;
   const user = demoUsers[requestedRole];
   const emailValue = clean(email).toLowerCase();
-  if (!demoEmailCandidates(requestedRole).includes(emailValue) || !demoPasswordAccepted(password, requestedRole)) return null;
+  if (
+    !demoEmailCandidates(requestedRole).includes(emailValue) ||
+    !demoPasswordAccepted(password, requestedRole)
+  )
+    return null;
 
   return createSession({
     userId: user.id,
@@ -216,8 +394,13 @@ function signInWithDemo(email: string, password: string, requestedRole: ServerRo
   });
 }
 
-export function requestDemoPasswordReset(email: string, requestedRole?: ServerRole) {
-  const role = demoAuthEnabled() ? findDemoRoleByEmail(email, requestedRole) : undefined;
+export function requestDemoPasswordReset(
+  email: string,
+  requestedRole?: ServerRole
+) {
+  const role = demoAuthEnabled()
+    ? findDemoRoleByEmail(email, requestedRole)
+    : undefined;
   const expiresAt = Date.now() + DEMO_RESET_TTL_MS;
   if (!role) {
     return { ok: true as const };
@@ -232,13 +415,21 @@ export function requestDemoPasswordReset(email: string, requestedRole?: ServerRo
   };
 }
 
-export function confirmDemoPasswordReset(input: { token: string; email: string; password: string }) {
+export function confirmDemoPasswordReset(input: {
+  token: string;
+  email: string;
+  password: string;
+}) {
   if (!demoAuthEnabled()) throw new Error("Password reset is not available.");
   const token = clean(input.token);
   const email = clean(input.email).toLowerCase();
   const password = clean(input.password);
   const reset = demoResetTokens.get(token);
-  if (!reset || reset.expiresAt <= Date.now() || reset.email.toLowerCase() !== email) {
+  if (
+    !reset ||
+    reset.expiresAt <= Date.now() ||
+    reset.email.toLowerCase() !== email
+  ) {
     throw new Error("Reset link is invalid or expired.");
   }
   if (password.length < 8) {
@@ -251,7 +442,7 @@ export function confirmDemoPasswordReset(input: { token: string; email: string; 
 
 export function changeDemoPasswordForSession(
   session: ServerSession,
-  input: { currentPassword: string; newPassword: string },
+  input: { currentPassword: string; newPassword: string }
 ) {
   if (session.provider !== "demo") {
     throw new Error("Password changes are managed by your sign-in provider.");
@@ -274,17 +465,28 @@ export function resetDemoPasswordResetState() {
   demoPasswordOverrides.clear();
 }
 
-export async function signIn(email: string, password: string, requestedRole: ServerRole) {
-  const supabaseSession = await signInWithSupabase(email, password, requestedRole);
+export async function signIn(
+  email: string,
+  password: string,
+  requestedRole: ServerRole
+) {
+  const supabaseSession = await signInWithSupabase(
+    email,
+    password,
+    requestedRole
+  );
   if (supabaseSession) return supabaseSession;
 
-  const demoSession = signInWithDemo(email, password, requestedRole);
+  const demoSession = await signInWithDemo(email, password, requestedRole);
   if (demoSession) return demoSession;
 
   throw new Error("Invalid email, password, or role.");
 }
 
-export function attachSession(res: SessionCookieResponse, session: ServerSession) {
+export function attachSession(
+  res: SessionCookieResponse,
+  session: ServerSession
+) {
   writeSessionCookie(res, session.id);
   return {
     userId: session.userId,

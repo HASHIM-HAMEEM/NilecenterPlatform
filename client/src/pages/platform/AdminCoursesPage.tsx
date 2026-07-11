@@ -1,10 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  BookOpen,
-  ArrowRight,
-  Library,
-  Search,
-} from "lucide-react";
+import { BookOpen, ArrowRight, Library, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
@@ -165,7 +160,10 @@ export default function AdminCoursesPage({
       );
     });
 
-  const updateCourseStatus = async (course: Course, nextStatus: CourseStatus) => {
+  const updateCourseStatus = async (
+    course: Course,
+    nextStatus: CourseStatus
+  ) => {
     setSavingCourseId(course.id);
     const response = await runPlatformWorkflowActionRequest({
       type: "course.status.update",
@@ -193,76 +191,66 @@ export default function AdminCoursesPage({
     <DataTableCard
       title="Course catalog"
       subtitle={`${courseRows.length} course(s)`}
-      className="admin-ia-table-card admin-courses-catalog-table"
+      className="admin-ia-table-card admin-courses-catalog-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Course</th>
-              <th>Program</th>
-              <th>Department</th>
-              <th>Level</th>
-              <th>Runs</th>
-              <th>Course status</th>
-              <th>Open</th>
-            </tr>
-          </thead>
-          <tbody>
-            {courseRows.map(({ course, program, department, level, runs }) => (
-              <tr key={course.id}>
-                <td>
-                  <strong>{course.title}</strong>
-                  <small>{course.description}</small>
-                </td>
-                <td>{program?.title ?? "No program"}</td>
-                <td>{department?.name ?? "No department"}</td>
-                <td>{level?.title ?? "No level"}</td>
-                <td>{runs.length}</td>
-                <td>
-                  <label className="admin-courses-status-control">
-                    <span>Course status</span>
-                    <select
-                      value={course.status}
-                      disabled={savingCourseId === course.id}
-                      onChange={event =>
-                        void updateCourseStatus(
-                          course,
-                          event.target.value as CourseStatus
-                        )
-                      }
-                    >
-                      {courseStatusOptions.map(option => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </td>
-                <td>
-                  <Link
-                    className="platform-row-link"
-                    href={`/app/admin/courses/${course.id}`}
-                  >
-                    Details
-                    <ArrowRight size={13} />
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {!courseRows.length ? (
-              <tr>
-                <td colSpan={7}>
-                  <div className="platform-empty-state">
-                    <strong>No courses found</strong>
-                    <span>Try a different search or status filter.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-course-catalog-records">
+        {courseRows.map(({ course, program, department, level, runs }) => (
+          <article key={course.id}>
+            <div className="admin-record-list-copy">
+              <span>{program?.title ?? "Program not set"}</span>
+              <strong>{course.title}</strong>
+              <p>{course.description}</p>
+            </div>
+            <dl className="admin-record-list-facts">
+              <div>
+                <dt>Department</dt>
+                <dd>{department?.name ?? "Not set"}</dd>
+              </div>
+              <div>
+                <dt>Level</dt>
+                <dd>{level?.title ?? "Not set"}</dd>
+              </div>
+              <div>
+                <dt>Class runs</dt>
+                <dd>{runs.length}</dd>
+              </div>
+            </dl>
+            <div className="admin-record-list-actions">
+              <label className="admin-record-list-select">
+                <span>Course status</span>
+                <select
+                  value={course.status}
+                  disabled={savingCourseId === course.id}
+                  onChange={event =>
+                    void updateCourseStatus(
+                      course,
+                      event.target.value as CourseStatus
+                    )
+                  }
+                >
+                  {courseStatusOptions.map(option => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Link
+                className="simple-portal-row-action"
+                href={`/app/admin/courses/${course.id}`}
+              >
+                Details
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          </article>
+        ))}
+        {!courseRows.length ? (
+          <div className="platform-empty-state">
+            <strong>No courses found</strong>
+            <span>Try a different search or status filter.</span>
+          </div>
+        ) : null}
       </div>
     </DataTableCard>
   );
@@ -282,7 +270,9 @@ export default function AdminCoursesPage({
 
       <div className="admin-courses-detail-grid">
         <section className="admin-courses-detail-card">
-          <span className="admin-courses-detail-kicker">Academic structure</span>
+          <span className="admin-courses-detail-kicker">
+            Academic structure
+          </span>
           <dl className="admin-courses-detail-list">
             <div>
               <dt>Program</dt>
@@ -329,47 +319,35 @@ export default function AdminCoursesPage({
       <DataTableCard
         title="Course modules"
         subtitle={`${selectedModules.length} module(s)`}
-        className="admin-ia-table-card admin-courses-detail-modules-table"
+        className="admin-ia-table-card admin-courses-detail-modules-list"
       >
-        <div className="admin-ia-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Module</th>
-                <th>Order</th>
-                <th>Lessons</th>
-                <th>Outcomes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedModules.map(module => {
-                const lessons = state.lessons.filter(
-                  lesson => lesson.moduleId === module.id
-                );
-                return (
-                  <tr key={module.id}>
-                    <td>
-                      <strong>{module.title}</strong>
-                      <small>{module.id}</small>
-                    </td>
-                    <td>{module.order}</td>
-                    <td>{lessons.length}</td>
-                    <td>{module.outcomes.join(", ") || "No outcomes"}</td>
-                  </tr>
-                );
-              })}
-              {!selectedModules.length ? (
-                <tr>
-                  <td colSpan={4}>
-                    <div className="platform-empty-state">
-                      <strong>No modules yet</strong>
-                      <span>This course has no curriculum modules assigned.</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+        <div className="admin-record-list admin-course-module-records">
+          {selectedModules.map(module => {
+            const lessons = state.lessons.filter(
+              lesson => lesson.moduleId === module.id
+            );
+            return (
+              <article key={module.id}>
+                <div className="admin-record-list-copy">
+                  <span>Module {module.order}</span>
+                  <strong>{module.title}</strong>
+                  <p>
+                    {module.outcomes.slice(0, 2).join(" · ") ||
+                      "No outcomes set"}
+                  </p>
+                </div>
+                <div className="admin-record-list-meta">
+                  <small>{lessons.length} lessons</small>
+                </div>
+              </article>
+            );
+          })}
+          {!selectedModules.length ? (
+            <div className="platform-empty-state">
+              <strong>No modules yet</strong>
+              <span>This course has no curriculum modules assigned.</span>
+            </div>
+          ) : null}
         </div>
       </DataTableCard>
     </div>
@@ -393,49 +371,44 @@ export default function AdminCoursesPage({
     <DataTableCard
       title="Programs"
       subtitle={`${state.programs.length} program(s)`}
-      className="admin-ia-table-card admin-courses-programs-table"
+      className="admin-ia-table-card admin-courses-programs-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Program</th>
-              <th>Department</th>
-              <th>Language</th>
-              <th>Courses</th>
-              <th>Levels</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.programs.map(program => {
-              const department = getDepartment(program.departmentId);
-              const courses = state.courses.filter(
-                course => course.programId === program.id
-              );
-              const levels = state.levels.filter(
-                level => level.programId === program.id
-              );
-              return (
-                <tr key={program.id}>
-                  <td>
-                    <strong>{program.title}</strong>
-                    <small>{program.category}</small>
-                  </td>
-                  <td>{department?.name ?? "No department"}</td>
-                  <td>{program.language}</td>
-                  <td>{courses.length}</td>
-                  <td>{levels.length}</td>
-                  <td>
-                    <StatusBadge tone={statusTone(program.status)}>
-                      {program.status}
-                    </StatusBadge>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-course-program-records">
+        {state.programs.map(program => {
+          const department = getDepartment(program.departmentId);
+          const courses = state.courses.filter(
+            course => course.programId === program.id
+          );
+          const levels = state.levels.filter(
+            level => level.programId === program.id
+          );
+          return (
+            <article key={program.id}>
+              <div className="admin-record-list-copy">
+                <span>{department?.name ?? "Department not set"}</span>
+                <strong>{program.title}</strong>
+                <p>
+                  {program.category} · {program.language}
+                </p>
+              </div>
+              <dl className="admin-record-list-facts">
+                <div>
+                  <dt>Courses</dt>
+                  <dd>{courses.length}</dd>
+                </div>
+                <div>
+                  <dt>Levels</dt>
+                  <dd>{levels.length}</dd>
+                </div>
+              </dl>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={statusTone(program.status)}>
+                  {program.status}
+                </StatusBadge>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </DataTableCard>
   );
@@ -444,46 +417,43 @@ export default function AdminCoursesPage({
     <DataTableCard
       title="Levels"
       subtitle={`${state.levels.length} level(s)`}
-      className="admin-ia-table-card admin-courses-levels-table"
+      className="admin-ia-table-card admin-courses-levels-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Level</th>
-              <th>Program</th>
-              <th>Order</th>
-              <th>Courses</th>
-              <th>Completion rules</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...state.levels]
-              .sort((a, b) => a.order - b.order)
-              .map(level => {
-                const program = getProgram(level.programId);
-                const courses = state.courses.filter(
-                  course => course.levelId === level.id
-                );
-                return (
-                  <tr key={level.id}>
-                    <td>
-                      <strong>{level.title}</strong>
-                      <small>
-                        {level.prerequisites.length
-                          ? level.prerequisites.join(", ")
-                          : "No prerequisites"}
-                      </small>
-                    </td>
-                    <td>{program?.title ?? "No program"}</td>
-                    <td>{level.order}</td>
-                    <td>{courses.length}</td>
-                    <td>{level.completionRules.join(", ")}</td>
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-course-level-records">
+        {[...state.levels]
+          .sort((a, b) => a.order - b.order)
+          .map(level => {
+            const program = getProgram(level.programId);
+            const courses = state.courses.filter(
+              course => course.levelId === level.id
+            );
+            return (
+              <article key={level.id}>
+                <div className="admin-record-list-copy">
+                  <span>{program?.title ?? "Program not set"}</span>
+                  <strong>{level.title}</strong>
+                  <p>
+                    {level.prerequisites.length
+                      ? `Prerequisites: ${level.prerequisites.join(", ")}`
+                      : "No prerequisites"}
+                  </p>
+                </div>
+                <dl className="admin-record-list-facts">
+                  <div>
+                    <dt>Courses</dt>
+                    <dd>{courses.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Completion</dt>
+                    <dd>{level.completionRules.length} rule(s)</dd>
+                  </div>
+                </dl>
+                <div className="admin-record-list-meta">
+                  <small>Level {level.order}</small>
+                </div>
+              </article>
+            );
+          })}
       </div>
     </DataTableCard>
   );
@@ -492,44 +462,40 @@ export default function AdminCoursesPage({
     <DataTableCard
       title="Curriculum"
       subtitle={`${state.modules.length} module(s)`}
-      className="admin-ia-table-card admin-courses-curriculum-table"
+      className="admin-ia-table-card admin-courses-curriculum-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Module</th>
-              <th>Course</th>
-              <th>Order</th>
-              <th>Lessons</th>
-              <th>Outcomes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...state.modules]
-              .sort((a, b) => a.order - b.order)
-              .map(module => {
-                const course = state.courses.find(
-                  item => item.id === module.courseId
-                );
-                const lessons = state.lessons.filter(
-                  lesson => lesson.moduleId === module.id
-                );
-                return (
-                  <tr key={module.id}>
-                    <td>
-                      <strong>{module.title}</strong>
-                      <small>{module.id}</small>
-                    </td>
-                    <td>{course?.title ?? "No course"}</td>
-                    <td>{module.order}</td>
-                    <td>{lessons.length}</td>
-                    <td>{module.outcomes.join(", ") || "No outcomes"}</td>
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-course-curriculum-records">
+        {[...state.modules]
+          .sort((a, b) => a.order - b.order)
+          .map(module => {
+            const course = state.courses.find(
+              item => item.id === module.courseId
+            );
+            const lessons = state.lessons.filter(
+              lesson => lesson.moduleId === module.id
+            );
+            return (
+              <article key={module.id}>
+                <div className="admin-record-list-copy">
+                  <span>{course?.title ?? "Course not set"}</span>
+                  <strong>{module.title}</strong>
+                  <p>
+                    {module.outcomes.slice(0, 2).join(" · ") ||
+                      "No outcomes set"}
+                  </p>
+                </div>
+                <dl className="admin-record-list-facts">
+                  <div>
+                    <dt>Lessons</dt>
+                    <dd>{lessons.length}</dd>
+                  </div>
+                </dl>
+                <div className="admin-record-list-meta">
+                  <small>Module {module.order}</small>
+                </div>
+              </article>
+            );
+          })}
       </div>
     </DataTableCard>
   );
@@ -538,52 +504,41 @@ export default function AdminCoursesPage({
     <DataTableCard
       title="Teaching assignments"
       subtitle={`${state.courseRuns.length} course run(s)`}
-      className="admin-ia-table-card admin-courses-teachers-table"
+      className="admin-ia-table-card admin-courses-teachers-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Course</th>
-              <th>Teacher</th>
-              <th>Branch</th>
-              <th>Term</th>
-              <th>Dates</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.courseRuns.map(run => {
-              const course = state.courses.find(item => item.id === run.courseId);
-              const teacher = state.teachers.find(
-                item => item.id === run.teacherId
-              );
-              const user = state.users.find(item => item.id === teacher?.userId);
-              const branch = state.branches.find(
-                item => item.id === run.branchId
-              );
-              return (
-                <tr key={run.id}>
-                  <td>
-                    <strong>{course?.title ?? "No course"}</strong>
-                    <small>{run.id}</small>
-                  </td>
-                  <td>{user?.name ?? "No teacher"}</td>
-                  <td>{branch?.name ?? "No branch"}</td>
-                  <td>{run.term}</td>
-                  <td>
+      <div className="admin-record-list admin-course-teacher-records">
+        {state.courseRuns.map(run => {
+          const course = state.courses.find(item => item.id === run.courseId);
+          const teacher = state.teachers.find(
+            item => item.id === run.teacherId
+          );
+          const user = state.users.find(item => item.id === teacher?.userId);
+          const branch = state.branches.find(item => item.id === run.branchId);
+          return (
+            <article key={run.id}>
+              <div className="admin-record-list-copy">
+                <span>{user?.name ?? "Teacher not set"}</span>
+                <strong>{course?.title ?? "Course not set"}</strong>
+                <p>
+                  {branch?.name ?? "Branch not set"} · {run.term}
+                </p>
+              </div>
+              <dl className="admin-record-list-facts">
+                <div>
+                  <dt>Dates</dt>
+                  <dd>
                     {formatDate(run.startsOn)} - {formatDate(run.endsOn)}
-                  </td>
-                  <td>
-                    <StatusBadge tone={statusTone(run.status)}>
-                      {run.status}
-                    </StatusBadge>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  </dd>
+                </div>
+              </dl>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={statusTone(run.status)}>
+                  {run.status}
+                </StatusBadge>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </DataTableCard>
   );
@@ -592,49 +547,36 @@ export default function AdminCoursesPage({
     <DataTableCard
       title="Resources"
       subtitle={`${state.resources.length} resource(s)`}
-      className="admin-ia-table-card admin-courses-resources-table"
+      className="admin-ia-table-card admin-courses-resources-list"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Resource</th>
-              <th>Lesson</th>
-              <th>Course</th>
-              <th>Type</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.resources.map(resource => {
-              const lesson = state.lessons.find(
-                item => item.id === resource.lessonId
-              );
-              const module = state.modules.find(
-                item => item.id === lesson?.moduleId
-              );
-              const course = state.courses.find(
-                item => item.id === module?.courseId
-              );
-              return (
-                <tr key={resource.id}>
-                  <td>
-                    <strong>{resource.title}</strong>
-                    <small>{resource.url}</small>
-                  </td>
-                  <td>{lesson?.title ?? "No lesson"}</td>
-                  <td>{course?.title ?? "No course"}</td>
-                  <td>{resource.type}</td>
-                  <td>
-                    <StatusBadge tone={resource.published ? "green" : "amber"}>
-                      {resource.published ? "published" : "draft"}
-                    </StatusBadge>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-course-resource-records">
+        {state.resources.map(resource => {
+          const lesson = state.lessons.find(
+            item => item.id === resource.lessonId
+          );
+          const module = state.modules.find(
+            item => item.id === lesson?.moduleId
+          );
+          const course = state.courses.find(
+            item => item.id === module?.courseId
+          );
+          return (
+            <article key={resource.id}>
+              <div className="admin-record-list-copy">
+                <span>{course?.title ?? "Course not set"}</span>
+                <strong>{resource.title}</strong>
+                <p>
+                  {lesson?.title ?? "Lesson not set"} · {resource.type}
+                </p>
+              </div>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={resource.published ? "green" : "amber"}>
+                  {resource.published ? "published" : "draft"}
+                </StatusBadge>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </DataTableCard>
   );
@@ -691,7 +633,10 @@ export default function AdminCoursesPage({
         description={pageCopy[view].description}
         actions={
           view === "catalog" ? (
-            <Link className="platform-secondary-button" href="/app/admin/programs">
+            <Link
+              className="platform-secondary-button"
+              href="/app/admin/programs"
+            >
               <Library size={15} />
               View programs
             </Link>
@@ -716,35 +661,35 @@ export default function AdminCoursesPage({
                   </Link>
                 ))}
               </nav>
-            {view === "catalog" ? (
-              <div className="admin-ia-toolbar">
-                <label className="admin-ia-search">
-                  <Search size={16} />
-                  <input
-                    value={search}
-                    onChange={event => setSearch(event.target.value)}
-                    placeholder="Search courses"
-                    aria-label="Search courses"
-                  />
-                </label>
-                <label>
-                  Status
-                  <select
-                    value={status}
-                    onChange={event =>
-                      setStatus(event.target.value as "all" | CourseStatus)
-                    }
-                  >
-                    <option value="all">All statuses</option>
-                    {courseStatusOptions.map(option => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            ) : null}
+              {view === "catalog" ? (
+                <div className="admin-ia-toolbar">
+                  <label className="admin-ia-search">
+                    <Search size={16} />
+                    <input
+                      value={search}
+                      onChange={event => setSearch(event.target.value)}
+                      placeholder="Search courses"
+                      aria-label="Search courses"
+                    />
+                  </label>
+                  <label>
+                    Status
+                    <select
+                      value={status}
+                      onChange={event =>
+                        setStatus(event.target.value as "all" | CourseStatus)
+                      }
+                    >
+                      <option value="all">All statuses</option>
+                      {courseStatusOptions.map(option => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : null}
             </div>
           )
         }

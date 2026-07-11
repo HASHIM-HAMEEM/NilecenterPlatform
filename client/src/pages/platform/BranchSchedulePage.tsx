@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, Clock, DoorOpen, Plus, Search } from "lucide-react";
+import { CalendarDays, Plus, Search } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import PlatformShell from "@/components/platform/PlatformShell";
-import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
+import {
+  FormFlowLayout,
+  WorkspaceLayout,
+} from "@/components/platform/PlatformLayouts";
 import {
   DataTableCard,
   StatusBadge,
@@ -46,13 +49,20 @@ function statusTone(status: EntityStatus): "green" | "amber" | "red" | "slate" {
   return "slate";
 }
 
-export default function BranchSchedulePage() {
+type BranchSchedulePageProps = {
+  view?: "list" | "create";
+};
+
+export default function BranchSchedulePage({
+  view = "list",
+}: BranchSchedulePageProps) {
   const [version, setVersion] = useState(0);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | CalendarEventType>(
     "all"
   );
   const [eventSaving, setEventSaving] = useState(false);
+  const [eventResult, setEventResult] = useState<string | null>(null);
   const [eventDraft, setEventDraft] = useState({
     title: "Focused live class",
     type: "live_session" as CalendarEventType,
@@ -71,14 +81,17 @@ export default function BranchSchedulePage() {
   );
   const branchId = actor?.branchId ?? staffProfile?.branchIds[0] ?? "br_cairo";
   const branch = state.branches.find(item => item.id === branchId);
-  const branchRuns = state.courseRuns.filter(run => run.branchId === branch?.id);
+  const branchRuns = state.courseRuns.filter(
+    run => run.branchId === branch?.id
+  );
   const branchRunIds = new Set(branchRuns.map(run => run.id));
   const branchClasses = state.classGroups.filter(classGroup =>
     branchRunIds.has(classGroup.courseRunId)
   );
-  const branchClassIds = new Set(branchClasses.map(classGroup => classGroup.id));
+  const branchClassIds = new Set(
+    branchClasses.map(classGroup => classGroup.id)
+  );
   const branchRooms = state.rooms.filter(room => room.branchId === branch?.id);
-  const branchRoomIds = new Set(branchRooms.map(room => room.id));
   const branchEvents = state.events
     .filter(
       event =>
@@ -87,11 +100,9 @@ export default function BranchSchedulePage() {
     )
     .slice()
     .sort((first, second) => first.startsAt.localeCompare(second.startsAt));
-  const pendingEvents = branchEvents.filter(event => event.status === "pending");
-  const roomBookings = branchEvents.filter(
-    event => event.roomId && branchRoomIds.has(event.roomId)
-  );
-  const branchClassKey = branchClasses.map(classGroup => classGroup.id).join("|");
+  const branchClassKey = branchClasses
+    .map(classGroup => classGroup.id)
+    .join("|");
   const branchRoomKey = branchRooms.map(room => room.id).join("|");
 
   useEffect(() => {
@@ -99,12 +110,12 @@ export default function BranchSchedulePage() {
       ...value,
       roomId: branchRooms.some(room => room.id === value.roomId)
         ? value.roomId
-        : branchRooms[0]?.id ?? "",
+        : (branchRooms[0]?.id ?? ""),
       classGroupId: branchClasses.some(
         classGroup => classGroup.id === value.classGroupId
       )
         ? value.classGroupId
-        : branchClasses[0]?.id ?? "",
+        : (branchClasses[0]?.id ?? ""),
     }));
   }, [branchClassKey, branchRoomKey]);
 
@@ -113,7 +124,13 @@ export default function BranchSchedulePage() {
     const classGroup = state.classGroups.find(
       item => item.id === event.classGroupId
     );
-    const text = [event.title, event.type, event.status, room?.name, classGroup?.name]
+    const text = [
+      event.title,
+      event.type,
+      event.status,
+      room?.name,
+      classGroup?.name,
+    ]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
@@ -136,7 +153,7 @@ export default function BranchSchedulePage() {
       eventDraft.starts >= eventDraft.ends
     ) {
       toast.error("Valid title, date, and time range are required");
-      return;
+      return false;
     }
 
     const needsClass =
@@ -150,15 +167,17 @@ export default function BranchSchedulePage() {
         : undefined;
     if (needsClass && !selectedClassId) {
       toast.error("Assign a branch class before scheduling this event");
-      return;
+      return false;
     }
 
-    const selectedRoomId = branchRooms.some(room => room.id === eventDraft.roomId)
+    const selectedRoomId = branchRooms.some(
+      room => room.id === eventDraft.roomId
+    )
       ? eventDraft.roomId
       : branchRooms[0]?.id;
     if (eventDraft.type === "room_booking" && !selectedRoomId) {
       toast.error("Choose a branch room before creating a room booking");
-      return;
+      return false;
     }
 
     setEventSaving(true);
@@ -180,7 +199,7 @@ export default function BranchSchedulePage() {
         description:
           result.error ?? "The server could not save this branch event.",
       });
-      return;
+      return false;
     }
 
     const payload = result.data.result.result as
@@ -188,30 +207,261 @@ export default function BranchSchedulePage() {
       | undefined;
     platformStore.setState(result.data.state);
     refresh();
+    setEventResult(
+      payload?.conflicts?.length || payload?.availabilityGaps?.length
+        ? "The event was saved for the branch team to review."
+        : "The event is now visible on the branch schedule."
+    );
     toast.success(
       payload?.conflicts?.length || payload?.availabilityGaps?.length
         ? "Event saved for review"
-        : "Event scheduled",
-      {
-        description: `${eventDraft.title.trim()} · ${result.data.persistence}`,
-      }
+        : "Event scheduled"
     );
+    return true;
   };
+
+  const eventForm = (
+    <section
+      className="branch-inline-composer"
+      data-testid="branch-schedule-composer"
+    >
+      <div className="branch-inline-composer-head">
+        <div>
+          <span>New event</span>
+          <strong>{branch?.name ?? "Branch"}</strong>
+        </div>
+        <Link className="branch-inline-close" href="/app/branch/schedule">
+          Cancel
+        </Link>
+      </div>
+      <form className="branch-room-form" onSubmit={createBranchEvent}>
+        <label>
+          Title
+          <input
+            value={eventDraft.title}
+            disabled={eventSaving}
+            onChange={event =>
+              setEventDraft(value => ({ ...value, title: event.target.value }))
+            }
+            placeholder="Branch session title"
+          />
+        </label>
+        <label>
+          Type
+          <select
+            value={eventDraft.type}
+            disabled={eventSaving}
+            onChange={event =>
+              setEventDraft(value => ({
+                ...value,
+                type: event.target.value as CalendarEventType,
+              }))
+            }
+          >
+            {branchEventTypes.map(type => (
+              <option key={type} value={type}>
+                {humanize(type)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Date
+          <input
+            type="date"
+            value={eventDraft.date}
+            disabled={eventSaving}
+            onChange={event =>
+              setEventDraft(value => ({ ...value, date: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          Starts
+          <input
+            type="time"
+            value={eventDraft.starts}
+            disabled={eventSaving}
+            onChange={event =>
+              setEventDraft(value => ({ ...value, starts: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          Ends
+          <input
+            type="time"
+            value={eventDraft.ends}
+            disabled={eventSaving}
+            onChange={event =>
+              setEventDraft(value => ({ ...value, ends: event.target.value }))
+            }
+          />
+        </label>
+        <label>
+          Room
+          <select
+            value={eventDraft.roomId}
+            disabled={eventSaving || !branchRooms.length}
+            onChange={event =>
+              setEventDraft(value => ({ ...value, roomId: event.target.value }))
+            }
+          >
+            {branchRooms.length ? (
+              branchRooms.map(room => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))
+            ) : (
+              <option value="">No room</option>
+            )}
+          </select>
+        </label>
+        <label>
+          Class
+          <select
+            value={eventDraft.classGroupId}
+            disabled={eventSaving || !branchClasses.length}
+            onChange={event =>
+              setEventDraft(value => ({
+                ...value,
+                classGroupId: event.target.value,
+              }))
+            }
+          >
+            {branchClasses.length ? (
+              branchClasses.map(classGroup => (
+                <option key={classGroup.id} value={classGroup.id}>
+                  {classGroup.name}
+                </option>
+              ))
+            ) : (
+              <option value="">No branch classes</option>
+            )}
+          </select>
+        </label>
+        <button type="submit" disabled={eventSaving}>
+          <Plus size={15} />
+          {eventSaving ? "Saving event" : "Create event"}
+        </button>
+      </form>
+    </section>
+  );
+
+  const scheduleList = (
+    <DataTableCard
+      title="Branch calendar"
+      subtitle={`${filteredEvents.length} scheduled event(s)`}
+    >
+      <div
+        className="branch-class-list compact"
+        data-testid="branch-schedule-list"
+      >
+        {filteredEvents.length ? (
+          filteredEvents.map(event => {
+            const room = state.rooms.find(item => item.id === event.roomId);
+            const classGroup = state.classGroups.find(
+              item => item.id === event.classGroupId
+            );
+            return (
+              <article key={event.id}>
+                <div>
+                  <strong>{event.title}</strong>
+                  <small>
+                    {humanize(event.type)} · {formatDateTime(event.startsAt)}
+                    {classGroup ? ` · ${classGroup.name}` : ""}
+                    {room ? ` · ${room.name}` : ""}
+                  </small>
+                </div>
+                <StatusBadge tone={statusTone(event.status)}>
+                  {humanize(event.status)}
+                </StatusBadge>
+                {state.classSessions.some(item => item.eventId === event.id) ? (
+                  <Link
+                    className="platform-row-link"
+                    href={`/app/branch/schedule/sessions/${
+                      state.classSessions.find(
+                        item => item.eventId === event.id
+                      )?.id
+                    }`}
+                  >
+                    Manage
+                  </Link>
+                ) : null}
+              </article>
+            );
+          })
+        ) : (
+          <article>
+            <div>
+              <strong>No events found</strong>
+              <small>Create the first event for this branch.</small>
+            </div>
+            <StatusBadge tone="slate">Empty</StatusBadge>
+          </article>
+        )}
+      </div>
+    </DataTableCard>
+  );
+
+  if (view === "create") {
+    return (
+      <PlatformShell role="branchadmin" title="Create event">
+        <FormFlowLayout
+          className="branch-schedule-page branch-schedule-create-page"
+          title="Create event"
+          description="Schedule one class, placement, exam, or room event."
+          context={branch?.name ?? "Branch"}
+          actions={
+            eventResult ? (
+              <Link
+                className="platform-primary-button"
+                href="/app/branch/schedule"
+              >
+                View schedule
+              </Link>
+            ) : undefined
+          }
+          main={
+            eventResult ? (
+              <section className="branch-create-success" role="status">
+                <CalendarDays size={20} />
+                <div>
+                  <strong>Event saved</strong>
+                  <span>{eventResult}</span>
+                </div>
+              </section>
+            ) : (
+              eventForm
+            )
+          }
+        />
+      </PlatformShell>
+    );
+  }
 
   return (
     <PlatformShell role="branchadmin" title="Schedule">
       <WorkspaceLayout
+        className="branch-schedule-page"
         title="Schedule"
-        description="Create branch events and review room or class timing."
+        description="Review branch events and room or class timing."
         context={branch?.name ?? "Branch access"}
         actions={
-          <Link className="platform-primary-button" href="/app/branch/rooms">
-            Manage rooms
-            <DoorOpen size={15} />
+          <Link
+            className="platform-primary-button"
+            href="/app/branch/schedule/new"
+          >
+            <Plus size={15} />
+            Create event
           </Link>
         }
         toolbar={
-          <div className="simple-portal-toolbar">
+          <div
+            className="branch-compact-toolbar"
+            data-testid="branch-schedule-toolbar"
+          >
             <label>
               Search
               <span>
@@ -241,263 +491,7 @@ export default function BranchSchedulePage() {
             </label>
           </div>
         }
-        main={
-          <DataTableCard
-            title="Branch calendar"
-            subtitle={`${filteredEvents.length} scheduled event(s)`}
-          >
-            <div className="branch-class-list compact">
-              {filteredEvents.length ? (
-                filteredEvents.map(event => {
-                  const room = state.rooms.find(item => item.id === event.roomId);
-                  const classGroup = state.classGroups.find(
-                    item => item.id === event.classGroupId
-                  );
-                  return (
-                    <article key={event.id}>
-                      <div>
-                        <strong>{event.title}</strong>
-                        <small>
-                          {humanize(event.type)} · {formatDateTime(event.startsAt)}
-                          {classGroup ? ` · ${classGroup.name}` : ""}
-                          {room ? ` · ${room.name}` : ""}
-                        </small>
-                      </div>
-                      <StatusBadge tone={statusTone(event.status)}>
-                        {humanize(event.status)}
-                      </StatusBadge>
-                    </article>
-                  );
-                })
-              ) : (
-                <article>
-                  <div>
-                    <strong>No events found</strong>
-                    <small>
-                      Create a branch session, room booking, placement test, or
-                      exam.
-                    </small>
-                  </div>
-                  <StatusBadge tone="slate">Empty</StatusBadge>
-                </article>
-              )}
-            </div>
-          </DataTableCard>
-        }
-        side={
-          <>
-            <section className="branch-panel">
-              <div className="branch-panel-head">
-                <div>
-                  <span>Create event</span>
-                  <strong>{branch?.name ?? "Branch"}</strong>
-                </div>
-                <CalendarDays size={18} />
-              </div>
-              <form
-                className="branch-room-form stacked"
-                onSubmit={createBranchEvent}
-              >
-                <label>
-                  Title
-                  <input
-                    value={eventDraft.title}
-                    disabled={eventSaving}
-                    onChange={event =>
-                      setEventDraft(value => ({
-                        ...value,
-                        title: event.target.value,
-                      }))
-                    }
-                    placeholder="Branch session title"
-                  />
-                </label>
-                <label>
-                  Type
-                  <select
-                    value={eventDraft.type}
-                    disabled={eventSaving}
-                    onChange={event =>
-                      setEventDraft(value => ({
-                        ...value,
-                        type: event.target.value as CalendarEventType,
-                      }))
-                    }
-                  >
-                    {branchEventTypes.map(type => (
-                      <option key={type} value={type}>
-                        {humanize(type)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Date
-                  <input
-                    type="date"
-                    value={eventDraft.date}
-                    disabled={eventSaving}
-                    onChange={event =>
-                      setEventDraft(value => ({
-                        ...value,
-                        date: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label>
-                  Starts
-                  <input
-                    type="time"
-                    value={eventDraft.starts}
-                    disabled={eventSaving}
-                    onChange={event =>
-                      setEventDraft(value => ({
-                        ...value,
-                        starts: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label>
-                  Ends
-                  <input
-                    type="time"
-                    value={eventDraft.ends}
-                    disabled={eventSaving}
-                    onChange={event =>
-                      setEventDraft(value => ({
-                        ...value,
-                        ends: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label>
-                  Room
-                  <select
-                    value={eventDraft.roomId}
-                    disabled={eventSaving || !branchRooms.length}
-                    onChange={event =>
-                      setEventDraft(value => ({
-                        ...value,
-                        roomId: event.target.value,
-                      }))
-                    }
-                  >
-                    {branchRooms.length ? (
-                      branchRooms.map(room => (
-                        <option key={room.id} value={room.id}>
-                          {room.name}
-                        </option>
-                      ))
-                    ) : (
-                      <option value="">No room</option>
-                    )}
-                  </select>
-                </label>
-                <label>
-                  Class
-                  <select
-                    value={eventDraft.classGroupId}
-                    disabled={eventSaving || !branchClasses.length}
-                    onChange={event =>
-                      setEventDraft(value => ({
-                        ...value,
-                        classGroupId: event.target.value,
-                      }))
-                    }
-                  >
-                    {branchClasses.length ? (
-                      branchClasses.map(classGroup => (
-                        <option key={classGroup.id} value={classGroup.id}>
-                          {classGroup.name}
-                        </option>
-                      ))
-                    ) : (
-                      <option value="">No branch classes</option>
-                    )}
-                  </select>
-                </label>
-                <button type="submit" disabled={eventSaving}>
-                  <Plus size={15} />
-                  {eventSaving ? "Saving event" : "Create event"}
-                </button>
-              </form>
-            </section>
-
-            <section className="branch-panel">
-              <div className="branch-panel-head">
-                <div>
-                  <span>Schedule scope</span>
-                  <strong>{pendingEvents.length} event(s) need review</strong>
-                </div>
-                <Clock size={18} />
-              </div>
-              <div className="branch-settings-list">
-                {[
-                  ["Branch classes", `${branchClasses.length} class group(s)`],
-                  ["Active rooms", `${branchRooms.length} room(s)`],
-                  ["Room use", `${roomBookings.length} booking(s)`],
-                ].map(([label, value]) => (
-                  <article key={label}>
-                    <CalendarDays size={15} />
-                    <div>
-                      <strong>{label}</strong>
-                      <small>{value}</small>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section className="branch-panel">
-              <div className="branch-panel-head">
-                <div>
-                  <span>Classes in schedule</span>
-                  <strong>{branchClasses.length} branch class(es)</strong>
-                </div>
-                <StatusBadge tone={branchClasses.length ? "green" : "amber"}>
-                  {branchClasses.length ? "Ready" : "Needs class"}
-                </StatusBadge>
-              </div>
-              <div className="branch-class-list compact">
-                {branchClasses.length ? (
-                  branchClasses.map(classGroup => {
-                    const run = state.courseRuns.find(
-                      item => item.id === classGroup.courseRunId
-                    );
-                    const course = state.courses.find(
-                      item => item.id === run?.courseId
-                    );
-                    const room = state.rooms.find(
-                      item => item.id === classGroup.roomId
-                    );
-                    return (
-                      <article key={classGroup.id}>
-                        <div>
-                          <strong>{classGroup.name}</strong>
-                          <small>
-                            {course?.title ?? "Course"} ·{" "}
-                            {room?.name ?? "Room pending"}
-                          </small>
-                        </div>
-                        <span>{classGroup.schedule}</span>
-                      </article>
-                    );
-                  })
-                ) : (
-                  <article>
-                    <div>
-                      <strong>No branch classes</strong>
-                      <small>Create a class before scheduling live sessions.</small>
-                    </div>
-                  </article>
-                )}
-              </div>
-            </section>
-          </>
-        }
+        main={<div className="branch-workspace-main">{scheduleList}</div>}
       />
     </PlatformShell>
   );

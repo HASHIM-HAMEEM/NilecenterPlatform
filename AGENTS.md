@@ -10,18 +10,37 @@ Before any implementation work, read:
 
 - `CLAUDE.md` for engineering discipline, verification, simplicity, and anti-pattern rules.
 - `AGENTS.md` for Nile Learn product, role, security, and portal-specific rules.
+- `docs/NILE_LEARN_MASTER_PLAN.md` for product authority, target architecture,
+  migration phases, and implementation sequence.
+- `docs/MODERNIZATION_EXECUTION_CONTRACT.md` for agent ownership, phase gates,
+  validation, stop conditions, and completion evidence.
 - `DESIGN.md` before creating or editing any UI.
 - `docs/DESIGN_V2.md` before creating or editing any internal portal UI. It is the stricter UI V2 reset contract for app shell, dashboards, density, and rollout order.
 - `docs/SIMPLE_UI.md` before creating or editing any UI. It is the strict simplicity contract: one page, one main job.
+- `docs/UI_INFORMATION_ARCHITECTURE.md` before changing internal routes, page
+  ownership, navigation, or route-family structure.
 - The matching `.codex/prompts/*.md` file for the feature or portal being changed.
 
 If these files conflict, follow the stricter rule and preserve auth, backend behavior, and RBAC.
 
-Do not duplicate rules across these files: `CLAUDE.md` is engineering discipline; `AGENTS.md` is product, security, role, portal, and command authority.
+Rule ownership:
+
+| Authority                                      | Owner                                                 |
+| ---------------------------------------------- | ----------------------------------------------------- |
+| Engineering discipline                         | `CLAUDE.md`                                           |
+| Product, roles, security, portal, and commands | `AGENTS.md`                                           |
+| Architecture, data authority, and sequencing   | `docs/NILE_LEARN_MASTER_PLAN.md`                      |
+| Agent orchestration and completion gates       | `docs/MODERNIZATION_EXECUTION_CONTRACT.md`            |
+| Brand and UI rules                             | `DESIGN.md`, `docs/DESIGN_V2.md`, `docs/SIMPLE_UI.md` |
+| Route and page ownership                       | `docs/UI_INFORMATION_ARCHITECTURE.md`                 |
+| Feature acceptance                             | Matching `.codex/prompts/*.md` file                   |
+
+Do not duplicate detailed rules across authority files.
 
 ## Product Goal
 
-Build a full role-based learning platform replacing or recreating:
+Build a full role-based learning platform that replaces the legacy system while
+preserving validated school workflows:
 
 - public course website
 - authentication and RBAC
@@ -35,31 +54,58 @@ Build a full role-based learning platform replacing or recreating:
 
 ## Current Development Phase
 
-The platform is in internal alpha stabilization.
+The platform is in internal alpha stabilization and modernization foundation
+work. Follow `docs/NILE_LEARN_MASTER_PLAN.md` in order. Broad feature expansion
+is paused.
+
+The exact current checkpoint and only approved next implementation slice live
+in `docs/NILE_LEARN_MASTER_PLAN.md` under **Current Modernization Checkpoint**.
+Do not duplicate or infer that status in companion files.
 
 Current QA baseline:
 
-- Portal QA: 1,205 checks, 0 failures.
+- Portal QA: 1,501 checks, 0 failures.
 - This baseline must not be broken.
 
 Current priority:
 
 1. Preserve clean portal QA.
-2. Stabilize internal user/role/admin workflows.
-3. Improve UI route by route.
-4. Prepare production data architecture.
-5. Do not integrate external systems yet.
+2. Finalize authority, architecture, migration, and agent contracts.
+3. Normalize identity, role grants, scopes, audit, and external mappings.
+4. Make production sessions durable before normalized workflow writes.
+5. Migrate repositories and workflows in small verified slices.
+6. Add read-only Moodle projections and finite EMS migration only in their
+   approved phases.
+7. Improve UI route by route after each workflow is stable.
 
-Do not implement yet:
+Do not implement outside an explicitly approved master-plan phase:
 
 - live Moodle sync
-- live EMS sync
+- recurring/live EMS sync or EMS writeback
 - payment gateway
 - real email/SMS/WhatsApp sending
 - meeting provider
 - production file/media storage
 
-Integration pages may remain as configuration/status placeholders.
+Integration pages may remain configuration/status placeholders. A visual
+`connected` or `synced` label requires server-verified remote evidence.
+
+### Legacy Evidence Boundary
+
+The read-only audit verified Registrar, Teacher, HOD, Supervisor-routed, Branch
+Administrator, and Moodle teacher/course surfaces. This evidence informs the
+replacement model but authorizes no production import, sync, writeback, or
+credential reuse.
+
+- Legacy Supervisor is a capability bundle, not a Nile Learn role and not proof
+  of Super Admin behavior.
+- Guidance capabilities belong to Registrar admissions scope.
+- Academic supervision belongs to HOD scope.
+- Branch operations and branch finance oversight belong to Branch Admin scope.
+- Global configuration, audit, and controlled finance authority belong to Super
+  Admin scope.
+- Legacy EMS is a finite migration source. Moodle is initially the authority for
+  Moodle-managed content and activities.
 
 Every task must:
 
@@ -87,44 +133,20 @@ When changing workflows:
 - preserve audit logging
 - preserve server-side action gates
 
-## Design Source Of Truth
+## UI Enforcement
 
-Before creating or editing any UI, read `DESIGN.md`, `docs/DESIGN_V2.md`, and `docs/SIMPLE_UI.md`. All pages must follow the Nile Learn design language. `DESIGN.md` preserves the landing-page visual language and tokens. `docs/DESIGN_V2.md` is the stricter internal portal reset contract for the app shell, sidebar, top header, dashboards, card density, copy limits, and rollout order. `docs/SIMPLE_UI.md` is the strict simplicity contract for school-management screens: one page, one main job, no everything-everywhere layouts. Do not create plain default shadcn/dashboard UI. Do not create random colors, random spacing, card walls, noisy grid backgrounds, or generic ugly admin screens. Reuse the design tokens and page components from `DESIGN.md`, the UI V2 layout rules from `docs/DESIGN_V2.md`, and the page-type rules from `docs/SIMPLE_UI.md`.
+The landing page at <https://nile-center-platform.vercel.app/> is the visual
+source of truth. Detailed UI rules live only in the four UI authority documents
+listed above.
 
-Match the existing Nile Learn visual direction:
+For every UI slice:
 
-- modern SaaS LMS UI
-- clean cards and operational layouts
-- strong spacing, hierarchy, and responsive behavior
-- role-specific dashboards and workspaces
-- English and Arabic/RTL readiness
-- premium, highly respected education platform feel
-- no disposable prototype-only pages
-
-## UI quality rule
-
-The landing page at https://nile-center-platform.vercel.app/ is the visual source of truth.
-
-Before editing UI:
-
-1. Read DESIGN.md, docs/DESIGN_V2.md, and docs/SIMPLE_UI.md.
-2. Inspect existing landing page components/styles.
-3. Reuse the Nile Learn design language.
-4. Do not create generic admin dashboard UI.
-5. Do not create plain default shadcn pages.
-6. Do not use random colors or spacing.
-7. Every page must have a designed PageHeader/PageHero.
-8. Every table must be inside a DataTableCard.
-9. Every dashboard must have role-specific personality.
-10. Every form must use FormSection/card layout.
-11. Every page must include responsive design.
-12. Every page must include empty/loading/error states when relevant.
-13. Follow UI V2 strict limits: max 4 top KPI cards, max 3 major dashboard sections above the fold, no card walls, no noisy grid backgrounds, and no debug/system metrics except admin, audit, integration, or system-health contexts.
-14. Follow the Simple UI rule: one page = one main job.
-15. Do not mix list, detail, create form, audit log, permissions, and settings on the same screen.
-16. Apply UI V2 in controlled order: app shell, sidebar, top header, one reference dashboard, visual review, then other pages.
-
-The UI should feel like a premium modern learning platform inspired by Apple clarity, Airbnb warmth, and Cursor-style SaaS polish, without copying any brand.
+- use one page for one main job;
+- use the correct page type and dedicated route owner;
+- preserve role scope and workflow behavior;
+- include responsive, RTL, accessibility, and all relevant state handling;
+- verify laptop, desktop, ultrawide, and mobile behavior;
+- do not use a visual redesign to hide missing logic or data authority.
 
 ## Roles
 
@@ -169,12 +191,32 @@ Supported roles:
 Use the commands that exist in `package.json`:
 
 - `npm run check` for TypeScript in this local workspace. Use `USE_PNPM=1 scripts/verify.sh` only after pnpm/node_modules store state is healthy.
+- `npm run check:phase1-schema` for static consistency across the promoted
+  Phase 1 migration, reviewed SQL, rollback, RLS, assertion, and fake-seed
+  artifacts.
+- `npm run check:phase1-schema:runtime` for two forward applications, two
+  semantic assertion passes, and one rollback drill against disposable PGlite
+  PostgreSQL. It never contacts the linked Supabase project.
+- `npm run check:phase1-schema:supabase` for the destructive local-only
+  Supabase reset, assertion, rollback, reapply, seed, and database-lint gate.
+  Start the disposable local stack first. This command must never target a
+  linked or shared project.
+- `npm run check:phase2-session-schema` for the static Phase 2B RPC, privilege,
+  evidence, and rollback contract.
+- `npm run check:phase2-session:supabase` for the guarded disposable-local
+  PostgREST session adapter gate. It verifies durable create, hashed-token
+  storage, atomic resolve, expiry, live scope refresh, revocation, and browser
+  role denial. It must never target a linked or shared project.
 - `npm test -- --run` for Vitest in this local workspace.
 - `npm run build` for production build.
 - `scripts/verify.sh` runs a non-mutating Prettier check for `CLAUDE.md`, `AGENTS.md`, `.codex/hooks.json`, and `.codex/prompts/*.md` by default.
 - `FULL_FORMAT_CHECK=1 scripts/verify.sh` runs the repo-wide Prettier audit. Use this intentionally because the current app has existing formatting drift.
 - `npm run qa:portals` for portal route QA when browser/runtime context is available.
 - `npm run seed:supabase` only when explicitly working on Supabase demo seeding.
+
+`scripts/verify.sh` keeps the Docker-backed Phase 1 Supabase gate opt-in. Set
+`RUN_SUPABASE_LOCAL_CHECK=1` only when the disposable local stack is running.
+Run the Phase 2 adapter gate separately when its current slice requires it.
 
 `npm run lint` and `npm run typecheck` are not currently defined. Do not report them as run unless scripts are added.
 

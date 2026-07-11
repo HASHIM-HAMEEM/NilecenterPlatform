@@ -2,6 +2,14 @@
 
 This document is the routing and page-purpose contract for Nile Learn internal portals. It works with `docs/SIMPLE_UI.md`: one page has one main job, and related work moves into sub-navigation or separate routes.
 
+## Route Status
+
+- **Current** means the route is registered in `client/src/App.tsx` now.
+- **Target** means the route expresses approved information architecture but is
+  not proof that implementation exists.
+- A route family may contain both. Implement target routes only in a bounded
+  master-plan slice; do not create empty navigation or placeholder routes.
+
 ## Page Types
 
 ### DashboardPage
@@ -14,7 +22,7 @@ Allowed:
 - Three to four important metrics maximum.
 - One primary work queue.
 - One small upcoming or alerts panel.
-- One primary action.
+- One primary action when the workflow supports one and the role is authorized.
 
 Move away:
 
@@ -33,7 +41,7 @@ Purpose: find and manage records.
 Allowed:
 
 - Title and short subtitle.
-- One create button.
+- One create button when creation is supported and authorized.
 - Search.
 - Two to four filters.
 - Table or list.
@@ -133,7 +141,7 @@ Preferred Super Admin sidebar:
 - Dashboard
 - People: Users, Roles and access
 - Learning: Courses, Classes, Certificates
-- Operations: Branches, Departments, Schedule
+- Operations: Branches, Departments, Schedule, Forms
 - Business: Payments, Reports
 - System: Connections, Activity log, Settings
 
@@ -146,11 +154,11 @@ Portal sidebars should follow the same principle:
 
 Preferred role sidebar intent:
 
-- Student: Dashboard, Courses, Assignments, Quizzes, Grades, Attendance, Calendar, Messages, Certificates, Reports, Support, Profile, Quran progress.
-- Teacher: Dashboard, Classes, Assignments, Grading, Quizzes, Question bank, Calendar, Messages, Reports, Profile, Quran review.
-- Registrar: Dashboard, Leads, Applications, Placement tests, Students, Enrollments, Classes, Schedule, Payments, Messages, Reports, Settings.
-- HOD: Dashboard, Departments, Programs, Courses, Curriculum, Teachers, Classes, Assessments, Certificates, Reports, Messages.
-- Branch admin: Dashboard, Students, Teachers, Classes, Rooms, Schedule, Attendance, Payments, Reports, Messages, Settings.
+- Student: Dashboard, Courses, Assignments, Quizzes, Grades, Attendance, Calendar, Forms, Messages, Certificates, Reports, Support, Profile, Quran progress.
+- Teacher: Dashboard, Classes, Assignments, Grading, Quizzes, Question bank, Calendar, Forms, Messages, Reports, Profile, Quran review.
+- Registrar: Dashboard, Leads, Applications, Placement tests, Students, Enrollments, Classes, Schedule, Forms, Payments, Messages, Reports, Settings.
+- HOD: Dashboard, Departments, Programs, Courses, Curriculum, Teachers, Classes, Assessments, Forms, Certificates, Reports, Messages.
+- Branch admin: Dashboard, Students, Teachers, Classes, Rooms, Schedule, Attendance, Forms, Payments, Reports, Messages, Settings.
 
 ## Sub-Navigation Rules
 
@@ -164,6 +172,8 @@ Preferred role sidebar intent:
 
 ### Users
 
+Status: Current.
+
 - `/app/admin/users`: ListPage for finding users and opening detail.
 - `/app/admin/users/new`: CreateFlowPage for creating one staff account.
 - `/app/admin/users/:userId`: DetailPage overview for one user.
@@ -173,6 +183,8 @@ Preferred role sidebar intent:
 Do not show the create flow, selected-user editor, access rules, branch access, and activity log on the list page.
 
 ### Schedule
+
+Status: Current for the listed admin routes.
 
 - `/app/admin/schedule`: Calendar view only.
 - `/app/admin/schedule/calendar`: Calendar view only.
@@ -184,6 +196,8 @@ Do not show the create flow, selected-user editor, access rules, branch access, 
 Do not combine schedule board, create form, conflict review, room metrics, audit, and boundary notes on one screen.
 
 ### Reports
+
+Status: Current for the listed admin routes.
 
 - `/app/admin/reports`: Report area overview and high-level summary.
 - `/app/admin/reports/attendance`: Attendance report only.
@@ -197,14 +211,18 @@ Do not combine attendance evidence, certificate health, finance presets, class s
 
 ### Roles And Access
 
-- `/app/admin/roles`: Role summaries first.
-- `/app/admin/roles/access-rules`: Detailed access rules.
-- `/app/admin/roles/branch-access`: Branch access.
-- `/app/admin/roles/advanced`: Advanced access controls.
+- `/app/admin/roles`: Current role overview and summaries.
+- `/app/admin/permissions`: Current access-rule editing.
+- `/app/admin/branches`: Current branch management and branch status.
+- Role-specific access detail routes are Target only when a workflow cannot be
+  kept clear on these three owners.
 
 Do not show the full permission matrix by default.
 
 ### Courses
+
+Status: Current for catalog, programs, levels, curriculum, teachers, resources,
+and course detail. Nested course-detail routes below are Target.
 
 - `/app/admin/courses`: Course catalog.
 - `/app/admin/courses/programs`: Programs.
@@ -221,6 +239,8 @@ Do not show catalog, programs, levels, teachers, curriculum builder, lessons, an
 
 ### Branches
 
+Status: Current for `/app/admin/branches`; nested routes are Target.
+
 - `/app/admin/branches`: Branch list.
 - `/app/admin/branches/rooms`: Rooms.
 - `/app/admin/branches/staff`: Staff.
@@ -228,6 +248,8 @@ Do not show catalog, programs, levels, teachers, curriculum builder, lessons, an
 - `/app/admin/branches/activity`: Branch activity.
 
 ### Registrar Admissions
+
+Status: Current for the listed routes.
 
 - `/app/registrar/leads`: Lead intake and lead follow-up only.
 - `/app/registrar/applications`: Application intake and application files only.
@@ -246,7 +268,36 @@ Do not show catalog, programs, levels, teachers, curriculum builder, lessons, an
 
 Do not show the full admissions pipeline, placement desk, enrollment handoff, payment ledger, student creation, and activity feed together on registrar pages. Detail routes must not render list or create desks underneath the selected record.
 
+### Nile Forms
+
+Status: Current internal-alpha route ownership. Production persistence and
+legacy cutover remain separately gated.
+
+- `/app/{role}/forms`: assigned forms and response status only.
+- `/app/{role}/forms/:publicationId`: one assigned form response flow only.
+- `/app/{role}/forms/:publicationId/responses/:submissionId`: the respondent's
+  own submitted response, review status, and permitted withdrawal only.
+- `/app/{role}/forms/manage`: scoped form definitions only.
+- `/app/{role}/forms/manage/:formId/builder`: one draft version only.
+- `/app/{role}/forms/manage/:formId/publish`: preview and publication settings only.
+- `/app/{role}/forms/review`: scoped submission queue only.
+- `/app/{role}/forms/review/:submissionId`: one submission, review decision,
+  promotion state, and evidence timeline only.
+- `/app/{staff-role}/forms/offline`: one enrolled device, downloaded forms,
+  encrypted capture, and foreground sync queue only.
+- `/app/admin/forms/migration`: one finite Jotform import job: source/target
+  inspection, mapping, dry-run evidence, explicit commit, or run reconciliation.
+- `/forms/:slug`: one public form response flow only.
+
+The top-level Forms item opens assigned work. Staff page sub-navigation exposes
+Offline, Manage, and Review according to server permissions; Super Admin also
+receives Migration. Do not combine assigned
+forms, definition management, the builder, publication settings, the inbox,
+exports, migration, and review detail on one page.
+
 ### Teacher Assessments
+
+Status: Current for the listed routes.
 
 - `/app/teacher/quizzes`: ListPage for finding quiz items.
 - `/app/teacher/quizzes/new`: CreateFlowPage for creating one quiz.
@@ -258,6 +309,9 @@ Do not combine assignment queue, quiz list, quiz creation, question creation, qu
 
 ### Role-Wide Report Pages
 
+Status: Pattern. A concrete route is Current only when registered in
+`client/src/App.tsx`.
+
 - `/app/{role}/reports`: Report overview or the role's primary report only.
 - `/app/{role}/reports/attendance`: Attendance report only when the role owns attendance data.
 - `/app/{role}/reports/finance`: Finance report only for registrar, branch admin, and super admin roles.
@@ -268,6 +322,9 @@ Do not place finance, attendance, academic, audit, and certificate report contro
 
 ### Role-Wide Schedule Pages
 
+Status: Pattern. A concrete route is Current only when registered in
+`client/src/App.tsx`.
+
 - `/app/{role}/schedule` or `/app/{role}/calendar`: Calendar view only.
 - `/app/{role}/schedule/sessions`: Sessions only.
 - `/app/{role}/schedule/conflicts`: Conflicts and pending reviews only.
@@ -276,25 +333,28 @@ Do not place finance, attendance, academic, audit, and certificate report contro
 
 Do not combine create schedule forms, conflict review, room status, audit, and schedule board on one page.
 
+### Class Workspaces
+
+Status: Target route family. Existing teacher class routes remain Current until
+the bounded class-workspace migration is implemented.
+
+- `/app/{role}/classes`: class list only.
+- `/app/{role}/classes/:classId`: class overview only.
+- `/app/{role}/classes/:classId/roster`: roster and membership only.
+- `/app/{role}/classes/:classId/schedule`: recurring schedule only.
+- `/app/{role}/classes/:classId/sessions`: delivered sessions only.
+- `/app/{role}/classes/:classId/attendance`: attendance only.
+- `/app/{role}/classes/:classId/grades`: grades and feedback only.
+- `/app/{role}/classes/:classId/content`: linked learning content only.
+- `/app/{role}/classes/:classId/activity`: class activity only.
+
+Do not expand every class tab into one page. Teacher assignment, membership,
+schedule, session, attendance, and content are distinct records and jobs.
+
 ## Label Rules
 
-Use these user-facing replacements:
-
-| Avoid                 | Use              |
-| --------------------- | ---------------- |
-| RBAC                  | Roles and access |
-| Permission Matrix     | Access rules     |
-| Audit Trail           | Activity         |
-| Audit Evidence        | Activity         |
-| Integration Readiness | Connections      |
-| Moodle Source         | Moodle           |
-| Platform State        | System data      |
-| Mock Mode             | Test mode        |
-| Server-only           | Protected        |
-| Local Records         | Records          |
-| Governance View       | Admin view       |
-| Branch Scope          | Branch access    |
-| Permission Scope      | Access level     |
+`docs/SIMPLE_UI.md` owns the user-facing terminology table. This document owns
+only where a job lives. Do not duplicate or locally override those labels.
 
 ## Anti-Patterns
 
@@ -307,9 +367,12 @@ Use these user-facing replacements:
 - Navigation that exposes every internal route at the same level.
 - Generic generated layouts used for unrelated work.
 
-## Phase 1 Scope
+## Protected Reference Route Inventory
 
-Implement the IA split first for:
+The following splits are current and form the reference architecture. Preserve
+them while migrating other route families.
+
+The protected reference split includes:
 
 - `/app/admin/users`
 - `/app/admin/users/new`
@@ -322,7 +385,7 @@ Implement the IA split first for:
 - `/app/admin/reports`
 - `/app/admin/reports/attendance`
 
-Next implemented reference split:
+Additional Current reference splits:
 
 - `/app/teacher/quizzes`
 - `/app/teacher/quizzes/new`

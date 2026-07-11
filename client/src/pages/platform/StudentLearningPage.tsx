@@ -1,23 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  Award,
   BookOpen,
-  CalendarDays,
   Captions,
   CheckCircle2,
-  ChevronRight,
   ClipboardCheck,
-  Download,
   FileText,
   Headphones,
-  ListChecks,
   Maximize2,
   Minimize2,
   Pause,
   Play,
   Radio,
-  Settings,
   SkipBack,
   SkipForward,
   Video,
@@ -40,7 +34,7 @@ import type {
   LessonResource,
   PlatformState,
 } from "@/lib/domain/types";
-import { getDemoUser, roleMeta } from "@/lib/platformData";
+import { getDemoUser } from "@/lib/platformData";
 
 const PLATFORM_STATE_UPDATED_EVENT = "nilelearn:platform-state-updated";
 
@@ -51,8 +45,6 @@ type StudentLearningPageProps = {
   courseId?: string;
   lessonId?: string;
 };
-
-type SyncStatus = "loading" | "supabase" | "local" | "offline";
 
 type LearningOption = {
   enrollment: PlatformState["enrollments"][number];
@@ -134,7 +126,8 @@ function getStudentOptionData(state: PlatformState, courseId?: string) {
 function getLessonRows(
   state: PlatformState,
   courseId?: string,
-  studentId?: string
+  studentId?: string,
+  enrollmentId?: string
 ) {
   const modules = state.modules
     .filter(item => item.courseId === courseId)
@@ -146,7 +139,10 @@ function getLessonRows(
         module,
         lesson,
         progress: state.lessonProgress.find(
-          item => item.lessonId === lesson.id && item.studentId === studentId
+          item =>
+            item.lessonId === lesson.id &&
+            item.studentId === studentId &&
+            item.enrollmentId === enrollmentId
         ),
         resources: state.resources.filter(
           resource =>
@@ -181,21 +177,16 @@ export default function StudentLearningPage({
   lessonId,
 }: StudentLearningPageProps) {
   const [version, setVersion] = useState(0);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>("loading");
   const state = useMemo(() => platformStore.getState(), [version]);
 
   useEffect(() => {
     let cancelled = false;
-    setSyncStatus("loading");
     fetchPlatformStateRequest().then(result => {
       if (cancelled) return;
       if (result.ok && result.data) {
         platformStore.setState(result.data.state);
-        setSyncStatus(result.data.persistence);
         setVersion(value => value + 1);
-        return;
       }
-      setSyncStatus("offline");
     });
     return () => {
       cancelled = true;
@@ -222,14 +213,17 @@ export default function StudentLearningPage({
   );
   const run = selected?.run;
   const course = selected?.course;
-  const enrollment = selected?.enrollment;
   const classGroup = selected?.classGroup;
   const branch = state.branches.find(item => item.id === run?.branchId);
-  const teacherUser = state.users.find(item => item.id === run?.teacherId);
   const meeting = state.meetingLinks.find(
     item => item.id === classGroup?.meetingLinkId
   );
-  const lessonRows = getLessonRows(state, course?.id, studentId);
+  const lessonRows = getLessonRows(
+    state,
+    course?.id,
+    studentId,
+    selected?.enrollment.id
+  );
   const completedLessons = lessonRows.filter(
     row => row.progress?.status === "completed"
   ).length;
@@ -244,31 +238,13 @@ export default function StudentLearningPage({
       ? (lessonRows.find(row => row.lesson.type === "live") ?? nextLessonRow)
       : (lessonRows.find(row => row.lesson.id === lessonId) ?? nextLessonRow);
   const selectedLesson = selectedLessonRow?.lesson;
-  const assignment = state.assignments.find(
-    item => item.courseRunId === run?.id
-  );
-  const submission = assignment
-    ? state.assignmentSubmissions.find(
-        item =>
-          item.assignmentId === assignment.id && item.studentId === studentId
-      )
-    : undefined;
-  const quiz = state.quizzes.find(item => item.courseRunId === run?.id);
-  const latestAttempt = quiz
-    ? state.quizAttempts.find(
-        item => item.quizId === quiz.id && item.studentId === studentId
-      )
-    : undefined;
-  const certificate = state.certificates.find(
-    item => item.courseId === course?.id && item.studentId === studentId
-  );
-
   const completeSelectedLesson = () => {
     if (!selectedLesson) return;
     const lesson = platformStore.completeLesson(
       selectedLesson.id,
       studentId,
-      getDemoUser("student").id
+      getDemoUser("student").id,
+      selected.enrollment.id
     );
     setVersion(value => value + 1);
     toast.success("Lesson marked complete", { description: lesson.title });
@@ -279,7 +255,8 @@ export default function StudentLearningPage({
     const lesson = platformStore.startLesson(
       selectedLesson.id,
       studentId,
-      getDemoUser("student").id
+      getDemoUser("student").id,
+      selected.enrollment.id
     );
     setVersion(value => value + 1);
     toast.success("Lesson opened", { description: lesson.title });
@@ -287,7 +264,8 @@ export default function StudentLearningPage({
 
   const joinLiveClass = () => {
     toast.success("Live class ready", {
-      description: meeting?.url ?? "Meeting provider is not connected yet.",
+      description:
+        meeting?.url ?? "The live session link is not available in this demo.",
     });
   };
 
@@ -323,7 +301,7 @@ export default function StudentLearningPage({
       ? course.title
       : mode === "live"
         ? "Live class"
-        : selectedLesson?.title ?? "Lesson";
+        : (selectedLesson?.title ?? "Lesson");
   const description =
     mode === "course"
       ? "Review the course path and continue the next lesson."
@@ -369,40 +347,48 @@ export default function StudentLearningPage({
         actions={action}
         toolbar={
           <div className="student-learning-toolbar">
-            <label>
-              Course
-              <select
-                value={run.id}
-                onChange={event => {
-                  const option = options.find(
-                    item => item.run.id === event.target.value
-                  );
-                  if (option) {
-                    window.history.pushState(
-                      null,
-                      "",
-                      `/app/student/courses/${option.course.id}`
+            {options.length > 1 ? (
+              <label className="student-learning-course-select">
+                <span>Course</span>
+                <select
+                  value={run.id}
+                  onChange={event => {
+                    const option = options.find(
+                      item => item.run.id === event.target.value
                     );
-                    window.dispatchEvent(new PopStateEvent("popstate"));
-                  }
-                }}
-              >
-                {options.map(option => (
-                  <option key={option.run.id} value={option.run.id}>
-                    {option.course.title}
-                  </option>
-                ))}
-              </select>
-            </label>
+                    if (option) {
+                      window.history.pushState(
+                        null,
+                        "",
+                        `/app/student/courses/${option.course.id}`
+                      );
+                      window.dispatchEvent(new PopStateEvent("popstate"));
+                    }
+                  }}
+                >
+                  {options.map(option => (
+                    <option key={option.run.id} value={option.run.id}>
+                      {option.course.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <nav className="portal-simple-tabs" aria-label="Learning sections">
-              <Link href={courseHref} className={mode === "course" ? "active" : ""}>
+              <Link
+                href={courseHref}
+                className={mode === "course" ? "active" : ""}
+              >
                 Overview
               </Link>
-              <Link href={lessonHref} className={mode === "lesson" ? "active" : ""}>
+              <Link
+                href={lessonHref}
+                className={mode === "lesson" ? "active" : ""}
+              >
                 Lesson
               </Link>
               <Link href={liveHref} className={mode === "live" ? "active" : ""}>
-                Live
+                Live class
               </Link>
             </nav>
           </div>
@@ -422,31 +408,11 @@ export default function StudentLearningPage({
             <LessonWorkspace
               mode={mode}
               lessonRow={selectedLessonRow}
-              syncStatus={syncStatus}
               startSelectedLesson={startSelectedLesson}
               completeSelectedLesson={completeSelectedLesson}
               joinLiveClass={joinLiveClass}
             />
           )
-        }
-        side={
-          <StudentLearningSidePanel
-            course={course}
-            run={run}
-            classGroup={classGroup}
-            teacherName={teacherUser?.name}
-            enrollment={enrollment}
-            assignment={assignment}
-            submission={submission}
-            quiz={quiz}
-            latestAttempt={latestAttempt}
-            certificate={certificate}
-            selectedLessonRow={selectedLessonRow}
-            lessonCompletion={lessonCompletion}
-            completedLessons={completedLessons}
-            lessonCount={lessonRows.length}
-            syncStatus={syncStatus}
-          />
         }
       />
     </PlatformShell>
@@ -472,98 +438,81 @@ function CourseOverview({
 }) {
   return (
     <div className="student-learning-main">
-      <section className="student-learning-summary">
-        <div>
-          <span className="platform-section-kicker">Course overview</span>
-          <h2>{course.title}</h2>
+      <section className="student-course-hero-v3">
+        <div className="student-course-overview-copy">
+          <span>What you will learn</span>
           <p>{course.description}</p>
         </div>
-        <div className="learning-progress-panel">
-          <span>Progress</span>
-          <strong>{lessonCompletion}%</strong>
+        <div className="student-course-hero-progress">
           <div>
-            <i
-              style={{
-                width: `${lessonCompletion}%`,
-                background: roleMeta.student.color,
-              }}
-            />
+            <span>Course progress</span>
+            <strong>{lessonCompletion}%</strong>
           </div>
+          <i>
+            <b style={{ width: `${lessonCompletion}%` }} />
+          </i>
           <small>
-            {completedLessons} of {lessonRows.length} lessons complete.
+            {completedLessons} of {lessonRows.length} lessons complete
           </small>
         </div>
+        <dl className="student-course-hero-facts">
+          <div>
+            <dt>Class</dt>
+            <dd>{classGroup?.name ?? "Assigned class"}</dd>
+          </div>
+          <div>
+            <dt>Schedule</dt>
+            <dd>{classGroup?.schedule ?? run.term}</dd>
+          </div>
+          <div>
+            <dt>Branch</dt>
+            <dd>{branchName ?? "Online"}</dd>
+          </div>
+        </dl>
       </section>
 
-      <div className="student-learning-facts">
-        <MiniMetric label="Branch" value={branchName ?? "Online"} />
-        <MiniMetric label="Class" value={classGroup?.name ?? "Assigned"} />
-        <MiniMetric label="Schedule" value={classGroup?.schedule ?? run.term} />
-      </div>
-
-      <DataTableCard
-        title="Learning path"
-        subtitle={`${lessonRows.length} lesson(s)`}
-        className="student-learning-table"
-      >
-        <div className="admin-ia-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Lesson</th>
-                <th>Module</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Open</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lessonRows.map(row => {
-                const Icon = getLessonIcon(row.lesson.type);
-                return (
-                  <tr key={row.lesson.id}>
-                    <td>
-                      <strong>{row.lesson.title}</strong>
-                      <small>{row.lesson.durationMinutes} min</small>
-                    </td>
-                    <td>{row.module.title}</td>
-                    <td>
-                      <span className="student-learning-type">
-                        <Icon size={14} />
-                        {row.lesson.type}
-                      </span>
-                    </td>
-                    <td>
-                      <StatusBadge tone={statusTone(row.progress?.status)}>
-                        {readableStatus(row.progress?.status)}
-                      </StatusBadge>
-                    </td>
-                    <td>
-                      <Link
-                        className="platform-row-link"
-                        href={`/app/student/courses/${course.id}/learn/${row.lesson.id}`}
-                      >
-                        Open
-                        <ArrowRight size={13} />
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!lessonRows.length ? (
-                <tr>
-                  <td colSpan={5}>
-                    <div className="platform-empty-state">
-                      <strong>No lessons yet</strong>
-                      <span>This course does not have published lessons.</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+      <section className="student-course-map-v3">
+        <div className="student-course-map-head">
+          <div>
+            <span>Course map</span>
+            <h2>Learning path</h2>
+          </div>
+          <small>{lessonRows.length} lessons</small>
         </div>
-      </DataTableCard>
+        <div className="student-course-map-list">
+          {lessonRows.map(row => {
+            const Icon = getLessonIcon(row.lesson.type);
+            return (
+              <article key={row.lesson.id}>
+                <span className="student-course-map-icon">
+                  <Icon size={17} />
+                </span>
+                <div>
+                  <strong>{row.lesson.title}</strong>
+                  <span>
+                    {row.module.title} · {row.lesson.durationMinutes} min
+                  </span>
+                </div>
+                <StatusBadge tone={statusTone(row.progress?.status)}>
+                  {readableStatus(row.progress?.status)}
+                </StatusBadge>
+                <Link
+                  className="student-course-map-action"
+                  href={`/app/student/courses/${course.id}/learn/${row.lesson.id}`}
+                >
+                  Open <ArrowRight size={14} />
+                </Link>
+              </article>
+            );
+          })}
+          {!lessonRows.length ? (
+            <div className="platform-empty-state">
+              <strong>No lessons yet</strong>
+              <span>This course does not have published lessons.</span>
+            </div>
+          ) : null}
+        </div>
+      </section>
     </div>
   );
 }
@@ -571,14 +520,12 @@ function CourseOverview({
 function LessonWorkspace({
   mode,
   lessonRow,
-  syncStatus,
   startSelectedLesson,
   completeSelectedLesson,
   joinLiveClass,
 }: {
   mode: StudentLearningMode;
   lessonRow?: LessonRow;
-  syncStatus: SyncStatus;
   startSelectedLesson: () => void;
   completeSelectedLesson: () => void;
   joinLiveClass: () => void;
@@ -600,7 +547,6 @@ function LessonWorkspace({
           outcomes={lessonRow?.module.outcomes ?? []}
           resources={lessonRow?.resources ?? []}
           progressStatus={lessonRow?.progress?.status}
-          syncStatus={syncStatus}
         />
         <div className="learning-player-actions">
           <button
@@ -630,10 +576,14 @@ function LessonWorkspace({
         </div>
       </section>
 
-      <DataTableCard
-        title="Resources"
-        subtitle={`${lessonRow?.resources.length ?? 0} file(s)`}
-      >
+      <section className="student-lesson-resources-v3">
+        <div className="student-lesson-resources-head">
+          <div>
+            <span>Lesson materials</span>
+            <h2>Resources</h2>
+          </div>
+          <small>{lessonRow?.resources.length ?? 0} available</small>
+        </div>
         <div className="student-resource-list">
           {lessonRow?.resources.map(resource => {
             const Icon =
@@ -657,141 +607,6 @@ function LessonWorkspace({
             </div>
           ) : null}
         </div>
-      </DataTableCard>
-    </div>
-  );
-}
-
-function StudentLearningSidePanel({
-  course,
-  run,
-  classGroup,
-  teacherName,
-  enrollment,
-  assignment,
-  submission,
-  quiz,
-  latestAttempt,
-  certificate,
-  selectedLessonRow,
-  lessonCompletion,
-  completedLessons,
-  lessonCount,
-  syncStatus,
-}: {
-  course: PlatformState["courses"][number];
-  run: PlatformState["courseRuns"][number];
-  classGroup?: PlatformState["classGroups"][number];
-  teacherName?: string;
-  enrollment: PlatformState["enrollments"][number];
-  assignment?: PlatformState["assignments"][number];
-  submission?: PlatformState["assignmentSubmissions"][number];
-  quiz?: PlatformState["quizzes"][number];
-  latestAttempt?: PlatformState["quizAttempts"][number];
-  certificate?: PlatformState["certificates"][number];
-  selectedLessonRow?: LessonRow;
-  lessonCompletion: number;
-  completedLessons: number;
-  lessonCount: number;
-  syncStatus: SyncStatus;
-}) {
-  return (
-    <div className="student-learning-side">
-      <section className="learning-progress-panel">
-        <span>Course progress</span>
-        <strong>{lessonCompletion}%</strong>
-        <div>
-          <i
-            style={{
-              width: `${lessonCompletion}%`,
-              background: roleMeta.student.color,
-            }}
-          />
-        </div>
-        <small>
-          {completedLessons} of {lessonCount} lessons complete. Enrollment is{" "}
-          {enrollment.progress}%.
-        </small>
-      </section>
-
-      <section className="portal-simple-side-card">
-        <span>
-          <CalendarDays size={15} />
-          Class details
-        </span>
-        <strong>{classGroup?.name ?? run.term}</strong>
-        <p>
-          {classGroup?.schedule ?? run.term} · {teacherName ?? "Teacher assigned"}
-        </p>
-        <StatusBadge tone={statusTone(run.status)}>{run.status}</StatusBadge>
-      </section>
-
-      <section className="portal-simple-side-card">
-        <span>
-          <ListChecks size={15} />
-          Current lesson
-        </span>
-        <strong>{selectedLessonRow?.lesson.title ?? "No lesson selected"}</strong>
-        <p>{selectedLessonRow?.module.title ?? course.title}</p>
-        <StatusBadge tone={statusTone(selectedLessonRow?.progress?.status)}>
-          {readableStatus(selectedLessonRow?.progress?.status)}
-        </StatusBadge>
-      </section>
-
-      <section className="portal-simple-side-card">
-        <span>
-          <ClipboardCheck size={15} />
-          Due work
-        </span>
-        <strong>{assignment?.title ?? "No assignment"}</strong>
-        <p>
-          {assignment
-            ? `Assignment ${submission?.status ?? "not submitted"}. Quiz ${
-                latestAttempt
-                  ? `${latestAttempt.score}/${latestAttempt.maxScore}`
-                  : quiz
-                    ? "not attempted"
-                    : "not assigned"
-              }.`
-            : "No assignment is due for this course."}
-        </p>
-        <div className="student-learning-link-row">
-          {assignment ? (
-            <Link href={`/app/student/assignments/${assignment.id}`}>
-              Assignment
-            </Link>
-          ) : null}
-          {quiz ? <Link href={`/app/student/quizzes/${quiz.id}`}>Quiz</Link> : null}
-        </div>
-      </section>
-
-      <section className="portal-simple-side-card">
-        <span>
-          <Award size={15} />
-          Certificate
-        </span>
-        <strong>{certificate?.verificationCode ?? "Not issued yet"}</strong>
-        <p>
-          Certificate status is{" "}
-          {certificate ? readableStatus(certificate.status) : "pending"}.
-        </p>
-      </section>
-
-      <section className="portal-simple-side-card">
-        <span>
-          <Download size={15} />
-          Sync state
-        </span>
-        <strong className={`learning-sync-pill ${syncStatus}`}>
-          {syncStatus === "supabase"
-            ? "Synced"
-            : syncStatus === "loading"
-              ? "Syncing"
-              : syncStatus === "offline"
-                ? "Offline"
-                : "Local"}
-        </strong>
-        <p>Lesson progress is saved to the current demo workspace.</p>
       </section>
     </div>
   );
@@ -803,14 +618,12 @@ function NileLessonPlayer({
   outcomes,
   resources,
   progressStatus,
-  syncStatus,
 }: {
   lesson?: Lesson;
   moduleTitle?: string;
   outcomes: string[];
   resources: LessonResource[];
   progressStatus?: LessonProgressStatus;
-  syncStatus: SyncStatus;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(
@@ -847,14 +660,6 @@ function NileLessonPlayer({
         : playerMode === "assessment"
           ? ClipboardCheck
           : Video;
-  const syncCopy =
-    syncStatus === "supabase"
-      ? "Synced"
-      : syncStatus === "loading"
-        ? "Syncing"
-        : syncStatus === "offline"
-          ? "Offline"
-          : "Local";
   const captionText = lesson
     ? playerMode === "live"
       ? "Live room opens with attendance and class notes attached."
@@ -899,12 +704,8 @@ function NileLessonPlayer({
     >
       <div className="nile-player-header">
         <div>
-          <span>Nile Player</span>
+          <span>Lesson player</span>
           <strong>{lesson?.title ?? "No lesson selected"}</strong>
-        </div>
-        <div className="nile-player-status">
-          <em>{playerMode}</em>
-          <em>{syncCopy}</em>
         </div>
       </div>
 
@@ -1019,9 +820,6 @@ function NileLessonPlayer({
           onClick={() => setBoardMode(value => !value)}
         >
           {boardMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-        </button>
-        <button type="button" aria-label="Player settings">
-          <Settings size={16} />
         </button>
       </div>
     </div>

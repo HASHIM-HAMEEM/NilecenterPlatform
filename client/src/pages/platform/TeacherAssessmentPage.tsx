@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BookMarked,
   CheckCircle2,
@@ -11,6 +11,7 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 import PlatformShell from "@/components/platform/PlatformShell";
 import {
+  DetailLayout,
   FormFlowLayout,
   WorkspaceLayout,
 } from "@/components/platform/PlatformLayouts";
@@ -31,12 +32,16 @@ import { demoUsers } from "@/lib/platformData";
 type TeacherAssessmentView =
   | "quizzes"
   | "new-quiz"
+  | "quiz-detail"
   | "review"
+  | "review-detail"
   | "question-bank"
   | "new-question";
 
 type TeacherAssessmentPageProps = {
   view: TeacherAssessmentView;
+  quizId?: string;
+  reviewAttemptId?: string;
 };
 
 function formatDate(value?: string) {
@@ -69,8 +74,9 @@ function truncateText(value: string, maxLength = 72) {
 }
 
 function statusTone(status: EntityStatus): "green" | "amber" | "red" | "slate" {
-  if (status === "active") return "green";
-  if (status === "pending" || status === "paused") return "amber";
+  if (status === "active" || status === "completed") return "green";
+  if (status === "draft" || status === "pending" || status === "paused")
+    return "amber";
   if (status === "cancelled" || status === "rejected" || status === "overdue")
     return "red";
   return "slate";
@@ -82,12 +88,13 @@ function isReviewNeeded(status: QuizAttempt["status"]) {
 
 export default function TeacherAssessmentPage({
   view,
+  quizId,
+  reviewAttemptId,
 }: TeacherAssessmentPageProps) {
   const [version, setVersion] = useState(0);
   const [search, setSearch] = useState("");
   const [selectedRunId, setSelectedRunId] = useState("");
   const [selectedQuizId, setSelectedQuizId] = useState("");
-  const [selectedAttemptId, setSelectedAttemptId] = useState("");
   const [savingAction, setSavingAction] = useState("");
   const [actionError, setActionError] = useState("");
   const [quizDraft, setQuizDraft] = useState({
@@ -97,6 +104,15 @@ export default function TeacherAssessmentPage({
     attemptsAllowed: 2,
     questionTypes: "multiple_choice, short_answer",
   });
+  const [quizEditDraft, setQuizEditDraft] = useState({
+    title: "",
+    dueAt: "",
+    durationMinutes: 20,
+    attemptsAllowed: 1,
+  });
+  const [quizQuestionDraftIds, setQuizQuestionDraftIds] = useState<string[]>([]);
+  const [showQuizCancel, setShowQuizCancel] = useState(false);
+  const [quizCancelReason, setQuizCancelReason] = useState("");
   const [questionDraft, setQuestionDraft] = useState({
     prompt: "Choose the correct answer and explain the grammar rule.",
     questionType: "short_answer" as QuestionBankItem["type"],
@@ -155,8 +171,13 @@ export default function TeacherAssessmentPage({
   const runQuizzes = activeRunId
     ? teacherQuizzes.filter(quiz => quiz.courseRunId === activeRunId)
     : teacherQuizzes;
+  const draftRunQuizzes = runQuizzes.filter(quiz => quiz.status === "draft");
   const targetQuiz =
-    runQuizzes.find(quiz => quiz.id === selectedQuizId) ?? runQuizzes[0];
+    draftRunQuizzes.find(quiz => quiz.id === selectedQuizId) ??
+    draftRunQuizzes[0];
+  const selectedQuiz = quizId
+    ? teacherQuizzes.find(quiz => quiz.id === quizId)
+    : undefined;
   const attachedQuestionIds = new Set(targetQuiz?.questionIds ?? []);
   const attempts = state.quizAttempts
     .filter(attempt => {
@@ -176,27 +197,23 @@ export default function TeacherAssessmentPage({
   const reviewAttempts = attempts.filter(attempt =>
     isReviewNeeded(attempt.status)
   );
-  const selectedAttempt =
-    reviewAttempts.find(attempt => attempt.id === selectedAttemptId) ??
-    reviewAttempts[0];
+  const selectedAttempt = reviewAttemptId
+    ? attempts.find(attempt => attempt.id === reviewAttemptId)
+    : undefined;
 
-  const tabs = [
-    {
-      href: "/app/teacher/quizzes",
-      label: "Quizzes",
-      active: view === "quizzes" || view === "new-quiz",
-    },
-    {
-      href: "/app/teacher/quizzes/review",
-      label: "Review",
-      active: view === "review",
-    },
-    {
-      href: "/app/teacher/question-bank",
-      label: "Question bank",
-      active: view === "question-bank" || view === "new-question",
-    },
-  ];
+  useEffect(() => {
+    if (!selectedQuiz) return;
+    setQuizEditDraft({
+      title: selectedQuiz.title,
+      dueAt: selectedQuiz.dueAt.slice(0, 10),
+      durationMinutes: selectedQuiz.durationMinutes,
+      attemptsAllowed: selectedQuiz.attemptsAllowed,
+    });
+    setQuizQuestionDraftIds(selectedQuiz.questionIds);
+    setShowQuizCancel(false);
+    setQuizCancelReason("");
+    setActionError("");
+  }, [selectedQuiz?.id]);
 
   const getRunCourse = (runId?: string) => {
     const run = state.courseRuns.find(item => item.id === runId);
@@ -232,8 +249,8 @@ export default function TeacherAssessmentPage({
   };
 
   const createQuiz = async () => {
-    if (!activeRun || !quizDraft.title.trim()) return;
-    await runAction("Quiz created", {
+    if (!activeRun || !quizDraft.title.trim() || !quizDraft.dueAt) return;
+    await runAction("Quiz draft created", {
       type: "quiz.create",
       courseRunId: activeRun.id,
       title: quizDraft.title.trim(),
@@ -241,6 +258,65 @@ export default function TeacherAssessmentPage({
       durationMinutes: Math.max(5, Number(quizDraft.durationMinutes) || 20),
       attemptsAllowed: Math.max(1, Number(quizDraft.attemptsAllowed) || 1),
       questionTypes: splitList(quizDraft.questionTypes),
+    });
+  };
+
+  const updateQuiz = async () => {
+    if (
+      !selectedQuiz ||
+      !quizEditDraft.title.trim() ||
+      !quizEditDraft.dueAt
+    ) {
+      return;
+    }
+    await runAction("Quiz draft saved", {
+      type: "quiz.update",
+      quizId: selectedQuiz.id,
+      title: quizEditDraft.title.trim(),
+      dueAt: new Date(quizEditDraft.dueAt).toISOString(),
+      durationMinutes: Math.max(5, Number(quizEditDraft.durationMinutes) || 5),
+      attemptsAllowed: Math.max(1, Number(quizEditDraft.attemptsAllowed) || 1),
+    });
+  };
+
+  const publishQuiz = async () => {
+    if (!selectedQuiz) return;
+    await runAction("Quiz published", {
+      type: "quiz.status.update",
+      quizId: selectedQuiz.id,
+      status: "active",
+    });
+  };
+
+  const saveQuizQuestions = async () => {
+    if (!selectedQuiz || selectedQuiz.status !== "draft") return;
+    await runAction("Quiz questions saved", {
+      type: "quiz.questions.set",
+      quizId: selectedQuiz.id,
+      questionIds: quizQuestionDraftIds,
+    });
+  };
+
+  const cancelQuiz = async () => {
+    if (!selectedQuiz || quizCancelReason.trim().length < 5) return;
+    const saved = await runAction("Quiz cancelled", {
+      type: "quiz.status.update",
+      quizId: selectedQuiz.id,
+      status: "cancelled",
+      reason: quizCancelReason.trim(),
+    });
+    if (saved) {
+      setShowQuizCancel(false);
+      setQuizCancelReason("");
+    }
+  };
+
+  const closeQuiz = async () => {
+    if (!selectedQuiz) return;
+    await runAction("Quiz closed", {
+      type: "quiz.status.update",
+      quizId: selectedQuiz.id,
+      status: "completed",
     });
   };
 
@@ -260,7 +336,7 @@ export default function TeacherAssessmentPage({
   };
 
   const attachQuestion = async (questionId: string) => {
-    if (!targetQuiz) return;
+    if (!targetQuiz || targetQuiz.status !== "draft") return;
     await runAction("Quiz questions updated", {
       type: "quiz.questions.set",
       quizId: targetQuiz.id,
@@ -277,20 +353,6 @@ export default function TeacherAssessmentPage({
       feedback: reviewDraft.feedback.trim() || "Reviewed by teacher.",
     });
   };
-
-  const sharedToolbar = (
-    <nav className="portal-ia-subnav" aria-label="Assessment sections">
-      {tabs.map(tab => (
-        <Link
-          key={tab.href}
-          href={tab.href}
-          className={tab.active ? "active" : ""}
-        >
-          {tab.label}
-        </Link>
-      ))}
-    </nav>
-  );
 
   const runPicker = (
     <label>
@@ -315,9 +377,9 @@ export default function TeacherAssessmentPage({
     return (
       <PlatformShell role="teacher" title="Create quiz">
         <FormFlowLayout
-          className="portal-ia-page teacher-assessment-page"
+          className="portal-ia-page teacher-assessment-page teacher-quiz-create-page"
           title="Create quiz"
-          description="Create one quiz for an assigned class."
+          description="Save one quiz draft for an assigned class."
           context={<span>Teacher</span>}
           actions={
             <Link
@@ -327,9 +389,11 @@ export default function TeacherAssessmentPage({
               Back to quizzes
             </Link>
           }
-          toolbar={sharedToolbar}
           main={
-            <section className="portal-ia-form-card">
+            <section
+              className="portal-ia-form-card"
+              data-testid="teacher-quiz-create-form"
+            >
               {actionError ? (
                 <p className="platform-form-error">{actionError}</p>
               ) : null}
@@ -351,6 +415,8 @@ export default function TeacherAssessmentPage({
                   Due date
                   <input
                     type="date"
+                    min={activeRun?.startsOn}
+                    max={activeRun?.endsOn}
                     value={quizDraft.dueAt}
                     onChange={event =>
                       setQuizDraft(current => ({
@@ -365,6 +431,7 @@ export default function TeacherAssessmentPage({
                   <input
                     type="number"
                     min="5"
+                    max="180"
                     value={quizDraft.durationMinutes}
                     onChange={event =>
                       setQuizDraft(current => ({
@@ -379,6 +446,7 @@ export default function TeacherAssessmentPage({
                   <input
                     type="number"
                     min="1"
+                    max="5"
                     value={quizDraft.attemptsAllowed}
                     onChange={event =>
                       setQuizDraft(current => ({
@@ -408,12 +476,14 @@ export default function TeacherAssessmentPage({
                   disabled={
                     !activeRun ||
                     !quizDraft.title.trim() ||
-                    savingAction === "Quiz created"
+                    savingAction === "Quiz draft created"
                   }
                   onClick={createQuiz}
                 >
                   <Plus size={15} />
-                  {savingAction === "Quiz created" ? "Creating" : "Create quiz"}
+                  {savingAction === "Quiz draft created"
+                    ? "Saving draft"
+                    : "Save quiz draft"}
                 </button>
               </div>
             </section>
@@ -427,7 +497,7 @@ export default function TeacherAssessmentPage({
     return (
       <PlatformShell role="teacher" title="New question">
         <FormFlowLayout
-          className="portal-ia-page teacher-assessment-page"
+          className="portal-ia-page teacher-assessment-page teacher-question-create-page"
           title="New question"
           description="Create one reusable question for your classes."
           context={<span>Teacher</span>}
@@ -439,7 +509,6 @@ export default function TeacherAssessmentPage({
               Back to question bank
             </Link>
           }
-          toolbar={sharedToolbar}
           main={
             <section className="portal-ia-form-card">
               {actionError ? (
@@ -599,7 +668,10 @@ export default function TeacherAssessmentPage({
             value={targetQuiz?.id ?? ""}
             onChange={event => setSelectedQuizId(event.target.value)}
           >
-            {runQuizzes.map(quiz => (
+            {!draftRunQuizzes.length ? (
+              <option value="">No draft quiz available</option>
+            ) : null}
+            {draftRunQuizzes.map(quiz => (
               <option key={quiz.id} value={quiz.id}>
                 {quiz.title}
               </option>
@@ -613,54 +685,58 @@ export default function TeacherAssessmentPage({
     <DataTableCard
       title="Quiz list"
       subtitle={`${filteredQuizzes.length} quiz item(s)`}
-      className="portal-ia-table-card"
+      className="teacher-assessment-record-card"
     >
-      <div className="portal-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Quiz</th>
-              <th>Course</th>
-              <th>Due</th>
-              <th>Questions</th>
-              <th>Attempts</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredQuizzes.map(quiz => {
-              const course = getRunCourse(quiz.courseRunId);
-              return (
-                <tr key={quiz.id}>
-                  <td>
-                    <strong>{quiz.title}</strong>
-                    <small>{quiz.questionTypes.join(", ")}</small>
-                  </td>
-                  <td>{course?.title ?? "Course"}</td>
-                  <td>{formatDate(quiz.dueAt)}</td>
-                  <td>{quiz.questionIds.length}</td>
-                  <td>{quiz.attemptsAllowed}</td>
-                  <td>
-                    <StatusBadge tone={statusTone(quiz.status)}>
-                      {quiz.status}
-                    </StatusBadge>
-                  </td>
-                </tr>
-              );
-            })}
-            {!filteredQuizzes.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No quizzes found</strong>
-                    <span>Create a quiz or adjust your search.</span>
+      {filteredQuizzes.length ? (
+        <div className="teacher-assessment-record-list">
+          {filteredQuizzes.map(quiz => {
+            const course = getRunCourse(quiz.courseRunId);
+            return (
+              <article key={quiz.id}>
+                <div className="teacher-assessment-record-copy">
+                  <span>{course?.title ?? "Course"}</span>
+                  <strong>{quiz.title}</strong>
+                  <p>
+                    {quiz.questionTypes
+                      .map(type => type.replaceAll("_", " "))
+                      .join(" · ")}
+                  </p>
+                </div>
+                <dl className="teacher-assessment-record-facts">
+                  <div>
+                    <dt>Due</dt>
+                    <dd>{formatDate(quiz.dueAt)}</dd>
                   </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+                  <div>
+                    <dt>Questions</dt>
+                    <dd>{quiz.questionIds.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Attempts</dt>
+                    <dd>{quiz.attemptsAllowed}</dd>
+                  </div>
+                </dl>
+                <div className="teacher-assessment-record-actions">
+                  <StatusBadge tone={statusTone(quiz.status)}>
+                    {quiz.status === "active" ? "Published" : quiz.status}
+                  </StatusBadge>
+                  <Link
+                    className="platform-row-link"
+                    href={`/app/teacher/quizzes/${quiz.id}`}
+                  >
+                    Open
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="platform-empty-state">
+          <strong>No quizzes found</strong>
+          <span>Create a quiz or adjust your search.</span>
+        </div>
+      )}
     </DataTableCard>
   );
 
@@ -668,70 +744,63 @@ export default function TeacherAssessmentPage({
     <DataTableCard
       title="Question bank"
       subtitle={`${filteredQuestions.length} question(s)`}
-      className="portal-ia-table-card"
+      className="teacher-assessment-record-card"
     >
-      <div className="portal-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Question</th>
-              <th>Type</th>
-              <th>Level</th>
-              <th>Quiz</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredQuestions.map(question => {
-              const attached = attachedQuestionIds.has(question.id);
-              return (
-                <tr key={question.id}>
-                  <td>
-                    <strong title={question.prompt}>
-                      {truncateText(question.prompt, 52)}
-                    </strong>
-                    <small>
-                      {[formatDate(question.updatedAt), question.tags[0]]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </small>
-                  </td>
-                  <td>{question.type.replace(/_/g, " ")}</td>
-                  <td>{question.difficulty}</td>
-                  <td>{targetQuiz?.title ?? "No quiz selected"}</td>
-                  <td>
-                    {attached ? (
-                      <StatusBadge tone="green">Attached</StatusBadge>
-                    ) : (
-                      <button
-                        type="button"
-                        className="platform-row-link"
-                        disabled={
-                          !targetQuiz ||
-                          savingAction === "Quiz questions updated"
-                        }
-                        onClick={() => attachQuestion(question.id)}
-                      >
-                        Attach
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {!filteredQuestions.length ? (
-              <tr>
-                <td colSpan={5}>
-                  <div className="platform-empty-state">
-                    <strong>No questions yet</strong>
-                    <span>Try another class or create a question.</span>
+      {filteredQuestions.length ? (
+        <div className="teacher-assessment-record-list">
+          {filteredQuestions.map(question => {
+            const attached = attachedQuestionIds.has(question.id);
+            return (
+              <article key={question.id}>
+                <div className="teacher-assessment-record-copy">
+                  <span>
+                    {question.type.replaceAll("_", " ")} · {question.difficulty}
+                  </span>
+                  <strong title={question.prompt}>
+                    {truncateText(question.prompt, 58)}
+                  </strong>
+                  <p>{question.tags.slice(0, 2).join(" · ") || "No tags"}</p>
+                </div>
+                <dl className="teacher-assessment-record-facts">
+                  <div>
+                    <dt>Updated</dt>
+                    <dd>{formatDate(question.updatedAt)}</dd>
                   </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+                  <div>
+                    <dt>Quiz</dt>
+                    <dd>{targetQuiz?.title ?? "Choose a quiz"}</dd>
+                  </div>
+                </dl>
+                <div className="teacher-assessment-record-actions">
+                  {attached ? (
+                    <StatusBadge tone="green">Attached</StatusBadge>
+                  ) : targetQuiz?.status !== "draft" ? (
+                    <StatusBadge tone="slate">Draft only</StatusBadge>
+                  ) : (
+                    <button
+                      type="button"
+                      className="platform-row-link"
+                      disabled={
+                        !targetQuiz ||
+                        targetQuiz.status !== "draft" ||
+                        savingAction === "Quiz questions updated"
+                      }
+                      onClick={() => attachQuestion(question.id)}
+                    >
+                      Attach
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="platform-empty-state">
+          <strong>No questions yet</strong>
+          <span>Try another class or create a question.</span>
+        </div>
+      )}
     </DataTableCard>
   );
 
@@ -739,119 +808,675 @@ export default function TeacherAssessmentPage({
     <DataTableCard
       title="Review queue"
       subtitle={`${reviewAttempts.length} pending attempt(s)`}
-      className="portal-ia-table-card"
+      className="teacher-assessment-record-card"
     >
-      <div className="portal-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Quiz</th>
-              <th>Submitted</th>
-              <th>Score</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {reviewAttempts.map(attempt => {
-              const context = getAttemptContext(attempt);
-              return (
-                <tr key={attempt.id}>
-                  <td>
-                    <strong>{context.user?.name ?? "Student"}</strong>
-                    <small>{context.course?.title ?? "Course"}</small>
-                  </td>
-                  <td>{context.quiz?.title ?? attempt.quizId}</td>
-                  <td>
-                    {formatDate(attempt.submittedAt ?? attempt.startedAt)}
-                  </td>
-                  <td>
-                    {attempt.score}/{attempt.maxScore}
-                  </td>
-                  <td>
-                    <StatusBadge tone="amber">{attempt.status}</StatusBadge>
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="platform-row-link"
-                      onClick={() => setSelectedAttemptId(attempt.id)}
-                    >
-                      Review
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {!reviewAttempts.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No attempts need review</strong>
-                    <span>Submitted quiz attempts will appear here.</span>
+      {reviewAttempts.length ? (
+        <div className="teacher-assessment-record-list">
+          {reviewAttempts.map(attempt => {
+            const context = getAttemptContext(attempt);
+            return (
+              <article key={attempt.id}>
+                <div className="teacher-assessment-record-copy">
+                  <span>{context.course?.title ?? "Course"}</span>
+                  <strong>{context.user?.name ?? "Student"}</strong>
+                  <p>{context.quiz?.title ?? "Quiz"}</p>
+                </div>
+                <dl className="teacher-assessment-record-facts">
+                  <div>
+                    <dt>Submitted</dt>
+                    <dd>
+                      {formatDate(attempt.submittedAt ?? attempt.startedAt)}
+                    </dd>
                   </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+                  <div>
+                    <dt>Score</dt>
+                    <dd>
+                      {attempt.score}/{attempt.maxScore}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="teacher-assessment-record-actions">
+                  <StatusBadge tone="amber">{attempt.status}</StatusBadge>
+                  <Link
+                    className="platform-row-link"
+                    href={`/app/teacher/quizzes/review/${attempt.id}`}
+                  >
+                    Review
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="platform-empty-state">
+          <strong>No attempts need review</strong>
+          <span>Submitted quiz attempts will appear here.</span>
+        </div>
+      )}
     </DataTableCard>
   );
 
   const selectedContext = getAttemptContext(selectedAttempt);
-  const reviewPanel = selectedAttempt ? (
-    <section className="portal-ia-side-panel">
-      <span>Selected attempt</span>
-      <strong>{selectedContext.quiz?.title ?? selectedAttempt.quizId}</strong>
-      <p>
-        {selectedContext.user?.name ?? "Student"} ·{" "}
-        {selectedContext.course?.title ?? "Course"}
-      </p>
-      <label>
-        Score
-        <input
-          type="number"
-          min="0"
-          max="100"
-          value={reviewDraft.score}
-          onChange={event =>
-            setReviewDraft(current => ({
-              ...current,
-              score: Number(event.target.value),
-            }))
+
+  if (view === "quiz-detail") {
+    const selectedQuizAttempts = selectedQuiz
+      ? attempts.filter(attempt => attempt.quizId === selectedQuiz.id)
+      : [];
+    const duePassed = selectedQuiz
+      ? new Date(selectedQuiz.dueAt).getTime() <= Date.now()
+      : false;
+    const activeLearnerIds = new Set(
+      selectedQuiz
+        ? state.enrollments
+            .filter(
+              enrollment =>
+                enrollment.courseRunId === selectedQuiz.courseRunId &&
+                enrollment.status === "active"
+            )
+            .map(enrollment => enrollment.studentId)
+            .filter(studentId => {
+              const student = state.students.find(item => item.id === studentId);
+              const user = state.users.find(item => item.id === student?.userId);
+              return student?.status === "active" && user?.status === "active";
+            })
+        : []
+    );
+    const reviewedLearnerIds = new Set(
+      selectedQuizAttempts
+        .filter(attempt => attempt.status === "completed")
+        .map(attempt => attempt.studentId)
+    );
+    const reviewComplete =
+      activeLearnerIds.size > 0 &&
+      selectedQuizAttempts.every(attempt => attempt.status === "completed") &&
+      Array.from(activeLearnerIds).every(studentId =>
+        reviewedLearnerIds.has(studentId)
+      );
+    const canCloseQuiz = duePassed || reviewComplete;
+    const canCancelQuiz = selectedQuizAttempts.length === 0;
+    const selectedQuizRun = selectedQuiz
+      ? state.courseRuns.find(run => run.id === selectedQuiz.courseRunId)
+      : undefined;
+    const quizQuestionOptions = selectedQuiz
+      ? questionBank.filter(
+          question =>
+            question.courseRunId === selectedQuiz.courseRunId &&
+            question.status === "active"
+        )
+      : [];
+    const quizDetailsDirty = Boolean(
+      selectedQuiz &&
+        (quizEditDraft.title.trim() !== selectedQuiz.title ||
+          quizEditDraft.dueAt !== selectedQuiz.dueAt.slice(0, 10) ||
+          Number(quizEditDraft.durationMinutes) !==
+            selectedQuiz.durationMinutes ||
+          Number(quizEditDraft.attemptsAllowed) !==
+            selectedQuiz.attemptsAllowed)
+    );
+    const quizQuestionsDirty = Boolean(
+      selectedQuiz &&
+        [...quizQuestionDraftIds].sort().join("|") !==
+          [...selectedQuiz.questionIds].sort().join("|")
+    );
+    const hasActiveClass = Boolean(
+      selectedQuiz &&
+        state.classGroups.some(
+          group =>
+            group.courseRunId === selectedQuiz.courseRunId &&
+            group.status === "active"
+        )
+    );
+    const isDraft = selectedQuiz?.status === "draft";
+    const isPublished = selectedQuiz?.status === "active";
+    const isTerminal = Boolean(
+      selectedQuiz &&
+        (selectedQuiz.status === "completed" ||
+          selectedQuiz.status === "cancelled")
+    );
+
+    return (
+      <PlatformShell role="teacher" title="Quiz details">
+        <DetailLayout
+          className="portal-ia-page teacher-assessment-page teacher-quiz-detail-page"
+          title={selectedQuiz?.title ?? "Quiz"}
+          description={
+            selectedQuiz
+              ? "Manage this quiz without changing learner attempt history."
+              : "This quiz is no longer available in your assigned classes."
+          }
+          context={<span>Teacher</span>}
+          actions={
+            <Link className="platform-secondary-button" href="/app/teacher/quizzes">
+              <ListChecks size={15} />
+              Back to quizzes
+            </Link>
+          }
+          main={
+            selectedQuiz ? (
+              <div className="teacher-quiz-detail-stack" data-testid="teacher-quiz-detail">
+                <section className="teacher-quiz-lifecycle-summary">
+                  <div>
+                    <span>Delivery</span>
+                    <strong>{getRunCourse(selectedQuiz.courseRunId)?.title ?? "Course"}</strong>
+                    <p>
+                      {isDraft
+                        ? "Add questions and publish when the class is ready."
+                        : isPublished
+                          ? "Learners can take this quiz while it is open."
+                          : selectedQuiz.status === "completed"
+                            ? "This quiz is closed. Attempts and results remain available."
+                            : "This quiz was cancelled before learner attempts could begin."}
+                    </p>
+                  </div>
+                  <StatusBadge tone={statusTone(selectedQuiz.status)}>
+                    {selectedQuiz.status === "active"
+                      ? "Published"
+                      : selectedQuiz.status === "completed"
+                        ? "Closed"
+                        : selectedQuiz.status}
+                  </StatusBadge>
+                </section>
+
+                <dl className="teacher-quiz-lifecycle-facts">
+                  <div>
+                    <dt>Due</dt>
+                    <dd>{formatDate(selectedQuiz.dueAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Questions</dt>
+                    <dd>{selectedQuiz.questionIds.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Attempts</dt>
+                    <dd>{selectedQuizAttempts.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Limit</dt>
+                    <dd>{selectedQuiz.attemptsAllowed} per learner</dd>
+                  </div>
+                </dl>
+
+                {actionError ? (
+                  <p className="platform-form-error">{actionError}</p>
+                ) : null}
+
+                {isDraft ? (
+                  <section
+                    className="portal-ia-form-card teacher-quiz-lifecycle-form"
+                    data-testid="teacher-quiz-draft-controls"
+                  >
+                    <div>
+                      <h2>Draft settings</h2>
+                      <p>
+                        {hasActiveClass
+                          ? "Set the delivery details, add questions, then publish."
+                          : "Create or reactivate a class for this course before publishing."}
+                      </p>
+                    </div>
+                    <div className="portal-ia-form-grid">
+                      <label className="wide">
+                        Quiz title
+                        <input
+                          value={quizEditDraft.title}
+                          onChange={event =>
+                            setQuizEditDraft(current => ({
+                              ...current,
+                              title: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Due date
+                        <input
+                          type="date"
+                          min={selectedQuizRun?.startsOn}
+                          max={selectedQuizRun?.endsOn}
+                          value={quizEditDraft.dueAt}
+                          onChange={event =>
+                            setQuizEditDraft(current => ({
+                              ...current,
+                              dueAt: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Minutes
+                        <input
+                          type="number"
+                          min="5"
+                          max="180"
+                          value={quizEditDraft.durationMinutes}
+                          onChange={event =>
+                            setQuizEditDraft(current => ({
+                              ...current,
+                              durationMinutes: Number(event.target.value),
+                            }))
+                          }
+                        />
+                      </label>
+                      <label>
+                        Attempts per learner
+                        <input
+                          type="number"
+                          min="1"
+                          max="5"
+                          value={quizEditDraft.attemptsAllowed}
+                          onChange={event =>
+                            setQuizEditDraft(current => ({
+                              ...current,
+                              attemptsAllowed: Number(event.target.value),
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div
+                      className="teacher-quiz-question-editor"
+                      data-testid="teacher-quiz-question-editor"
+                    >
+                      <div className="teacher-quiz-question-editor-heading">
+                        <div>
+                          <h3>Questions</h3>
+                          <p>
+                            Choose active questions from this class. Save the
+                            selection before publishing.
+                          </p>
+                        </div>
+                        <strong>
+                          {quizQuestionDraftIds.length} selected
+                        </strong>
+                      </div>
+                      {quizQuestionOptions.length ? (
+                        <div className="teacher-quiz-question-options">
+                          {quizQuestionOptions.map(question => (
+                            <label key={question.id}>
+                              <input
+                                type="checkbox"
+                                data-question-id={question.id}
+                                checked={quizQuestionDraftIds.includes(
+                                  question.id
+                                )}
+                                onChange={event =>
+                                  setQuizQuestionDraftIds(current =>
+                                    event.target.checked
+                                      ? Array.from(
+                                          new Set([...current, question.id])
+                                        )
+                                      : current.filter(
+                                          item => item !== question.id
+                                        )
+                                  )
+                                }
+                              />
+                              <span>
+                                <strong>{truncateText(question.prompt, 84)}</strong>
+                                <small>
+                                  {question.type.replaceAll("_", " ")} ·{" "}
+                                  {question.difficulty}
+                                </small>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="platform-empty-state compact">
+                          <strong>No active questions for this class</strong>
+                          <span>Create a reusable question before publishing.</span>
+                        </div>
+                      )}
+                      <div className="teacher-quiz-question-editor-actions">
+                        <Link
+                          className="platform-row-link"
+                          href="/app/teacher/question-bank/new"
+                        >
+                          Create question
+                        </Link>
+                        <button
+                          type="button"
+                          className="platform-secondary-button"
+                          data-testid="teacher-quiz-save-questions"
+                          disabled={
+                            !quizQuestionsDirty ||
+                            savingAction === "Quiz questions saved"
+                          }
+                          onClick={saveQuizQuestions}
+                        >
+                          {savingAction === "Quiz questions saved"
+                            ? "Saving questions"
+                            : "Save questions"}
+                        </button>
+                      </div>
+                    </div>
+                    {quizDetailsDirty || quizQuestionsDirty ? (
+                      <p
+                        className="teacher-quiz-unsaved-note"
+                        role="status"
+                        data-testid="teacher-quiz-unsaved-note"
+                      >
+                        Save all draft changes before publishing.
+                      </p>
+                    ) : null}
+                    <div className="portal-ia-actions">
+                      <button
+                        type="button"
+                        className="platform-secondary-button"
+                        disabled={
+                          !quizDetailsDirty ||
+                          !quizEditDraft.title.trim() ||
+                          !quizEditDraft.dueAt ||
+                          savingAction === "Quiz draft saved"
+                        }
+                        onClick={updateQuiz}
+                      >
+                        {savingAction === "Quiz draft saved"
+                          ? "Saving draft"
+                          : "Save draft"}
+                      </button>
+                      <button
+                        type="button"
+                        className="platform-primary-button"
+                        data-testid="teacher-quiz-publish"
+                        disabled={
+                          selectedQuiz.questionIds.length === 0 ||
+                          !hasActiveClass ||
+                          quizDetailsDirty ||
+                          quizQuestionsDirty ||
+                          savingAction === "Quiz published"
+                        }
+                        onClick={publishQuiz}
+                      >
+                        {savingAction === "Quiz published"
+                          ? "Publishing"
+                          : "Publish quiz"}
+                      </button>
+                      <button
+                        type="button"
+                        className="platform-row-link"
+                        disabled={!canCancelQuiz}
+                        onClick={() => setShowQuizCancel(current => !current)}
+                      >
+                        Cancel draft
+                      </button>
+                    </div>
+                    {!canCancelQuiz ? (
+                      <p className="teacher-quiz-guard-note">
+                        This quiz has learner attempts and can no longer be
+                        cancelled.
+                      </p>
+                    ) : null}
+                  </section>
+                ) : null}
+
+                {isPublished ? (
+                  <section
+                    className="teacher-quiz-lifecycle-panel"
+                    data-testid="teacher-quiz-published-controls"
+                  >
+                    <div>
+                      <h2>Published quiz</h2>
+                      <p>
+                        Close it after the due date or once every active learner
+                        has a reviewed attempt.
+                      </p>
+                    </div>
+                    <div className="portal-ia-actions">
+                      <button
+                        type="button"
+                        className="platform-primary-button"
+                        data-testid="teacher-quiz-close"
+                        disabled={!canCloseQuiz || savingAction === "Quiz closed"}
+                        onClick={closeQuiz}
+                      >
+                        {savingAction === "Quiz closed" ? "Closing" : "Close quiz"}
+                      </button>
+                      <button
+                        type="button"
+                        className="platform-row-link"
+                        disabled={!canCancelQuiz}
+                        onClick={() => setShowQuizCancel(current => !current)}
+                      >
+                        Cancel quiz
+                      </button>
+                    </div>
+                    {!canCloseQuiz ? (
+                      <p className="teacher-quiz-guard-note">
+                        Closing becomes available after the due date or once
+                        every active learner has a reviewed attempt.
+                      </p>
+                    ) : null}
+                    {!canCancelQuiz ? (
+                      <p className="teacher-quiz-guard-note">
+                        Cancellation is unavailable because learner attempts
+                        already exist.
+                      </p>
+                    ) : null}
+                  </section>
+                ) : null}
+
+                {showQuizCancel && !isTerminal ? (
+                  <section
+                    className="portal-ia-form-card teacher-quiz-cancel-form"
+                    data-testid="teacher-quiz-cancel-form"
+                  >
+                    <label>
+                      Why is this quiz being cancelled?
+                      <textarea
+                        value={quizCancelReason}
+                        onChange={event => setQuizCancelReason(event.target.value)}
+                        placeholder="Add a short reason for the teaching record"
+                      />
+                    </label>
+                    <div className="portal-ia-actions">
+                      <button
+                        type="button"
+                        className="platform-secondary-button"
+                        onClick={() => setShowQuizCancel(false)}
+                      >
+                        Keep quiz
+                      </button>
+                      <button
+                        type="button"
+                        className="platform-danger-button"
+                        data-testid="teacher-quiz-cancel"
+                        disabled={
+                          quizCancelReason.trim().length < 5 ||
+                          savingAction === "Quiz cancelled"
+                        }
+                        onClick={cancelQuiz}
+                      >
+                        {savingAction === "Quiz cancelled"
+                          ? "Cancelling"
+                          : "Cancel quiz"}
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
+                {isTerminal ? (
+                  <section
+                    className="teacher-quiz-lifecycle-complete"
+                    data-testid="teacher-quiz-terminal-state"
+                  >
+                    <CheckCircle2 size={18} />
+                    <div>
+                      <strong>
+                        {selectedQuiz.status === "completed"
+                          ? "Quiz closed"
+                          : "Quiz cancelled"}
+                      </strong>
+                      <p>
+                        {selectedQuiz.status === "completed"
+                          ? "Learner attempts and results remain read-only records."
+                          : "This quiz is no longer available to learners."}
+                      </p>
+                    </div>
+                  </section>
+                ) : null}
+              </div>
+            ) : (
+              <div className="platform-empty-state">
+                <strong>Quiz not found</strong>
+                <span>Return to the quiz list and choose another item.</span>
+              </div>
+            )
           }
         />
-      </label>
-      <label>
-        Feedback
-        <textarea
-          value={reviewDraft.feedback}
-          onChange={event =>
-            setReviewDraft(current => ({
-              ...current,
-              feedback: event.target.value,
-            }))
+      </PlatformShell>
+    );
+  }
+
+  if (view === "review-detail") {
+    const reviewNeeded = Boolean(
+      selectedAttempt && isReviewNeeded(selectedAttempt.status)
+    );
+
+    return (
+      <PlatformShell role="teacher" title="Review quiz">
+        <DetailLayout
+          className="portal-ia-page teacher-assessment-page teacher-quiz-review-detail-page"
+          title={selectedContext.quiz?.title ?? "Quiz attempt"}
+          description={
+            selectedAttempt
+              ? `${selectedContext.user?.name ?? "Student"} submitted this attempt for review.`
+              : "This quiz attempt is no longer available."
+          }
+          context={<span>Teacher</span>}
+          actions={
+            <Link
+              className="platform-secondary-button"
+              href="/app/teacher/quizzes/review"
+            >
+              <ListChecks size={15} />
+              Back to review queue
+            </Link>
+          }
+          main={
+            selectedAttempt ? (
+              <div className="teacher-quiz-review-detail-stack">
+                <section className="teacher-quiz-review-summary">
+                  <div>
+                    <span>Student</span>
+                    <strong>{selectedContext.user?.name ?? "Student"}</strong>
+                    <p>{selectedContext.course?.title ?? "Course"}</p>
+                  </div>
+                  <StatusBadge
+                    tone={
+                      reviewNeeded
+                        ? "amber"
+                        : statusTone(selectedAttempt.status)
+                    }
+                  >
+                    {reviewNeeded ? "Needs review" : selectedAttempt.status}
+                  </StatusBadge>
+                </section>
+
+                <dl className="teacher-quiz-review-facts">
+                  <div>
+                    <dt>Submitted</dt>
+                    <dd>
+                      {formatDate(
+                        selectedAttempt.submittedAt ?? selectedAttempt.startedAt
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Current score</dt>
+                    <dd>
+                      {selectedAttempt.score}/{selectedAttempt.maxScore}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Responses</dt>
+                    <dd>{Object.keys(selectedAttempt.answers).length}</dd>
+                  </div>
+                </dl>
+
+                {reviewNeeded ? (
+                  <section className="portal-ia-form-card teacher-quiz-review-form">
+                    <div>
+                      <h2>Review attempt</h2>
+                      <p>Record a score and concise learner feedback.</p>
+                    </div>
+                    {actionError ? (
+                      <p className="platform-form-error">{actionError}</p>
+                    ) : null}
+                    <div className="portal-ia-form-grid">
+                      <label>
+                        Score
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={reviewDraft.score}
+                          onChange={event =>
+                            setReviewDraft(current => ({
+                              ...current,
+                              score: Number(event.target.value),
+                            }))
+                          }
+                        />
+                      </label>
+                      <label className="wide">
+                        Feedback
+                        <textarea
+                          value={reviewDraft.feedback}
+                          onChange={event =>
+                            setReviewDraft(current => ({
+                              ...current,
+                              feedback: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="portal-ia-actions">
+                      <button
+                        type="button"
+                        className="platform-primary-button"
+                        disabled={savingAction === "Quiz reviewed"}
+                        onClick={reviewAttempt}
+                      >
+                        <CheckCircle2 size={15} />
+                        {savingAction === "Quiz reviewed"
+                          ? "Saving review"
+                          : "Save review"}
+                      </button>
+                    </div>
+                  </section>
+                ) : (
+                  <section className="teacher-quiz-review-complete">
+                    <CheckCircle2 size={18} />
+                    <div>
+                      <strong>Review recorded</strong>
+                      <p>
+                        This attempt has already been reviewed and is kept here
+                        as a read-only record.
+                      </p>
+                    </div>
+                  </section>
+                )}
+              </div>
+            ) : (
+              <div className="platform-empty-state">
+                <strong>Quiz attempt not found</strong>
+                <span>
+                  Return to the review queue and choose another attempt.
+                </span>
+              </div>
+            )
           }
         />
-      </label>
-      <button
-        type="button"
-        className="platform-primary-button"
-        disabled={savingAction === "Quiz reviewed"}
-        onClick={reviewAttempt}
-      >
-        <CheckCircle2 size={15} />
-        {savingAction === "Quiz reviewed" ? "Saving" : "Save review"}
-      </button>
-    </section>
-  ) : null;
+      </PlatformShell>
+    );
+  }
 
   return (
     <PlatformShell role="teacher" title="Quizzes">
       <WorkspaceLayout
-        className="portal-ia-page teacher-assessment-page"
+        className={`portal-ia-page teacher-assessment-page teacher-assessment-${view}`}
         title={
           view === "review"
             ? "Quiz review"
@@ -885,20 +1510,29 @@ export default function TeacherAssessmentPage({
               Back to quizzes
             </Link>
           ) : (
-            <Link
-              className="platform-primary-button"
-              href="/app/teacher/quizzes/new"
-            >
-              <ClipboardCheck size={15} />
-              Create quiz
-            </Link>
+            <>
+              <Link
+                className="platform-secondary-button"
+                href="/app/teacher/quizzes/review"
+              >
+                Review attempts
+              </Link>
+              <Link
+                className="platform-primary-button"
+                href="/app/teacher/quizzes/new"
+              >
+                <ClipboardCheck size={15} />
+                Create quiz
+              </Link>
+            </>
           )
         }
         toolbar={
-          <div className="portal-ia-toolbar teacher-assessment-toolbar">
-            {sharedToolbar}
-            {viewFilters}
-          </div>
+          viewFilters ? (
+            <div className="portal-ia-toolbar teacher-assessment-toolbar">
+              {viewFilters}
+            </div>
+          ) : undefined
         }
         main={
           <>
@@ -912,7 +1546,6 @@ export default function TeacherAssessmentPage({
                 : quizzesTable}
           </>
         }
-        side={view === "review" ? reviewPanel : undefined}
       />
     </PlatformShell>
   );

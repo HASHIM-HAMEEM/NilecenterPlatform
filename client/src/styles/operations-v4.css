@@ -1,0 +1,625 @@
+/*
+  Operations Portal V4
+  Registrar, HOD, and Branch Admin use the same information grammar without
+  becoming identical dashboards: a short status rail, one work surface, and a
+  supporting queue. Lists stay operational and forms stay focused.
+*/
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-page-header {
+  gap: 18px;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-page-header
+  h1 {
+  max-width: 24ch;
+  font-size: 30px;
+  font-weight: 760;
+  line-height: 1.12;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-page-header
+  p {
+  max-width: 60ch;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Role dashboards: compact and distinct, never an equal-weight card wall. */
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-metric-grid {
+  overflow: hidden;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 12px 30px rgba(26, 26, 26, 0.025);
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-metric {
+  min-height: 104px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 18px 20px;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-metric
+  + .platform-metric {
+  border-inline-start: 1px solid var(--border);
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-metric
+  > div {
+  gap: 7px;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-metric
+  span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-metric
+  strong {
+  font-size: 27px;
+  font-weight: 760;
+  line-height: 1;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-role-main {
+  grid-template-columns: minmax(0, 1.6fr) minmax(290px, 0.72fr);
+  gap: 18px;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-role-stack {
+  gap: 18px;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-role-main
+  .platform-v2-panel {
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 14px 36px rgba(26, 26, 26, 0.03);
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-work-summary {
+  border-inline-start: 3px solid var(--role-color);
+  background: var(--card);
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-workspace-header {
+  min-height: auto;
+  padding: 20px 22px 0;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-summary-body {
+  grid-template-columns: minmax(0, 1fr) minmax(245px, 0.5fr);
+  gap: 22px;
+  align-items: stretch;
+  padding: 12px 22px 22px;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-summary-copy {
+  min-height: 188px;
+  align-content: center;
+  border-radius: 0;
+  background: transparent;
+  padding: 18px 2px 18px 0;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-summary-copy
+  h2 {
+  max-width: 25ch;
+  font-size: 30px;
+  font-weight: 760;
+  line-height: 1.14;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-summary-copy
+  p {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-summary-facts {
+  gap: 0;
+  border-inline-start: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-summary-facts
+  article {
+  min-height: 96px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 18px;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-summary-facts
+  article
+  + article {
+  border-inline-start: 1px solid var(--border);
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-summary-facts
+  strong {
+  font-size: 17px;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-dashboard-list,
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-attention-list {
+  gap: 0;
+  padding: 12px 22px 20px;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-dashboard-list
+  > *,
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-attention-list
+  > * {
+  border-radius: 0;
+  border-inline: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  box-shadow: none;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-dashboard-list
+  > *:first-child,
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-attention-list
+  > *:first-child {
+  border-top: 0;
+}
+
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-dashboard-list
+  a,
+:is(
+    .platform-shell[data-role="registrar"],
+    .platform-shell[data-role="headofdepartment"],
+    .platform-shell[data-role="branchadmin"]
+  )
+  .platform-v2-attention-list
+  a {
+  min-height: 68px;
+  padding-inline: 0;
+}
+
+/* List, review, and settings routes share a readable workbench width. */
+:is(
+  .platform-shell[data-role="registrar"] .registrar-admissions-page,
+  .platform-shell[data-role="registrar"] .registrar-schedule-page,
+  .platform-shell[data-role="registrar"] .registrar-students-list-page,
+  .platform-shell[data-role="registrar"] .registrar-classes-page,
+  .platform-shell[data-role="registrar"] .registrar-payments-page,
+  .platform-shell[data-role="registrar"] .registrar-enrollments-page,
+  .platform-shell[data-role="headofdepartment"] .hod-directory-page,
+  .platform-shell[data-role="headofdepartment"] .hod-workflow-page,
+  .platform-shell[data-role="headofdepartment"] .hod-report-page,
+  .platform-shell[data-role="branchadmin"] .branch-directory-page,
+  .platform-shell[data-role="branchadmin"] .branch-rooms-page,
+  .platform-shell[data-role="branchadmin"] .branch-schedule-page,
+  .platform-shell[data-role="branchadmin"] .branch-payments-page,
+  .platform-shell[data-role="branchadmin"] .branch-reports-page,
+  .platform-shell[data-role="branchadmin"] .branch-attendance-page
+) {
+  width: 100%;
+  max-width: 1560px;
+  margin-inline: auto;
+}
+
+:is(
+  .platform-shell[data-role="registrar"] .registrar-panel,
+  .platform-shell[data-role="headofdepartment"] .platform-table-card,
+  .platform-shell[data-role="headofdepartment"] .platform-workflow-card,
+  .platform-shell[data-role="branchadmin"] .platform-table-card,
+  .platform-shell[data-role="branchadmin"] .branch-workspace-main > section,
+  .platform-shell[data-role="branchadmin"] .branch-attendance-workspace
+) {
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(26, 26, 26, 0.03);
+}
+
+:is(
+  .platform-shell[data-role="registrar"] .registrar-record-row,
+  .platform-shell[data-role="registrar"] .registrar-lead-list article,
+  .platform-shell[data-role="registrar"] .registrar-application-list article,
+  .platform-shell[data-role="registrar"] .registrar-workflow-list article,
+  .platform-shell[data-role="registrar"] .registrar-operations-list article,
+  .platform-shell[data-role="headofdepartment"] .hod-course-list > article,
+  .platform-shell[data-role="headofdepartment"] .hod-directory-list > article,
+  .platform-shell[data-role="headofdepartment"] .hod-schedule-list > article,
+  .platform-shell[data-role="branchadmin"] .branch-room-list article,
+  .platform-shell[data-role="branchadmin"] .branch-class-list article
+) {
+  border-inline-start: 3px solid transparent;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+:is(
+  .platform-shell[data-role="registrar"] .registrar-record-row:hover,
+  .platform-shell[data-role="registrar"] .registrar-lead-list article:hover,
+  .platform-shell[data-role="registrar"]
+    .registrar-application-list
+    article:hover,
+  .platform-shell[data-role="registrar"] .registrar-workflow-list article:hover,
+  .platform-shell[data-role="registrar"]
+    .registrar-operations-list
+    article:hover,
+  .platform-shell[data-role="headofdepartment"]
+    .hod-course-list
+    > article:hover,
+  .platform-shell[data-role="headofdepartment"]
+    .hod-directory-list
+    > article:hover,
+  .platform-shell[data-role="headofdepartment"]
+    .hod-schedule-list
+    > article:hover,
+  .platform-shell[data-role="branchadmin"] .branch-room-list article:hover,
+  .platform-shell[data-role="branchadmin"] .branch-class-list article:hover
+) {
+  border-inline-start-color: var(--role-color);
+  background: color-mix(in srgb, var(--role-tint) 24%, var(--card));
+}
+
+/* Every filter bar has one visual language: compact, horizontal, and legible. */
+:is(
+  .platform-shell[data-role="registrar"] .registrar-admissions-toolbar-v3,
+  .platform-shell[data-role="registrar"] .registrar-list-toolbar-v3,
+  .platform-shell[data-role="registrar"] .registrar-payment-toolbar,
+  .platform-shell[data-role="headofdepartment"] .hod-compact-toolbar,
+  .platform-shell[data-role="branchadmin"] .branch-compact-toolbar
+) {
+  min-height: 50px;
+  border-color: color-mix(in srgb, var(--border) 88%, var(--foreground));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 96%, var(--muted));
+  box-shadow: none;
+}
+
+@media (min-width: 1600px) {
+  :is(
+    .platform-shell[data-role="registrar"] .registrar-admissions-page,
+    .platform-shell[data-role="registrar"] .registrar-schedule-page,
+    .platform-shell[data-role="registrar"] .registrar-students-list-page,
+    .platform-shell[data-role="registrar"] .registrar-classes-page,
+    .platform-shell[data-role="registrar"] .registrar-payments-page,
+    .platform-shell[data-role="registrar"] .registrar-enrollments-page,
+    .platform-shell[data-role="headofdepartment"] .hod-directory-page,
+    .platform-shell[data-role="headofdepartment"] .hod-workflow-page,
+    .platform-shell[data-role="headofdepartment"] .hod-report-page,
+    .platform-shell[data-role="branchadmin"] .branch-directory-page,
+    .platform-shell[data-role="branchadmin"] .branch-rooms-page,
+    .platform-shell[data-role="branchadmin"] .branch-schedule-page,
+    .platform-shell[data-role="branchadmin"] .branch-payments-page,
+    .platform-shell[data-role="branchadmin"] .branch-reports-page,
+    .platform-shell[data-role="branchadmin"] .branch-attendance-page
+  ) {
+    max-width: 1640px;
+  }
+}
+
+@media (max-width: 980px) {
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-v2-role-main {
+    grid-template-columns: 1fr;
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-v2-role-main
+    > aside {
+    max-width: none;
+  }
+}
+
+@media (max-width: 760px) {
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-page-header
+    h1 {
+    font-size: 26px;
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-metric {
+    min-height: 94px;
+    padding: 15px;
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-metric:nth-child(odd) {
+    border-inline-start: 0;
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-metric:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-v2-summary-body {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 8px 18px 18px;
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-v2-summary-copy {
+    min-height: 0;
+    padding-block: 18px;
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-v2-summary-copy
+    h2 {
+    font-size: 25px;
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-v2-summary-facts {
+    grid-template-columns: 1fr;
+    border-top: 1px solid var(--border);
+    border-inline-start: 0;
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-v2-summary-facts
+    article {
+    min-height: 0;
+    padding: 14px 0;
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-v2-summary-facts
+    article
+    + article {
+    border-top: 1px solid var(--border);
+    border-inline-start: 0;
+  }
+
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-v2-dashboard-list,
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    .platform-v2-attention-list {
+    padding-inline: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    *,
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    *::before,
+  :is(
+      .platform-shell[data-role="registrar"],
+      .platform-shell[data-role="headofdepartment"],
+      .platform-shell[data-role="branchadmin"]
+    )
+    *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  ArrowRight,
   BookOpen,
   CalendarDays,
   CheckCircle2,
@@ -10,8 +11,13 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
-import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
+import {
+  DetailLayout,
+  FormFlowLayout,
+  WorkspaceLayout,
+} from "@/components/platform/PlatformLayouts";
 import {
   DataTableCard,
   StatusBadge,
@@ -36,6 +42,17 @@ type HodWorkflowPageId =
 
 type HodWorkflowPageProps = {
   pageId: HodWorkflowPageId;
+  mode?:
+    | "list"
+    | "create"
+    | "review"
+    | "review-detail"
+    | "sessions"
+    | "course-detail"
+    | "certificate-detail";
+  courseId?: string;
+  certificateId?: string;
+  reviewSubmissionId?: string;
 };
 
 type CourseStatus = "draft" | "active" | "paused" | "completed";
@@ -226,7 +243,13 @@ function normalizeStatusClass(status: string) {
   return status.replace(/[_\s]/g, "-");
 }
 
-export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
+export default function HodWorkflowPage({
+  pageId,
+  mode = "list",
+  courseId,
+  certificateId,
+  reviewSubmissionId,
+}: HodWorkflowPageProps) {
   const [state, setState] = useState(() => platformStore.getState());
   const [query, setQuery] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -241,15 +264,10 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
   const [assignmentRubric, setAssignmentRubric] = useState(
     "Accuracy, Evidence, Teacher notes"
   );
-  const [selectedSubmissionId, setSelectedSubmissionId] = useState(
-    "sub_ar_grammar_draft"
-  );
+  const [selectedSubmissionId] = useState("sub_ar_grammar_draft");
   const [gradeScore, setGradeScore] = useState(89);
   const [gradeFeedback, setGradeFeedback] = useState(
     "Clear answer. Keep evidence specific."
-  );
-  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>(
-    {}
   );
 
   const scope = useMemo(() => buildHodScope(state), [state]);
@@ -308,7 +326,7 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
         .filter(Boolean);
       if (!selectedCourse || !title) {
         toast.error("Add a module title first.");
-        return;
+        return false;
       }
       const saved = await runAction(
         {
@@ -324,6 +342,7 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
         setModuleTitle("");
         setModuleOutcomes("");
       }
+      return saved;
     },
   };
 
@@ -331,7 +350,7 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
     createAssignment: async () => {
       if (!selectedRun || !assignmentTitle.trim()) {
         toast.error("Add an assignment title first.");
-        return;
+        return false;
       }
       const saved = await runAction(
         {
@@ -349,16 +368,17 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
         "Assignment created"
       );
       if (saved) setAssignmentTitle("");
+      return saved;
     },
-    gradeSubmission: () => {
-      if (!selectedSubmissionId) {
+    gradeSubmission: (submissionId = selectedSubmissionId) => {
+      if (!submissionId) {
         toast.error("Choose a submission first.");
-        return;
+        return Promise.resolve(false);
       }
       return runAction(
         {
           type: "assignment.grade",
-          submissionId: selectedSubmissionId,
+          submissionId,
           score: Math.min(100, Math.max(0, Number(gradeScore) || 0)),
           feedback: gradeFeedback.trim() || "Reviewed by HOD.",
           actorId: scope.actorId,
@@ -387,17 +407,17 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
         },
         "Certificate issued"
       ),
-    reject: (certificateId: string) => {
-      const reason = rejectReasons[certificateId]?.trim();
-      if (!reason) {
+    reject: async (certificateId: string, reason: string) => {
+      const trimmedReason = reason.trim();
+      if (!trimmedReason) {
         toast.error("Add a reject reason first.");
-        return;
+        return false;
       }
       return runAction(
         {
           type: "certificate.reject",
           certificateId,
-          reason,
+          reason: trimmedReason,
           actorId: scope.actorId,
         },
         "Certificate rejected"
@@ -405,9 +425,31 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
     },
   };
 
+  const isCurriculumCreate = pageId === "curriculum" && mode === "create";
+  const isAssessmentCreate = pageId === "assessments" && mode === "create";
+  const isAssessmentReview = pageId === "assessments" && mode === "review";
+  const isAssessmentReviewDetail =
+    pageId === "assessments" && mode === "review-detail";
+  const isScheduleSessions = pageId === "schedule" && mode === "sessions";
+  const isCourseDetail = pageId === "courses" && mode === "course-detail";
+  const detailCourse = isCourseDetail
+    ? scope.courses.find(course => course.id === courseId)
+    : undefined;
+  const isCertificateDetail =
+    pageId === "certificates" && mode === "certificate-detail";
+  const detailCertificate = isCertificateDetail
+    ? scope.state.certificates.find(
+        certificate => certificate.id === certificateId
+      )
+    : undefined;
+  const isFormFlow = isCurriculumCreate || isAssessmentCreate;
+
   const toolbar =
     pageId === "courses" ? (
-      <div className="simple-portal-toolbar hod-workflow-toolbar">
+      <div
+        className="hod-compact-toolbar hod-workflow-toolbar-v3"
+        data-testid="hod-courses-toolbar"
+      >
         <label>
           Search
           <span>
@@ -420,8 +462,14 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
           </span>
         </label>
       </div>
-    ) : pageId === "curriculum" || pageId === "assessments" ? (
-      <div className="simple-portal-toolbar hod-workflow-toolbar">
+    ) : pageId === "curriculum" ||
+      (pageId === "assessments" &&
+        !isAssessmentCreate &&
+        !isAssessmentReviewDetail) ? (
+      <div
+        className="hod-compact-toolbar hod-workflow-toolbar-v3"
+        data-testid={`hod-${pageId}-toolbar`}
+      >
         <label>
           Course
           <select
@@ -463,24 +511,122 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
       </div>
     ) : null;
 
+  const Layout =
+    isAssessmentReviewDetail || isCourseDetail || isCertificateDetail
+      ? DetailLayout
+      : isFormFlow
+        ? FormFlowLayout
+        : WorkspaceLayout;
+  const layoutTitle = isCurriculumCreate
+    ? "Add module"
+    : isAssessmentCreate
+      ? "New assignment"
+      : isCourseDetail
+        ? (detailCourse?.title ?? "Course")
+        : isCertificateDetail
+          ? "Certificate request"
+          : isAssessmentReview
+            ? "Assessment review"
+            : isAssessmentReviewDetail
+              ? "Review submission"
+              : isScheduleSessions
+                ? "Sessions"
+                : copy.title;
+  const layoutDescription = isCurriculumCreate
+    ? "Add one learning module to the selected course."
+    : isAssessmentCreate
+      ? "Set one clear assignment for a selected class."
+      : isCourseDetail
+        ? (detailCourse?.description ??
+          "Review this course and its academic status.")
+        : isCertificateDetail
+          ? "Review one learner certificate request and record the decision."
+          : isAssessmentReview
+            ? "Work that needs an academic decision."
+            : isAssessmentReviewDetail
+              ? "Review one learner submission and record the result."
+              : isScheduleSessions
+                ? "Review upcoming department sessions and attendance follow-up."
+                : copy.description;
+  const pageActions = isCurriculumCreate ? (
+    <Link className="platform-secondary-button" href="/app/hod/curriculum">
+      Cancel
+    </Link>
+  ) : isAssessmentCreate ? (
+    <Link className="platform-secondary-button" href="/app/hod/assessments">
+      Cancel
+    </Link>
+  ) : isCourseDetail ? (
+    <Link className="platform-secondary-button" href="/app/hod/courses">
+      Back to courses
+    </Link>
+  ) : isCertificateDetail ? (
+    <Link className="platform-secondary-button" href="/app/hod/certificates">
+      Back to certificates
+    </Link>
+  ) : isAssessmentReviewDetail ? (
+    <Link
+      className="platform-secondary-button"
+      href="/app/hod/assessments/review"
+    >
+      Back to review queue
+    </Link>
+  ) : isAssessmentReview ? (
+    <Link className="platform-secondary-button" href="/app/hod/assessments">
+      Back to assignments
+    </Link>
+  ) : isScheduleSessions ? (
+    <Link className="platform-secondary-button" href="/app/hod/schedule">
+      Back to class schedule
+    </Link>
+  ) : pageId === "curriculum" ? (
+    <Link className="platform-primary-button" href="/app/hod/curriculum/new">
+      <Plus size={15} />
+      Add module
+    </Link>
+  ) : pageId === "assessments" ? (
+    <>
+      <Link
+        className="platform-secondary-button"
+        href="/app/hod/assessments/review"
+      >
+        Review queue
+      </Link>
+      <Link className="platform-primary-button" href="/app/hod/assessments/new">
+        <Plus size={15} />
+        New assignment
+      </Link>
+    </>
+  ) : pageId === "schedule" ? (
+    <Link
+      className="platform-secondary-button"
+      href="/app/hod/schedule/sessions"
+    >
+      View sessions
+    </Link>
+  ) : undefined;
+
   return (
-    <PlatformShell role="headofdepartment" title={copy.title}>
-      <WorkspaceLayout
-        className={`hod-workflow-page hod-${pageId}-page`}
-        title={copy.title}
-        description={copy.description}
+    <PlatformShell role="headofdepartment" title={layoutTitle}>
+      <Layout
+        className={`hod-workflow-page hod-${pageId}-page${isCurriculumCreate ? " hod-curriculum-create-page" : ""}${isAssessmentCreate ? " hod-assessments-create-page" : ""}${isAssessmentReview ? " hod-assessments-review-page" : ""}${isAssessmentReviewDetail ? " hod-assessment-review-detail-page" : ""}${isScheduleSessions ? " hod-schedule-sessions-page" : ""}${isCourseDetail ? " hod-course-detail-page" : ""}${isCertificateDetail ? " hod-certificate-detail-page" : ""}`}
+        title={layoutTitle}
+        description={layoutDescription}
         context={copy.context}
+        actions={pageActions}
         toolbar={toolbar}
         main={
           pageId === "courses" ? (
-            <CoursesMain
-              scope={scope}
-              courses={visibleCourses}
-              selectedCourse={selectedCourse}
-              setSelectedCourseId={setSelectedCourseId}
-              updateStatus={courseActions.updateStatus}
-              busyKey={busyKey}
-            />
+            isCourseDetail ? (
+              <CourseDetailMain
+                scope={scope}
+                course={detailCourse}
+                updateStatus={courseActions.updateStatus}
+                busyKey={busyKey}
+              />
+            ) : (
+              <CoursesMain scope={scope} courses={visibleCourses} />
+            )
           ) : pageId === "curriculum" ? (
             <CurriculumMain
               scope={scope}
@@ -491,13 +637,28 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
               setModuleOutcomes={setModuleOutcomes}
               addModule={curriculumActions.addModule}
               busyKey={busyKey}
+              mode={isCurriculumCreate ? "create" : "list"}
             />
           ) : pageId === "schedule" ? (
-            <ScheduleMain scope={scope} />
+            <ScheduleMain
+              scope={scope}
+              view={isScheduleSessions ? "sessions" : "classes"}
+            />
           ) : pageId === "assessments" ? (
             <AssessmentsMain
               scope={scope}
+              view={
+                isAssessmentCreate
+                  ? "create"
+                  : isAssessmentReview
+                    ? "review"
+                    : isAssessmentReviewDetail
+                      ? "review-detail"
+                      : "list"
+              }
+              selectedCourse={selectedCourse}
               selectedRun={selectedRun}
+              reviewSubmissionId={reviewSubmissionId}
               assignmentTitle={assignmentTitle}
               assignmentSubmission={assignmentSubmission}
               assignmentDueAt={assignmentDueAt}
@@ -509,26 +670,27 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
               setAssignmentSubmission={setAssignmentSubmission}
               setAssignmentDueAt={setAssignmentDueAt}
               setAssignmentRubric={setAssignmentRubric}
-              setSelectedSubmissionId={setSelectedSubmissionId}
+              setSelectedCourseId={setSelectedCourseId}
+              setSelectedRunId={setSelectedRunId}
               setGradeScore={setGradeScore}
               setGradeFeedback={setGradeFeedback}
               createAssignment={assessmentActions.createAssignment}
               gradeSubmission={assessmentActions.gradeSubmission}
               busyKey={busyKey}
             />
-          ) : (
-            <CertificatesMain
+          ) : isCertificateDetail ? (
+            <CertificateDetailMain
               scope={scope}
-              rejectReasons={rejectReasons}
-              setRejectReasons={setRejectReasons}
+              certificate={detailCertificate}
               approveCertificate={certificateActions.approve}
               issueCertificate={certificateActions.issue}
               rejectCertificate={certificateActions.reject}
               busyKey={busyKey}
             />
+          ) : (
+            <CertificatesMain scope={scope} />
           )
         }
-        side={<HodSidePanel pageId={pageId} scope={scope} />}
       />
     </PlatformShell>
   );
@@ -537,97 +699,167 @@ export default function HodWorkflowPage({ pageId }: HodWorkflowPageProps) {
 function CoursesMain({
   scope,
   courses,
-  selectedCourse,
-  setSelectedCourseId,
+}: {
+  scope: ScopedHodData;
+  courses: PlatformState["courses"];
+}) {
+  return (
+    <DataTableCard title="Courses" subtitle={`${courses.length} available`}>
+      <div className="hod-course-list" data-testid="hod-courses-list">
+        {courses.map(course => {
+          const program = scope.programs.find(
+            item => item.id === course.programId
+          );
+          const modules = scope.state.modules.filter(
+            module => module.courseId === course.id
+          );
+          return (
+            <article key={course.id}>
+              <div className="hod-course-list-copy">
+                <span>{program?.title ?? "Academic program"}</span>
+                <strong>{course.title}</strong>
+                <p>{course.description}</p>
+              </div>
+              <div className="hod-course-list-meta">
+                <StatusBadge tone={statusTone(course.status)}>
+                  {humanize(course.status)}
+                </StatusBadge>
+                <small>{modules.length} modules</small>
+                <Link
+                  className="hod-table-action"
+                  href={`/app/hod/courses/${course.id}`}
+                >
+                  Open course <ArrowRight size={14} />
+                </Link>
+              </div>
+            </article>
+          );
+        })}
+        {!courses.length ? (
+          <div className="platform-empty-state">
+            <strong>No courses match this search.</strong>
+            <span>Try a different course name or clear the search.</span>
+          </div>
+        ) : null}
+      </div>
+    </DataTableCard>
+  );
+}
+
+function CourseDetailMain({
+  scope,
+  course,
   updateStatus,
   busyKey,
 }: {
   scope: ScopedHodData;
-  courses: PlatformState["courses"];
-  selectedCourse?: PlatformState["courses"][number];
-  setSelectedCourseId: (courseId: string) => void;
-  updateStatus: (courseId: string, status: CourseStatus) => void;
+  course?: PlatformState["courses"][number];
+  updateStatus: (courseId: string, status: CourseStatus) => Promise<boolean>;
   busyKey: string | null;
 }) {
-  return (
-    <div className="hod-workflow-main">
-      <DataTableCard title="Course list" subtitle={`${courses.length} courses`}>
-        <table className="hod-workflow-table">
-          <thead>
-            <tr>
-              <th>Course</th>
-              <th>Program</th>
-              <th>Status</th>
-              <th>Modules</th>
-            </tr>
-          </thead>
-          <tbody>
-            {courses.map(course => {
-              const program = scope.programs.find(
-                item => item.id === course.programId
-              );
-              const modules = scope.state.modules.filter(
-                module => module.courseId === course.id
-              );
-              return (
-                <tr key={course.id}>
-                  <td>
-                    <button
-                      type="button"
-                      className="hod-row-button"
-                      onClick={() => setSelectedCourseId(course.id)}
-                    >
-                      <strong>{course.title}</strong>
-                      <small>{course.description}</small>
-                    </button>
-                  </td>
-                  <td>{program?.title ?? "Program not set"}</td>
-                  <td>
-                    <StatusBadge tone={statusTone(course.status)}>
-                      {humanize(course.status)}
-                    </StatusBadge>
-                  </td>
-                  <td>{modules.length} modules</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </DataTableCard>
+  const [nextStatus, setNextStatus] = useState<CourseStatus>(() => {
+    const current = course?.status as CourseStatus | undefined;
+    return current && courseStatuses.includes(current) ? current : "draft";
+  });
+  const [saved, setSaved] = useState(false);
 
-      <DataTableCard
-        className="hod-action-card"
-        title="Selected course"
-        subtitle={selectedCourse?.title ?? "Choose a course"}
-      >
-        {selectedCourse ? (
-          <div className="hod-form-grid">
-            <label>
-              Course status
-              <select
-                value={selectedCourse.status}
-                onChange={event =>
-                  updateStatus(
-                    selectedCourse.id,
-                    event.target.value as CourseStatus
-                  )
-                }
-                disabled={busyKey === "course.status.update"}
-              >
-                {courseStatuses.map(status => (
-                  <option key={status} value={status}>
-                    {humanize(status)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p>{selectedCourse.outcomes.slice(0, 2).join(" · ")}</p>
-          </div>
-        ) : (
-          <p>No course selected.</p>
-        )}
+  if (!course) {
+    return (
+      <DataTableCard title="Course not found">
+        <div className="platform-empty-state">
+          <strong>This course is not available in your department.</strong>
+          <span>Return to the course list and choose another course.</span>
+        </div>
       </DataTableCard>
-    </div>
+    );
+  }
+
+  const program = scope.programs.find(item => item.id === course.programId);
+  const modules = scope.state.modules
+    .filter(module => module.courseId === course.id)
+    .sort((first, second) => first.order - second.order);
+  const runs = scope.courseRuns.filter(run => run.courseId === course.id);
+
+  return (
+    <section className="hod-course-detail" data-testid="hod-course-detail">
+      <header className="hod-course-detail-head">
+        <div>
+          <span>Course overview</span>
+          <h2>{course.title}</h2>
+          <p>{course.description}</p>
+        </div>
+        <StatusBadge tone={statusTone(course.status)}>
+          {humanize(course.status)}
+        </StatusBadge>
+      </header>
+      <dl className="hod-course-facts">
+        <div>
+          <dt>Program</dt>
+          <dd>{program?.title ?? "Program not set"}</dd>
+        </div>
+        <div>
+          <dt>Modules</dt>
+          <dd>{modules.length}</dd>
+        </div>
+        <div>
+          <dt>Class runs</dt>
+          <dd>{runs.length}</dd>
+        </div>
+      </dl>
+      <section className="hod-course-outcomes">
+        <span>Learning outcomes</span>
+        <ul>
+          {course.outcomes.map(outcome => (
+            <li key={outcome}>{outcome}</li>
+          ))}
+        </ul>
+      </section>
+      <form
+        className="hod-course-status-form"
+        data-testid="hod-course-status-form"
+        onSubmit={async event => {
+          event.preventDefault();
+          if (await updateStatus(course.id, nextStatus)) setSaved(true);
+        }}
+      >
+        <div>
+          <span>Course status</span>
+          <strong>Choose the current academic state.</strong>
+          <small>Changes are recorded in the activity log.</small>
+        </div>
+        <label>
+          Status
+          <select
+            value={nextStatus}
+            onChange={event => {
+              setNextStatus(event.target.value as CourseStatus);
+              setSaved(false);
+            }}
+            disabled={busyKey === "course.status.update"}
+          >
+            {courseStatuses.map(status => (
+              <option key={status} value={status}>
+                {humanize(status)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="submit"
+          className="platform-primary-button"
+          disabled={
+            busyKey === "course.status.update" || nextStatus === course.status
+          }
+        >
+          {busyKey === "course.status.update" ? "Saving status" : "Save status"}
+        </button>
+      </form>
+      {saved ? (
+        <p className="hod-inline-success" role="status">
+          <CheckCircle2 aria-hidden="true" size={15} /> Course status updated.
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -640,6 +872,7 @@ function CurriculumMain({
   setModuleOutcomes,
   addModule,
   busyKey,
+  mode,
 }: {
   scope: ScopedHodData;
   selectedCourse?: PlatformState["courses"][number];
@@ -647,17 +880,66 @@ function CurriculumMain({
   moduleOutcomes: string;
   setModuleTitle: (value: string) => void;
   setModuleOutcomes: (value: string) => void;
-  addModule: () => void;
+  addModule: () => Promise<boolean>;
   busyKey: string | null;
+  mode: "list" | "create";
 }) {
+  const [saved, setSaved] = useState(false);
   const modules = scope.state.modules
     .filter(module => module.courseId === selectedCourse?.id)
     .sort((first, second) => first.order - second.order);
 
-  return (
-    <div className="hod-workflow-main">
-      <DataTableCard title="Add module" subtitle={selectedCourse?.title}>
-        <div className="hod-form-grid">
+  const moduleList = (
+    <DataTableCard title="Modules" subtitle={`${modules.length} modules`}>
+      <div className="platform-row-list hod-row-list">
+        {modules.length ? (
+          modules.map(module => (
+            <article key={module.id}>
+              <div>
+                <strong>{module.title}</strong>
+                <small>{module.outcomes.slice(0, 2).join(" · ")}</small>
+              </div>
+              <StatusBadge tone="slate">Module {module.order}</StatusBadge>
+            </article>
+          ))
+        ) : (
+          <article>
+            <div>
+              <strong>No modules yet</strong>
+              <small>Add the first module for this course.</small>
+            </div>
+          </article>
+        )}
+      </div>
+    </DataTableCard>
+  );
+
+  if (mode === "create") {
+    return saved ? (
+      <section className="hod-create-success" role="status">
+        <CheckCircle2 size={20} />
+        <div>
+          <strong>Module added</strong>
+          <span>The course map now includes the new module.</span>
+        </div>
+        <Link className="platform-primary-button" href="/app/hod/curriculum">
+          View curriculum
+        </Link>
+      </section>
+    ) : (
+      <section className="hod-create-surface" data-testid="hod-module-composer">
+        <div className="hod-create-surface-head">
+          <span>Course map</span>
+          <strong>{selectedCourse?.title ?? "Choose a course"}</strong>
+          <p>Use a short title and only the outcomes learners need to see.</p>
+        </div>
+        <form
+          className="hod-form-grid"
+          onSubmit={async event => {
+            event.preventDefault();
+            if (await addModule()) setSaved(true);
+          }}
+        >
           <label>
             Module title
             <input
@@ -676,44 +958,30 @@ function CurriculumMain({
             />
           </label>
           <button
-            type="button"
+            type="submit"
             className="platform-primary-button"
-            onClick={addModule}
-            disabled={busyKey === "curriculum.module.create"}
+            disabled={!selectedCourse || busyKey === "curriculum.module.create"}
           >
             <Plus size={15} />
-            Add module
+            {busyKey === "curriculum.module.create"
+              ? "Adding module"
+              : "Add module"}
           </button>
-        </div>
-      </DataTableCard>
+        </form>
+      </section>
+    );
+  }
 
-      <DataTableCard title="Modules" subtitle={`${modules.length} records`}>
-        <div className="platform-row-list hod-row-list">
-          {modules.length ? (
-            modules.map(module => (
-              <article key={module.id}>
-                <div>
-                  <strong>{module.title}</strong>
-                  <small>{module.outcomes.slice(0, 2).join(" · ")}</small>
-                </div>
-                <StatusBadge tone="slate">Module {module.order}</StatusBadge>
-              </article>
-            ))
-          ) : (
-            <article>
-              <div>
-                <strong>No modules yet</strong>
-                <small>Add the first module for this course.</small>
-              </div>
-            </article>
-          )}
-        </div>
-      </DataTableCard>
-    </div>
-  );
+  return <div className="hod-workflow-main">{moduleList}</div>;
 }
 
-function ScheduleMain({ scope }: { scope: ScopedHodData }) {
+function ScheduleMain({
+  scope,
+  view,
+}: {
+  scope: ScopedHodData;
+  view: "classes" | "sessions";
+}) {
   const sessions = scope.state.classSessions
     .filter(session => scope.classGroupIds.has(session.classGroupId))
     .slice()
@@ -722,64 +990,88 @@ function ScheduleMain({ scope }: { scope: ScopedHodData }) {
         new Date(first.startsAt).getTime() - new Date(second.startsAt).getTime()
     );
 
-  return (
-    <div className="hod-workflow-main">
-      <DataTableCard
-        title="Class schedule"
-        subtitle={`${scope.classGroups.length} classes`}
-      >
-        <table className="hod-workflow-table">
-          <thead>
-            <tr>
-              <th>Class</th>
-              <th>Course</th>
-              <th>Schedule</th>
-              <th>Learners</th>
-            </tr>
-          </thead>
-          <tbody>
-            {scope.classGroups.map(group => {
-              const run = scope.courseRuns.find(
-                item => item.id === group.courseRunId
-              );
-              return (
-                <tr key={group.id}>
-                  <td>
-                    <strong>{group.name}</strong>
-                    <small>{group.roomId ?? "Room not set"}</small>
-                  </td>
-                  <td>{findCourseTitle(scope, run?.courseId)}</td>
-                  <td>{group.schedule}</td>
-                  <td>{group.studentIds.length} learners</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </DataTableCard>
-
+  if (view === "sessions") {
+    return (
       <DataTableCard title="Sessions" subtitle={`${sessions.length} sessions`}>
-        <div className="platform-row-list hod-row-list">
-          {sessions.slice(0, 6).map(session => (
-            <article key={session.id}>
+        <div
+          className="platform-row-list hod-row-list hod-session-list"
+          data-testid="hod-sessions-list"
+        >
+          {sessions.length ? (
+            sessions.map(session => (
+              <article key={session.id}>
+                <div>
+                  <strong>{session.title}</strong>
+                  <small>{formatDateTime(session.startsAt)}</small>
+                </div>
+                <StatusBadge tone={session.attendanceSaved ? "green" : "amber"}>
+                  {session.attendanceSaved ? "Attendance saved" : "Pending"}
+                </StatusBadge>
+              </article>
+            ))
+          ) : (
+            <article>
               <div>
-                <strong>{session.title}</strong>
-                <small>{formatDateTime(session.startsAt)}</small>
+                <strong>No sessions scheduled</strong>
+                <small>
+                  When a class session is planned, it will appear here.
+                </small>
               </div>
-              <StatusBadge tone={session.attendanceSaved ? "green" : "amber"}>
-                {session.attendanceSaved ? "Attendance saved" : "Pending"}
-              </StatusBadge>
             </article>
-          ))}
+          )}
         </div>
       </DataTableCard>
-    </div>
+    );
+  }
+
+  return (
+    <DataTableCard
+      title="Class schedule"
+      subtitle={`${scope.classGroups.length} classes`}
+    >
+      <div className="hod-schedule-list" data-testid="hod-class-schedule-list">
+        {scope.classGroups.map(group => {
+          const run = scope.courseRuns.find(
+            item => item.id === group.courseRunId
+          );
+          const room = scope.state.rooms.find(item => item.id === group.roomId);
+          return (
+            <article key={group.id}>
+              <div>
+                <span>{findCourseTitle(scope, run?.courseId)}</span>
+                <strong>{group.name}</strong>
+                <p>{room?.name ?? "Room not set"}</p>
+              </div>
+              <dl>
+                <div>
+                  <dt>Schedule</dt>
+                  <dd>{group.schedule}</dd>
+                </div>
+                <div>
+                  <dt>Learners</dt>
+                  <dd>{group.studentIds.length}</dd>
+                </div>
+              </dl>
+            </article>
+          );
+        })}
+        {!scope.classGroups.length ? (
+          <div className="platform-empty-state">
+            <strong>No classes are scheduled.</strong>
+            <span>Assigned department classes will appear here.</span>
+          </div>
+        ) : null}
+      </div>
+    </DataTableCard>
   );
 }
 
 function AssessmentsMain({
   scope,
+  view,
+  selectedCourse,
   selectedRun,
+  reviewSubmissionId,
   assignmentTitle,
   assignmentSubmission,
   assignmentDueAt,
@@ -791,7 +1083,8 @@ function AssessmentsMain({
   setAssignmentSubmission,
   setAssignmentDueAt,
   setAssignmentRubric,
-  setSelectedSubmissionId,
+  setSelectedCourseId,
+  setSelectedRunId,
   setGradeScore,
   setGradeFeedback,
   createAssignment,
@@ -799,7 +1092,10 @@ function AssessmentsMain({
   busyKey,
 }: {
   scope: ScopedHodData;
+  view: "list" | "create" | "review" | "review-detail";
+  selectedCourse?: PlatformState["courses"][number];
   selectedRun?: PlatformState["courseRuns"][number];
+  reviewSubmissionId?: string;
   assignmentTitle: string;
   assignmentSubmission: Assignment["submissionType"];
   assignmentDueAt: string;
@@ -811,22 +1107,26 @@ function AssessmentsMain({
   setAssignmentSubmission: (value: Assignment["submissionType"]) => void;
   setAssignmentDueAt: (value: string) => void;
   setAssignmentRubric: (value: string) => void;
-  setSelectedSubmissionId: (value: string) => void;
+  setSelectedCourseId: (value: string) => void;
+  setSelectedRunId: (value: string) => void;
   setGradeScore: (value: number) => void;
   setGradeFeedback: (value: string) => void;
-  createAssignment: () => void;
-  gradeSubmission: () => void;
+  createAssignment: () => Promise<boolean>;
+  gradeSubmission: (submissionId?: string) => Promise<boolean>;
   busyKey: string | null;
 }) {
-  const assignments = scope.state.assignments.filter(assignment =>
+  const [assignmentCreated, setAssignmentCreated] = useState(false);
+  const scopedAssignments = scope.state.assignments.filter(assignment =>
     scope.courseRunIds.has(assignment.courseRunId)
   );
-  const submissions = scope.state.assignmentSubmissions.filter(submission => {
-    const assignment = assignments.find(
-      item => item.id === submission.assignmentId
-    );
-    return Boolean(assignment);
-  });
+  const assignments = selectedRun
+    ? scopedAssignments.filter(
+        assignment => assignment.courseRunId === selectedRun.id
+      )
+    : scopedAssignments;
+  const submissions = scope.state.assignmentSubmissions.filter(submission =>
+    assignments.some(assignment => assignment.id === submission.assignmentId)
+  );
   const reviewSubmissions = submissions
     .filter(submission => submission.status !== "completed")
     .concat(
@@ -837,17 +1137,86 @@ function AssessmentsMain({
         list.findIndex(item => item.id === submission.id) === index
     );
   const selectedSubmission =
-    submissions.find(submission => submission.id === selectedSubmissionId) ??
-    reviewSubmissions[0];
+    submissions.find(
+      submission =>
+        submission.id === (reviewSubmissionId ?? selectedSubmissionId)
+    ) ?? reviewSubmissions[0];
+  const selectedAssignment = scopedAssignments.find(
+    assignment => assignment.id === selectedSubmission?.assignmentId
+  );
+  const availableRuns = scope.courseRuns.filter(
+    run => !selectedCourse || run.courseId === selectedCourse.id
+  );
+  const canCreateAssignment = Boolean(
+    selectedRun && selectedCourse?.status === "active"
+  );
 
-  return (
-    <div className="hod-workflow-main">
-      <DataTableCard
-        title="Create assignment"
-        subtitle={findRunTitle(scope, selectedRun?.id)}
+  const changeCourse = (courseId: string) => {
+    setSelectedCourseId(courseId);
+    const nextRun = scope.courseRuns.find(run => run.courseId === courseId);
+    if (nextRun) setSelectedRunId(nextRun.id);
+  };
+
+  if (view === "create") {
+    return assignmentCreated ? (
+      <section
+        className="hod-create-success"
+        data-testid="hod-assignment-success"
       >
-        <div className="hod-form-grid">
+        <CheckCircle2 aria-hidden="true" size={20} />
+        <div>
+          <strong>Assignment created</strong>
+          <span>The class now has its next piece of work.</span>
+        </div>
+        <Link className="platform-primary-button" href="/app/hod/assessments">
+          View assignments
+        </Link>
+      </section>
+    ) : (
+      <section
+        className="hod-create-surface"
+        data-testid="hod-assignment-composer"
+      >
+        <div className="hod-create-surface-head">
+          <div>
+            <span>Assignment scope</span>
+            <strong>Choose the class before setting the work.</strong>
+          </div>
+        </div>
+        <form
+          className="hod-form-grid"
+          onSubmit={async event => {
+            event.preventDefault();
+            if (await createAssignment()) setAssignmentCreated(true);
+          }}
+        >
           <label>
+            Course
+            <select
+              value={selectedCourse?.id ?? ""}
+              onChange={event => changeCourse(event.target.value)}
+            >
+              {scope.courses.map(course => (
+                <option key={course.id} value={course.id}>
+                  {course.title} · {humanize(course.status)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Class
+            <select
+              value={selectedRun?.id ?? ""}
+              onChange={event => setSelectedRunId(event.target.value)}
+            >
+              {availableRuns.map(run => (
+                <option key={run.id} value={run.id}>
+                  {findRunTitle(scope, run.id)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="wide">
             Assignment title
             <input
               value={assignmentTitle}
@@ -856,7 +1225,7 @@ function AssessmentsMain({
             />
           </label>
           <label>
-            Submission
+            Submission type
             <select
               value={assignmentSubmission}
               onChange={event =>
@@ -867,7 +1236,7 @@ function AssessmentsMain({
             >
               {submissionTypes.map(type => (
                 <option key={type} value={type}>
-                  {type}
+                  {humanize(type)}
                 </option>
               ))}
             </select>
@@ -885,107 +1254,177 @@ function AssessmentsMain({
             <input
               value={assignmentRubric}
               onChange={event => setAssignmentRubric(event.target.value)}
+              placeholder="Keep the criteria short and clear"
             />
           </label>
-          <button
-            type="button"
-            className="platform-primary-button"
-            onClick={createAssignment}
-            disabled={busyKey === "assignment.create"}
-          >
-            <Plus size={15} />
-            Create assignment
-          </button>
-        </div>
-      </DataTableCard>
-
-      <DataTableCard
-        title="Assessment list"
-        subtitle={`${assignments.length} items`}
-      >
-        <table className="hod-workflow-table">
-          <thead>
-            <tr>
-              <th>Assessment</th>
-              <th>Course run</th>
-              <th>Submission</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {assignments.map(assignment => (
-              <tr key={assignment.id}>
-                <td>
-                  <strong>{assignment.title}</strong>
-                  <small>Due {formatDate(assignment.dueAt)}</small>
-                </td>
-                <td>{findRunTitle(scope, assignment.courseRunId)}</td>
-                <td>{humanize(assignment.submissionType)}</td>
-                <td>
-                  <StatusBadge tone={statusTone(assignment.status)}>
-                    {humanize(assignment.status)}
-                  </StatusBadge>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </DataTableCard>
-
-      <section className="platform-workflow-card hod-review-card">
-        <div className="hod-section-title">
-          <ClipboardCheck size={16} />
-          <div>
-            <span>Manual review</span>
-            <strong>Submission queue</strong>
+          <div className="hod-assessment-eligibility wide">
+            <StatusBadge tone={statusTone(selectedCourse?.status ?? "draft")}>
+              {selectedCourse?.status === "active"
+                ? "Ready for assessment"
+                : `${humanize(selectedCourse?.status)} course`}
+            </StatusBadge>
+            <span>
+              {selectedCourse?.status === "active"
+                ? "This course can receive new learner work."
+                : "Select an active course before creating learner work."}
+            </span>
           </div>
-        </div>
-        <div className="platform-row-list hod-row-list">
-          {reviewSubmissions.length ? (
-            reviewSubmissions.map(submission => {
-              const assignment = assignments.find(
-                item => item.id === submission.assignmentId
-              );
-              return (
-                <article key={submission.id}>
-                  <button
-                    type="button"
-                    className="hod-row-button"
-                    onClick={() => setSelectedSubmissionId(submission.id)}
+          <div className="hod-create-form-actions wide">
+            <button
+              type="submit"
+              className="platform-primary-button"
+              disabled={!canCreateAssignment || busyKey === "assignment.create"}
+            >
+              <Plus size={15} />
+              {busyKey === "assignment.create"
+                ? "Creating assignment"
+                : "Create assignment"}
+            </button>
+          </div>
+        </form>
+      </section>
+    );
+  }
+
+  if (view === "review-detail") {
+    if (!selectedSubmission || !selectedAssignment) {
+      return (
+        <DataTableCard title="Submission not found">
+          <div className="platform-empty-state">
+            <strong>This submission is no longer available.</strong>
+            <span>Return to the review queue and choose another item.</span>
+          </div>
+        </DataTableCard>
+      );
+    }
+
+    return (
+      <section
+        className="hod-submission-review"
+        data-testid="hod-submission-review"
+      >
+        <header className="hod-submission-review-head">
+          <div>
+            <span>Submission</span>
+            <h2>{selectedAssignment.title}</h2>
+            <p>
+              {findStudentName(scope.state, selectedSubmission.studentId)} ·{" "}
+              {findRunTitle(scope, selectedAssignment.courseRunId)}
+            </p>
+          </div>
+          <StatusBadge tone={statusTone(selectedSubmission.status)}>
+            {humanize(selectedSubmission.status)}
+          </StatusBadge>
+        </header>
+        <section className="hod-submission-response">
+          <span>Learner response</span>
+          <p>
+            {selectedSubmission.response || "No written response provided."}
+          </p>
+        </section>
+        <GradeEditor
+          submission={selectedSubmission}
+          score={gradeScore}
+          feedback={gradeFeedback}
+          setScore={setGradeScore}
+          setFeedback={setGradeFeedback}
+          gradeSubmission={() => gradeSubmission(selectedSubmission.id)}
+          busyKey={busyKey}
+        />
+      </section>
+    );
+  }
+
+  if (view === "review") {
+    return (
+      <div className="hod-workflow-main">
+        <DataTableCard
+          title="Review queue"
+          subtitle={`${reviewSubmissions.length} waiting for review`}
+        >
+          <div
+            className="platform-row-list hod-row-list hod-review-list"
+            data-testid="hod-review-list"
+          >
+            {reviewSubmissions.length ? (
+              reviewSubmissions.map(submission => {
+                const assignment = scopedAssignments.find(
+                  item => item.id === submission.assignmentId
+                );
+                return (
+                  <Link
+                    key={submission.id}
+                    className="hod-review-row-link"
+                    href={`/app/hod/assessments/review/${submission.id}`}
                   >
-                    <strong>{assignment?.title ?? "Submission"}</strong>
-                    <small>
-                      {findStudentName(scope.state, submission.studentId)} ·{" "}
-                      {submission.response || "Draft answer saved locally"}
-                    </small>
-                  </button>
-                  <StatusBadge tone={statusTone(submission.status)}>
-                    {humanize(submission.status)}
-                  </StatusBadge>
-                </article>
-              );
-            })
+                    <div>
+                      <strong>{assignment?.title ?? "Submission"}</strong>
+                      <small>
+                        {findStudentName(scope.state, submission.studentId)} ·{" "}
+                        {findRunTitle(scope, assignment?.courseRunId)}
+                      </small>
+                    </div>
+                    <StatusBadge tone={statusTone(submission.status)}>
+                      {humanize(submission.status)}
+                    </StatusBadge>
+                  </Link>
+                );
+              })
+            ) : (
+              <article>
+                <div>
+                  <strong>No submissions need review</strong>
+                  <small>New learner work will appear here.</small>
+                </div>
+              </article>
+            )}
+          </div>
+        </DataTableCard>
+      </div>
+    );
+  }
+
+  return (
+    <div className="hod-workflow-main">
+      <DataTableCard
+        title="Assignments"
+        subtitle={`${assignments.length} for this class`}
+        className="hod-assignment-record-card"
+      >
+        <div
+          className="hod-assignment-record-list"
+          data-testid="hod-assignments-list"
+        >
+          {assignments.length ? (
+            assignments.map(assignment => (
+              <article
+                key={assignment.id}
+                className="hod-assignment-record"
+                data-assignment-id={assignment.id}
+              >
+                <div className="hod-assignment-record-primary">
+                  <strong>{assignment.title}</strong>
+                  <span>{humanize(assignment.submissionType)}</span>
+                </div>
+                <dl className="hod-assignment-record-facts">
+                  <div>
+                    <dt>Due</dt>
+                    <dd>{formatDate(assignment.dueAt)}</dd>
+                  </div>
+                </dl>
+                <StatusBadge tone={statusTone(assignment.status)}>
+                  {humanize(assignment.status)}
+                </StatusBadge>
+              </article>
+            ))
           ) : (
-            <article>
-              <div>
-                <strong>No pending submissions</strong>
-                <small>New review work appears here.</small>
-              </div>
-            </article>
+            <div className="platform-empty-state">
+              <strong>No assignments for this class</strong>
+              <span>Create an assignment when this class needs one.</span>
+            </div>
           )}
         </div>
-        {selectedSubmission ? (
-          <GradeEditor
-            submission={selectedSubmission}
-            score={gradeScore}
-            feedback={gradeFeedback}
-            setScore={setGradeScore}
-            setFeedback={setGradeFeedback}
-            gradeSubmission={gradeSubmission}
-            busyKey={busyKey}
-          />
-        ) : null}
-      </section>
+      </DataTableCard>
     </div>
   );
 }
@@ -1004,11 +1443,47 @@ function GradeEditor({
   feedback: string;
   setScore: (value: number) => void;
   setFeedback: (value: string) => void;
-  gradeSubmission: () => void;
+  gradeSubmission: () => Promise<boolean>;
   busyKey: string | null;
 }) {
+  const [graded, setGraded] = useState(false);
+
+  if (graded) {
+    return (
+      <section className="hod-create-success" data-testid="hod-grade-success">
+        <CheckCircle2 aria-hidden="true" size={20} />
+        <div>
+          <strong>Submission graded</strong>
+          <span>The learner feedback has been recorded.</span>
+        </div>
+        <Link
+          className="platform-primary-button"
+          href="/app/hod/assessments/review"
+        >
+          Return to review queue
+        </Link>
+      </section>
+    );
+  }
+
   return (
-    <div className="hod-grade-editor">
+    <form
+      className="hod-grade-editor"
+      data-testid="hod-grade-editor"
+      onSubmit={async event => {
+        event.preventDefault();
+        if (await gradeSubmission()) setGraded(true);
+      }}
+    >
+      <div className="hod-grade-editor-head">
+        <div>
+          <span>Result</span>
+          <strong>Record the learner outcome</strong>
+        </div>
+        <StatusBadge tone={statusTone(submission.status)}>
+          {humanize(submission.status)}
+        </StatusBadge>
+      </div>
       <label>
         Score
         <input
@@ -1024,38 +1499,21 @@ function GradeEditor({
         <input
           value={feedback}
           onChange={event => setFeedback(event.target.value)}
-          placeholder={`Feedback for ${submission.id}`}
+          placeholder="Brief feedback for the learner"
         />
       </label>
       <button
-        type="button"
+        type="submit"
         className="platform-primary-button"
-        onClick={gradeSubmission}
         disabled={busyKey === "assignment.grade"}
       >
-        Grade submission
+        {busyKey === "assignment.grade" ? "Saving result" : "Save result"}
       </button>
-    </div>
+    </form>
   );
 }
 
-function CertificatesMain({
-  scope,
-  rejectReasons,
-  setRejectReasons,
-  approveCertificate,
-  issueCertificate,
-  rejectCertificate,
-  busyKey,
-}: {
-  scope: ScopedHodData;
-  rejectReasons: Record<string, string>;
-  setRejectReasons: (value: Record<string, string>) => void;
-  approveCertificate: (certificateId: string) => void;
-  issueCertificate: (certificateId: string) => void;
-  rejectCertificate: (certificateId: string) => void;
-  busyKey: string | null;
-}) {
+function CertificatesMain({ scope }: { scope: ScopedHodData }) {
   const certificates = scope.state.certificates.filter(certificate =>
     scope.courseIds.has(certificate.courseId)
   );
@@ -1075,183 +1533,205 @@ function CertificatesMain({
       title="Certificate requests"
       subtitle={`${certificates.length} records`}
     >
-      <div className="platform-row-list hod-certificate-list">
-        {priorityCertificates.map(certificate => (
-          <CertificateRow
-            key={certificate.id}
-            scope={scope}
-            certificate={certificate}
-            rejectReason={rejectReasons[certificate.id] ?? ""}
-            setRejectReason={value =>
-              setRejectReasons({ ...rejectReasons, [certificate.id]: value })
-            }
-            approveCertificate={approveCertificate}
-            issueCertificate={issueCertificate}
-            rejectCertificate={rejectCertificate}
-            busyKey={busyKey}
-          />
-        ))}
+      <div
+        className="platform-row-list hod-certificate-list"
+        data-testid="hod-certificates-list"
+      >
+        {priorityCertificates.length ? (
+          priorityCertificates.map(certificate => (
+            <Link
+              key={certificate.id}
+              className="hod-certificate-row-link"
+              href={`/app/hod/certificates/${certificate.id}`}
+            >
+              <div>
+                <strong>{certificate.verificationCode}</strong>
+                <small>
+                  {findStudentName(scope.state, certificate.studentId)} ·{" "}
+                  {findCourseTitle(scope, certificate.courseId)}
+                </small>
+              </div>
+              <StatusBadge tone={statusTone(certificate.status)}>
+                {humanize(certificate.status)}
+              </StatusBadge>
+            </Link>
+          ))
+        ) : (
+          <article>
+            <div>
+              <strong>No certificate requests</strong>
+              <small>New academic requests will appear here.</small>
+            </div>
+          </article>
+        )}
       </div>
     </DataTableCard>
   );
 }
 
-function CertificateRow({
+function CertificateDetailMain({
   scope,
   certificate,
-  rejectReason,
-  setRejectReason,
   approveCertificate,
   issueCertificate,
   rejectCertificate,
   busyKey,
 }: {
   scope: ScopedHodData;
-  certificate: Certificate;
-  rejectReason: string;
-  setRejectReason: (value: string) => void;
-  approveCertificate: (certificateId: string) => void;
-  issueCertificate: (certificateId: string) => void;
-  rejectCertificate: (certificateId: string) => void;
+  certificate?: Certificate;
+  approveCertificate: (certificateId: string) => Promise<boolean>;
+  issueCertificate: (certificateId: string) => Promise<boolean>;
+  rejectCertificate: (
+    certificateId: string,
+    reason: string
+  ) => Promise<boolean>;
   busyKey: string | null;
 }) {
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [result, setResult] = useState<string | null>(null);
+
+  if (!certificate) {
+    return (
+      <DataTableCard title="Certificate not found">
+        <div className="platform-empty-state">
+          <strong>This certificate request is not available.</strong>
+          <span>
+            Return to the certificate list and choose another request.
+          </span>
+        </div>
+      </DataTableCard>
+    );
+  }
+
   const studentName = findStudentName(scope.state, certificate.studentId);
   const courseTitle = findCourseTitle(scope, certificate.courseId);
   const isApproved = certificate.status === "approved";
   const isPending = certificate.status === "pending_approval";
 
   return (
-    <article>
-      <div className="hod-certificate-copy">
-        <strong>{certificate.verificationCode}</strong>
-        <small>
-          {studentName} · {courseTitle} · grade {certificate.grade}%
-        </small>
-      </div>
-      <StatusBadge tone={statusTone(certificate.status)}>
-        {humanize(certificate.status)}
-      </StatusBadge>
-      <div className="hod-certificate-actions">
-        <button
-          type="button"
-          onClick={() => approveCertificate(certificate.id)}
-          disabled={!isPending || busyKey === "certificate.approve"}
-        >
-          Approve
-        </button>
-        <button
-          type="button"
-          onClick={() => issueCertificate(certificate.id)}
-          disabled={!isApproved || busyKey === "certificate.issue"}
-        >
-          Issue
-        </button>
-        <label>
-          Reject reason
-          <input
-            value={rejectReason}
-            onChange={event => setRejectReason(event.target.value)}
-            placeholder="Reason"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => rejectCertificate(certificate.id)}
-          disabled={busyKey === "certificate.reject"}
-        >
-          Reject
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function HodSidePanel({
-  pageId,
-  scope,
-}: {
-  pageId: HodWorkflowPageId;
-  scope: ScopedHodData;
-}) {
-  const pendingSubmissions = scope.state.assignmentSubmissions.filter(
-    submission => {
-      const assignment = scope.state.assignments.find(
-        item => item.id === submission.assignmentId
-      );
-      return (
-        assignment &&
-        scope.courseRunIds.has(assignment.courseRunId) &&
-        submission.status !== "completed"
-      );
-    }
-  );
-  const pendingCertificates = scope.state.certificates.filter(
-    certificate =>
-      scope.courseIds.has(certificate.courseId) &&
-      certificate.status === "pending_approval"
-  );
-  const nextSession = scope.state.classSessions
-    .filter(session => scope.classGroupIds.has(session.classGroupId))
-    .slice()
-    .sort(
-      (first, second) =>
-        new Date(first.startsAt).getTime() - new Date(second.startsAt).getTime()
-    )[0];
-
-  const summary =
-    pageId === "courses"
-      ? {
-          icon: <BookOpen size={15} />,
-          title: "Course scope",
-          value: `${scope.courses.length} courses`,
-          detail: `${scope.programs.length} programs`,
-        }
-      : pageId === "curriculum"
-        ? {
-            icon: <GraduationCap size={15} />,
-            title: "Curriculum",
-            value: `${scope.state.modules.filter(module => scope.courseIds.has(module.courseId)).length} modules`,
-            detail: "Course modules only",
-          }
-        : pageId === "schedule"
-          ? {
-              icon: <CalendarDays size={15} />,
-              title: "Next session",
-              value: nextSession?.title ?? "No session",
-              detail: formatDateTime(nextSession?.startsAt),
-            }
-          : pageId === "assessments"
-            ? {
-                icon: <ClipboardCheck size={15} />,
-                title: "Review queue",
-                value: `${pendingSubmissions.length} pending`,
-                detail: "Submissions needing action",
+    <section
+      className="hod-certificate-detail"
+      data-testid="hod-certificate-detail"
+    >
+      <header className="hod-certificate-detail-head">
+        <div>
+          <span>Certificate request</span>
+          <h2>{certificate.verificationCode}</h2>
+          <p>
+            {studentName} · {courseTitle}
+          </p>
+        </div>
+        <StatusBadge tone={statusTone(certificate.status)}>
+          {humanize(certificate.status)}
+        </StatusBadge>
+      </header>
+      <dl className="hod-certificate-facts">
+        <div>
+          <dt>Grade</dt>
+          <dd>{certificate.grade}%</dd>
+        </div>
+        <div>
+          <dt>Attendance</dt>
+          <dd>{certificate.attendanceRate}%</dd>
+        </div>
+        <div>
+          <dt>Course</dt>
+          <dd>{courseTitle}</dd>
+        </div>
+      </dl>
+      <section className="hod-certificate-decision">
+        <div>
+          <span>Academic decision</span>
+          <strong>
+            {isPending
+              ? "Confirm the completion result."
+              : isApproved
+                ? "The request is ready to issue."
+                : "This request has already been decided."}
+          </strong>
+          <small>
+            {isPending
+              ? "Approve the record when it meets the programme requirements."
+              : isApproved
+                ? "Issue the certificate when the final check is complete."
+                : "The activity log retains the decision history."}
+          </small>
+        </div>
+        {isPending ? (
+          <div className="hod-certificate-decision-actions">
+            <button
+              type="button"
+              className="platform-primary-button"
+              onClick={async () => {
+                if (await approveCertificate(certificate.id)) {
+                  setResult("Certificate approved.");
+                }
+              }}
+              disabled={busyKey === "certificate.approve"}
+            >
+              Approve
+            </button>
+            {!rejecting ? (
+              <button type="button" onClick={() => setRejecting(true)}>
+                Reject
+              </button>
+            ) : (
+              <form
+                className="hod-reject-composer"
+                onSubmit={async event => {
+                  event.preventDefault();
+                  if (await rejectCertificate(certificate.id, rejectReason)) {
+                    setResult("Certificate rejected.");
+                    setRejecting(false);
+                  }
+                }}
+              >
+                <label>
+                  Reason for rejection
+                  <input
+                    value={rejectReason}
+                    onChange={event => setRejectReason(event.target.value)}
+                    placeholder="Add a short reason"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={busyKey === "certificate.reject"}
+                >
+                  Confirm rejection
+                </button>
+                <button
+                  type="button"
+                  className="hod-quiet-button"
+                  onClick={() => setRejecting(false)}
+                >
+                  Cancel
+                </button>
+              </form>
+            )}
+          </div>
+        ) : null}
+        {isApproved ? (
+          <button
+            type="button"
+            className="platform-primary-button"
+            onClick={async () => {
+              if (await issueCertificate(certificate.id)) {
+                setResult("Certificate issued.");
               }
-            : {
-                icon: <ShieldCheck size={15} />,
-                title: "Certificate queue",
-                value: `${pendingCertificates.length} pending`,
-                detail: "Requests awaiting decision",
-              };
-
-  return (
-    <aside className="portal-simple-stack">
-      <section className="portal-simple-side-card">
-        <span>
-          {summary.icon}
-          {summary.title}
-        </span>
-        <strong>{summary.value}</strong>
-        <p>{summary.detail}</p>
+            }}
+            disabled={busyKey === "certificate.issue"}
+          >
+            Issue certificate
+          </button>
+        ) : null}
       </section>
-      <section className="portal-simple-side-card">
-        <span>
-          <CheckCircle2 size={15} />
-          Scope
-        </span>
-        <strong>{scope.departmentIds.size} departments</strong>
-        <p>{scope.classGroups.length} classes visible.</p>
-      </section>
-    </aside>
+      {result ? (
+        <p className="hod-inline-success" role="status">
+          <CheckCircle2 aria-hidden="true" size={15} /> {result}
+        </p>
+      ) : null}
+    </section>
   );
 }

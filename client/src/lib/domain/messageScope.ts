@@ -11,44 +11,131 @@ function userHasRole(user: User, role: Role) {
 }
 
 function activeUsers(state: PlatformState, actorId: string) {
-  return state.users.filter((user) => user.id !== actorId && user.status !== "cancelled");
+  return state.users.filter((user) => user.id !== actorId && user.status === "active");
+}
+
+function activeStaffProfile(state: PlatformState, actorId: string, role: Role) {
+  if (role === "student") return undefined;
+  return state.staffProfiles.find(
+    profile =>
+      profile.userId === actorId &&
+      profile.role === role &&
+      profile.status === "active"
+  );
+}
+
+function activeStudent(state: PlatformState, studentId: string) {
+  const student = state.students.find(item => item.id === studentId);
+  const user = student
+    ? state.users.find(item => item.id === student.userId)
+    : undefined;
+  return student?.status === "active" && user?.status === "active";
 }
 
 function assignedStudentIdsForTeacher(state: PlatformState, teacherUserId: string) {
-  const runIds = new Set(state.courseRuns.filter((run) => run.teacherId === teacherUserId).map((run) => run.id));
+  const runIds = new Set(
+    state.courseRuns
+      .filter(run => run.teacherId === teacherUserId && run.status === "active")
+      .map(run => run.id)
+  );
   const classGroups = state.classGroups.filter((group) => runIds.has(group.courseRunId));
-  return new Set([
-    ...classGroups.flatMap((group) => group.studentIds),
-    ...state.enrollments.filter((enrollment) => enrollment.classGroupId && classGroups.some((group) => group.id === enrollment.classGroupId)).map((enrollment) => enrollment.studentId),
-  ]);
+  const classGroupsById = new Map(classGroups.map(group => [group.id, group]));
+  return new Set(
+    state.enrollments
+      .filter(enrollment => {
+        const group = enrollment.classGroupId
+          ? classGroupsById.get(enrollment.classGroupId)
+          : undefined;
+        return (
+          enrollment.status === "active" &&
+          Boolean(group?.studentIds.includes(enrollment.studentId)) &&
+          activeStudent(state, enrollment.studentId)
+        );
+      })
+      .map(enrollment => enrollment.studentId)
+  );
 }
 
 function assignedTeacherIdsForStudent(state: PlatformState, studentUserId: string) {
   const student = state.students.find((item) => item.userId === studentUserId);
-  const runIds = new Set(state.enrollments.filter((item) => item.studentId === student?.id).map((item) => item.courseRunId));
-  return new Set(state.courseRuns.filter((run) => runIds.has(run.id)).map((run) => run.teacherId));
+  const runIds = new Set(
+    state.enrollments
+      .filter(item => item.studentId === student?.id && item.status === "active")
+      .map(item => item.courseRunId)
+  );
+  return new Set(
+    state.courseRuns
+      .filter(run => runIds.has(run.id) && run.status === "active")
+      .filter(run => {
+        const teacherUser = state.users.find(user => user.id === run.teacherId);
+        const teacher = state.teachers.find(
+          profile => profile.userId === run.teacherId && profile.status === "active"
+        );
+        return teacherUser?.status === "active" && Boolean(teacher);
+      })
+      .map(run => run.teacherId)
+  );
 }
 
-function studentUserIdsForBranch(state: PlatformState, branchId?: string) {
-  const runIds = new Set(state.courseRuns.filter((run) => run.branchId === branchId).map((run) => run.id));
-  const studentIds = new Set(state.enrollments.filter((enrollment) => runIds.has(enrollment.courseRunId)).map((enrollment) => enrollment.studentId));
+function studentUserIdsForBranches(state: PlatformState, branchIds: Set<string>) {
+  const runIds = new Set(
+    state.courseRuns
+      .filter(run => branchIds.has(run.branchId) && run.status === "active")
+      .map(run => run.id)
+  );
+  const studentIds = new Set(
+    state.enrollments
+      .filter(
+        enrollment =>
+          enrollment.status === "active" &&
+          runIds.has(enrollment.courseRunId) &&
+          activeStudent(state, enrollment.studentId)
+      )
+      .map(enrollment => enrollment.studentId)
+  );
   return new Set(state.students.filter((student) => studentIds.has(student.id)).map((student) => student.userId));
 }
 
-function departmentCourseStudentUserIds(state: PlatformState, departmentIds: Set<string>) {
+function departmentCourseStudentUserIds(
+  state: PlatformState,
+  departmentIds: Set<string>,
+  branchIds: Set<string>
+) {
   const programIds = new Set(state.programs.filter((program) => departmentIds.has(program.departmentId)).map((program) => program.id));
   const courseIds = new Set(state.courses.filter((course) => programIds.has(course.programId)).map((course) => course.id));
-  const runIds = new Set(state.courseRuns.filter((run) => courseIds.has(run.courseId)).map((run) => run.id));
-  const studentIds = new Set(state.enrollments.filter((enrollment) => runIds.has(enrollment.courseRunId)).map((enrollment) => enrollment.studentId));
+  const globalScope = branchIds.has("br_global");
+  const runIds = new Set(
+    state.courseRuns
+      .filter(
+        run =>
+          courseIds.has(run.courseId) &&
+          run.status === "active" &&
+          (globalScope || branchIds.has(run.branchId))
+      )
+      .map(run => run.id)
+  );
+  const studentIds = new Set(
+    state.enrollments
+      .filter(
+        enrollment =>
+          enrollment.status === "active" &&
+          runIds.has(enrollment.courseRunId) &&
+          activeStudent(state, enrollment.studentId)
+      )
+      .map(enrollment => enrollment.studentId)
+  );
   return new Set(state.students.filter((student) => studentIds.has(student.id)).map((student) => student.userId));
 }
 
 function addIf(set: Set<string>, user: User | undefined, condition: boolean) {
-  if (user && condition) set.add(user.id);
+  if (user?.status === "active" && condition) set.add(user.id);
 }
 
 export function getMessageRecipientScope(state: PlatformState, role: Role, actorId: string): MessageRecipientScope {
   const actor = state.users.find((user) => user.id === actorId);
+  const staffProfile = activeStaffProfile(state, actorId, role);
+  const branchIds = new Set(staffProfile?.branchIds ?? []);
+  const departmentIds = new Set(staffProfile?.departmentIds ?? []);
   const visibleUserIds = new Set(activeUsers(state, actorId).map((user) => user.id));
   const sendableUserIds = new Set<string>();
 
@@ -82,24 +169,27 @@ export function getMessageRecipientScope(state: PlatformState, role: Role, actor
         user,
         user.id !== actorId &&
           (userHasRole(user, "superadmin") ||
-            ((userHasRole(user, "registrar") || userHasRole(user, "branchadmin")) && user.branchId === actor?.branchId) ||
-            (userHasRole(user, "headofdepartment") && Boolean(actor?.departmentId && user.departmentId === actor.departmentId))),
+            ((userHasRole(user, "registrar") || userHasRole(user, "branchadmin")) && Boolean(user.branchId && branchIds.has(user.branchId))) ||
+            (userHasRole(user, "headofdepartment") && Boolean(user.departmentId && departmentIds.has(user.departmentId)))),
       );
     });
     return { visibleUserIds, sendableUserIds };
   }
 
   if (role === "branchadmin") {
-    studentUserIdsForBranch(state, actor?.branchId).forEach((userId) => sendableUserIds.add(userId));
+    studentUserIdsForBranches(state, branchIds).forEach((userId) => sendableUserIds.add(userId));
     state.users.forEach((user) => {
-      addIf(sendableUserIds, user, user.id !== actorId && user.branchId === actor?.branchId);
+      addIf(
+        sendableUserIds,
+        user,
+        user.id !== actorId && Boolean(user.branchId && branchIds.has(user.branchId))
+      );
     });
     return { visibleUserIds: new Set(sendableUserIds), sendableUserIds };
   }
 
   if (role === "headofdepartment") {
-    const departmentIds = new Set(state.departments.filter((department) => department.ownerUserId === actorId || department.id === actor?.departmentId).map((department) => department.id));
-    departmentCourseStudentUserIds(state, departmentIds).forEach((userId) => sendableUserIds.add(userId));
+    departmentCourseStudentUserIds(state, departmentIds, branchIds).forEach((userId) => sendableUserIds.add(userId));
     state.users.forEach((user) => {
       addIf(
         sendableUserIds,
@@ -107,7 +197,11 @@ export function getMessageRecipientScope(state: PlatformState, role: Role, actor
         user.id !== actorId &&
           (userHasRole(user, "superadmin") ||
             (typeof user.departmentId === "string" && departmentIds.has(user.departmentId)) ||
-            (userHasRole(user, "registrar") && Boolean(actor?.branchId && user.branchId === actor.branchId))),
+            (userHasRole(user, "registrar") &&
+              Boolean(
+                user.branchId &&
+                  (branchIds.has("br_global") || branchIds.has(user.branchId))
+              ))),
       );
     });
     return { visibleUserIds: new Set(sendableUserIds), sendableUserIds };
@@ -121,7 +215,10 @@ export function getMessageRecipientScope(state: PlatformState, role: Role, actor
         user.id !== actorId &&
           (userHasRole(user, "superadmin") ||
             ((userHasRole(user, "student") || userHasRole(user, "teacher") || userHasRole(user, "branchadmin") || userHasRole(user, "headofdepartment")) &&
-              (!actor?.branchId || user.branchId === actor.branchId || user.branchId === "br_global"))),
+              Boolean(
+                user.branchId &&
+                  (branchIds.has(user.branchId) || user.branchId === "br_global")
+              ))),
       );
     });
     return { visibleUserIds: new Set(sendableUserIds), sendableUserIds };

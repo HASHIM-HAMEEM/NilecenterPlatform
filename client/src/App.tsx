@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
-import { lazy, Suspense } from "react";
+import { Fragment, lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/platform/ProtectedRoute";
@@ -12,6 +12,9 @@ import type { Role } from "./lib/platformData";
 const Home = lazy(() => import("./pages/Home"));
 const Login = lazy(() => import("./pages/Login"));
 const PublicSitePage = lazy(() => import("./pages/public/PublicSitePage"));
+const PublicNileFormPage = lazy(
+  () => import("./pages/public/PublicNileFormPage")
+);
 const RoleDashboard = lazy(() => import("./pages/platform/RoleDashboard"));
 const AuthFlowPage = lazy(() => import("./pages/platform/AuthFlowPage"));
 const PlatformBlueprintPage = lazy(
@@ -46,6 +49,9 @@ const AdminSettingsPage = lazy(
 const AdminIntegrationsPage = lazy(
   () => import("./pages/platform/AdminIntegrationsPage")
 );
+const AdminDirectoryPage = lazy(
+  () => import("./pages/platform/AdminDirectoryPage")
+);
 const RegistrarStudentsPage = lazy(
   () => import("./pages/platform/RegistrarStudentsPage")
 );
@@ -54,6 +60,9 @@ const RegistrarAdmissionsPage = lazy(
 );
 const RegistrarEnrollmentsPage = lazy(
   () => import("./pages/platform/RegistrarEnrollmentsPage")
+);
+const RegistrarEnrollmentRecordsPage = lazy(
+  () => import("./pages/platform/RegistrarEnrollmentRecordsPage")
 );
 const RegistrarPaymentsPage = lazy(
   () => import("./pages/platform/RegistrarPaymentsPage")
@@ -67,6 +76,9 @@ const RegistrarClassesPage = lazy(
 const BranchRoomsPage = lazy(() => import("./pages/platform/BranchRoomsPage"));
 const BranchSchedulePage = lazy(
   () => import("./pages/platform/BranchSchedulePage")
+);
+const BranchSessionDetailPage = lazy(
+  () => import("./pages/platform/BranchSessionDetailPage")
 );
 const BranchAttendancePage = lazy(
   () => import("./pages/platform/BranchAttendancePage")
@@ -111,6 +123,9 @@ const StudentSupportPage = lazy(
 const StudentLearningPage = lazy(
   () => import("./pages/platform/StudentLearningPage")
 );
+const StudentWorkspacePage = lazy(
+  () => import("./pages/platform/StudentWorkspacePage")
+);
 const PortalSettingsPage = lazy(
   () => import("./pages/platform/PortalSettingsPage")
 );
@@ -120,6 +135,15 @@ const ProfileWorkspace = lazy(
 const BranchDirectoryPage = lazy(
   () => import("./pages/platform/BranchDirectoryPage")
 );
+const BranchClassCreatePage = lazy(
+  () => import("./pages/platform/BranchClassCreatePage")
+);
+const BranchClassDetailPage = lazy(
+  () => import("./pages/platform/BranchClassDetailPage")
+);
+const HodCourseRunCreatePage = lazy(
+  () => import("./pages/platform/HodCourseRunCreatePage")
+);
 const HodDirectoryPage = lazy(
   () => import("./pages/platform/HodDirectoryPage")
 );
@@ -127,6 +151,33 @@ const HodReportsPage = lazy(() => import("./pages/platform/HodReportsPage"));
 const HodWorkflowPage = lazy(() => import("./pages/platform/HodWorkflowPage"));
 const SimplePortalPage = lazy(
   () => import("./pages/platform/SimplePortalPage")
+);
+const NileFormsAssignedPage = lazy(
+  () => import("./pages/platform/NileFormsAssignedPage")
+);
+const NileFormsManagePage = lazy(
+  () => import("./pages/platform/NileFormsManagePage")
+);
+const NileFormsBuilderPage = lazy(
+  () => import("./pages/platform/NileFormsBuilderPage")
+);
+const NileFormsPublishPage = lazy(
+  () => import("./pages/platform/NileFormsPublishPage")
+);
+const NileFormsReviewPage = lazy(
+  () => import("./pages/platform/NileFormsReviewPage")
+);
+const NileFormsReviewDetailPage = lazy(
+  () => import("./pages/platform/NileFormsReviewDetailPage")
+);
+const NileFormsResponsePage = lazy(
+  () => import("./pages/platform/NileFormsResponsePage")
+);
+const NileFormsOfflinePage = lazy(
+  () => import("./pages/platform/NileFormsOfflinePage")
+);
+const NileFormsMigrationPage = lazy(
+  () => import("./pages/platform/NileFormsMigrationPage")
 );
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -140,19 +191,16 @@ const dashboardRoutes: { path: string; role: Role }[] = [
 ];
 
 const simplePortalRoutes: { path: string; role: Role; pageId: string }[] = [
-  { path: "/app/student/courses", role: "student", pageId: "courses" },
-  { path: "/app/student/assignments", role: "student", pageId: "assignments" },
-  { path: "/app/student/quizzes", role: "student", pageId: "quizzes" },
-  { path: "/app/student/calendar", role: "student", pageId: "calendar" },
-
-  { path: "/app/admin/departments", role: "superadmin", pageId: "departments" },
-  { path: "/app/admin/programs", role: "superadmin", pageId: "programs" },
   { path: "/app/admin/branches", role: "superadmin", pageId: "branches" },
-  {
-    path: "/app/admin/certificates",
-    role: "superadmin",
-    pageId: "certificates",
-  },
+];
+
+const formsRoleRoutes: { prefix: string; role: Role; manage: boolean }[] = [
+  { prefix: "/app/student", role: "student", manage: false },
+  { prefix: "/app/teacher", role: "teacher", manage: false },
+  { prefix: "/app/registrar", role: "registrar", manage: true },
+  { prefix: "/app/hod", role: "headofdepartment", manage: true },
+  { prefix: "/app/branch", role: "branchadmin", manage: true },
+  { prefix: "/app/admin", role: "superadmin", manage: true },
 ];
 
 function RouteLoading() {
@@ -252,6 +300,9 @@ function Router() {
         <Route path="/terms">
           <PublicSitePage mode="terms" />
         </Route>
+        <Route path="/forms/:slug">
+          {params => <PublicNileFormPage slug={params.slug} />}
+        </Route>
 
         <Route path="/app">
           <AuthFlowPage mode="select-role" />
@@ -265,9 +316,106 @@ function Router() {
           </Route>
         ))}
 
+        {formsRoleRoutes.map(route => (
+          <Fragment key={route.prefix}>
+            {route.manage ? (
+              <>
+                <Route path={`${route.prefix}/forms/manage/:formId/builder`}>
+                  {params => (
+                    <ProtectedRoute role={route.role} pageId="form-builder">
+                      <NileFormsBuilderPage
+                        role={route.role}
+                        formId={params.formId}
+                      />
+                    </ProtectedRoute>
+                  )}
+                </Route>
+                <Route path={`${route.prefix}/forms/manage/:formId/publish`}>
+                  {params => (
+                    <ProtectedRoute role={route.role} pageId="form-publish">
+                      <NileFormsPublishPage
+                        role={route.role}
+                        formId={params.formId}
+                      />
+                    </ProtectedRoute>
+                  )}
+                </Route>
+                <Route path={`${route.prefix}/forms/review/:submissionId`}>
+                  {params => (
+                    <ProtectedRoute role={route.role} pageId="form-submission">
+                      <NileFormsReviewDetailPage
+                        role={route.role}
+                        submissionId={params.submissionId}
+                      />
+                    </ProtectedRoute>
+                  )}
+                </Route>
+                <Route path={`${route.prefix}/forms/manage`}>
+                  <ProtectedRoute role={route.role} pageId="forms-manage">
+                    <NileFormsManagePage role={route.role} />
+                  </ProtectedRoute>
+                </Route>
+                <Route path={`${route.prefix}/forms/review`}>
+                  <ProtectedRoute role={route.role} pageId="forms-review">
+                    <NileFormsReviewPage role={route.role} />
+                  </ProtectedRoute>
+                </Route>
+                {route.role === "superadmin" ? (
+                  <Route path={`${route.prefix}/forms/migration`}>
+                    <ProtectedRoute role="superadmin" pageId="forms-manage">
+                      <NileFormsMigrationPage />
+                    </ProtectedRoute>
+                  </Route>
+                ) : null}
+              </>
+            ) : null}
+            {route.role !== "student" ? (
+              <Route path={`${route.prefix}/forms/offline`}>
+                <ProtectedRoute role={route.role} pageId="forms">
+                  <NileFormsOfflinePage role={route.role} />
+                </ProtectedRoute>
+              </Route>
+            ) : null}
+            <Route
+              path={`${route.prefix}/forms/:publicationId/responses/:submissionId`}
+            >
+              {params => (
+                <ProtectedRoute role={route.role} pageId="forms">
+                  <NileFormsResponsePage
+                    role={route.role}
+                    publicationId={params.publicationId}
+                    submissionId={params.submissionId}
+                  />
+                </ProtectedRoute>
+              )}
+            </Route>
+            <Route path={`${route.prefix}/forms/:publicationId`}>
+              {params => (
+                <ProtectedRoute role={route.role} pageId="forms">
+                  <NileFormsAssignedPage
+                    role={route.role}
+                    publicationId={params.publicationId}
+                  />
+                </ProtectedRoute>
+              )}
+            </Route>
+            <Route path={`${route.prefix}/forms`}>
+              <ProtectedRoute role={route.role} pageId="forms">
+                <NileFormsAssignedPage role={route.role} />
+              </ProtectedRoute>
+            </Route>
+          </Fragment>
+        ))}
+
         <Route path="/app/admin/platform-blueprint">
           <ProtectedRoute role="superadmin" pageId="platform-blueprint">
             <PlatformBlueprintPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/registrar/students/new">
+          <ProtectedRoute role="registrar" pageId="students">
+            <RegistrarStudentsPage view="create" />
           </ProtectedRoute>
         </Route>
 
@@ -288,6 +436,12 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/registrar/leads/new">
+          <ProtectedRoute role="registrar" pageId="leads">
+            <RegistrarAdmissionsPage view="lead-create" />
+          </ProtectedRoute>
+        </Route>
+
         <Route path="/app/registrar/leads/:leadId">
           {params => (
             <ProtectedRoute role="registrar" pageId="leads">
@@ -305,6 +459,23 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/registrar/applications/new">
+          <ProtectedRoute role="registrar" pageId="applications">
+            <RegistrarAdmissionsPage view="application-create" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/registrar/applications/:applicationId/placement">
+          {params => (
+            <ProtectedRoute role="registrar" pageId="placement-tests">
+              <RegistrarAdmissionsPage
+                view="placement-create"
+                applicationId={params.applicationId}
+              />
+            </ProtectedRoute>
+          )}
+        </Route>
+
         <Route path="/app/registrar/applications/:applicationId">
           {params => (
             <ProtectedRoute role="registrar" pageId="applications">
@@ -319,6 +490,12 @@ function Router() {
         <Route path="/app/registrar/applications">
           <ProtectedRoute role="registrar" pageId="applications">
             <RegistrarAdmissionsPage view="applications" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/registrar/placement-tests/new">
+          <ProtectedRoute role="registrar" pageId="placement-tests">
+            <RegistrarAdmissionsPage view="placement-create" />
           </ProtectedRoute>
         </Route>
 
@@ -339,15 +516,53 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/registrar/enrollments/records/:enrollmentId">
+          {params => (
+            <ProtectedRoute role="registrar" pageId="enrollments">
+              <RegistrarEnrollmentRecordsPage
+                enrollmentId={params.enrollmentId}
+              />
+            </ProtectedRoute>
+          )}
+        </Route>
+
+        <Route path="/app/registrar/enrollments/records">
+          <ProtectedRoute role="registrar" pageId="enrollments">
+            <RegistrarEnrollmentRecordsPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/registrar/enrollments/:workflowId">
+          {params => (
+            <ProtectedRoute role="registrar" pageId="enrollments">
+              <RegistrarEnrollmentsPage workflowId={params.workflowId} />
+            </ProtectedRoute>
+          )}
+        </Route>
+
         <Route path="/app/registrar/enrollments">
           <ProtectedRoute role="registrar" pageId="enrollments">
             <RegistrarEnrollmentsPage />
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/registrar/payments/:invoiceId">
+          {params => (
+            <ProtectedRoute role="registrar" pageId="payments">
+              <RegistrarPaymentsPage invoiceId={params.invoiceId} />
+            </ProtectedRoute>
+          )}
+        </Route>
+
         <Route path="/app/registrar/payments">
           <ProtectedRoute role="registrar" pageId="payments">
             <RegistrarPaymentsPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/registrar/schedule/new">
+          <ProtectedRoute role="registrar" pageId="schedule">
+            <RegistrarSchedulePage view="create" />
           </ProtectedRoute>
         </Route>
 
@@ -424,6 +639,24 @@ function Router() {
         <Route path="/app/admin/permissions">
           <ProtectedRoute role="superadmin" pageId="permissions">
             <AdminPermissionsPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/departments">
+          <ProtectedRoute role="superadmin" pageId="departments">
+            <AdminDirectoryPage view="departments" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/programs">
+          <ProtectedRoute role="superadmin" pageId="programs">
+            <AdminDirectoryPage view="programs" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/certificates">
+          <ProtectedRoute role="superadmin" pageId="certificates">
+            <AdminDirectoryPage view="certificates" />
           </ProtectedRoute>
         </Route>
 
@@ -573,10 +806,30 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/branch/rooms/new">
+          <ProtectedRoute role="branchadmin" pageId="rooms">
+            <BranchRoomsPage view="create" />
+          </ProtectedRoute>
+        </Route>
+
         <Route path="/app/branch/rooms">
           <ProtectedRoute role="branchadmin" pageId="rooms">
             <BranchRoomsPage />
           </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/branch/schedule/new">
+          <ProtectedRoute role="branchadmin" pageId="schedule">
+            <BranchSchedulePage view="create" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/branch/schedule/sessions/:sessionId">
+          {params => (
+            <ProtectedRoute role="branchadmin" pageId="schedule">
+              <BranchSessionDetailPage sessionId={params.sessionId} />
+            </ProtectedRoute>
+          )}
         </Route>
 
         <Route path="/app/branch/schedule">
@@ -589,6 +842,14 @@ function Router() {
           <ProtectedRoute role="branchadmin" pageId="attendance">
             <BranchAttendancePage />
           </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/branch/payments/:invoiceId">
+          {params => (
+            <ProtectedRoute role="branchadmin" pageId="payments">
+              <BranchPaymentsPage invoiceId={params.invoiceId} />
+            </ProtectedRoute>
+          )}
         </Route>
 
         <Route path="/app/branch/payments">
@@ -618,6 +879,18 @@ function Router() {
         <Route path="/app/branch/classes">
           <ProtectedRoute role="branchadmin" pageId="classes">
             <BranchDirectoryPage view="classes" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/branch/classes/new">
+          <ProtectedRoute role="branchadmin" pageId="classes">
+            <BranchClassCreatePage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/branch/classes/:classGroupId">
+          <ProtectedRoute role="branchadmin" pageId="classes">
+            <BranchClassDetailPage />
           </ProtectedRoute>
         </Route>
 
@@ -651,9 +924,33 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/hod/classes/runs/new">
+          <ProtectedRoute role="headofdepartment" pageId="classes">
+            <HodCourseRunCreatePage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/hod/courses/:courseId">
+          {params => (
+            <ProtectedRoute role="headofdepartment" pageId="courses">
+              <HodWorkflowPage
+                pageId="courses"
+                mode="course-detail"
+                courseId={params.courseId}
+              />
+            </ProtectedRoute>
+          )}
+        </Route>
+
         <Route path="/app/hod/courses">
           <ProtectedRoute role="headofdepartment" pageId="courses">
             <HodWorkflowPage pageId="courses" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/hod/curriculum/new">
+          <ProtectedRoute role="headofdepartment" pageId="curriculum">
+            <HodWorkflowPage pageId="curriculum" mode="create" />
           </ProtectedRoute>
         </Route>
 
@@ -663,9 +960,39 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/hod/schedule/sessions">
+          <ProtectedRoute role="headofdepartment" pageId="schedule">
+            <HodWorkflowPage pageId="schedule" mode="sessions" />
+          </ProtectedRoute>
+        </Route>
+
         <Route path="/app/hod/schedule">
           <ProtectedRoute role="headofdepartment" pageId="schedule">
             <HodWorkflowPage pageId="schedule" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/hod/assessments/new">
+          <ProtectedRoute role="headofdepartment" pageId="assessments">
+            <HodWorkflowPage pageId="assessments" mode="create" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/hod/assessments/review/:submissionId">
+          {params => (
+            <ProtectedRoute role="headofdepartment" pageId="assessments">
+              <HodWorkflowPage
+                pageId="assessments"
+                mode="review-detail"
+                reviewSubmissionId={params.submissionId}
+              />
+            </ProtectedRoute>
+          )}
+        </Route>
+
+        <Route path="/app/hod/assessments/review">
+          <ProtectedRoute role="headofdepartment" pageId="assessments">
+            <HodWorkflowPage pageId="assessments" mode="review" />
           </ProtectedRoute>
         </Route>
 
@@ -673,6 +1000,18 @@ function Router() {
           <ProtectedRoute role="headofdepartment" pageId="assessments">
             <HodWorkflowPage pageId="assessments" />
           </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/hod/certificates/:certificateId">
+          {params => (
+            <ProtectedRoute role="headofdepartment" pageId="certificates">
+              <HodWorkflowPage
+                pageId="certificates"
+                mode="certificate-detail"
+                certificateId={params.certificateId}
+              />
+            </ProtectedRoute>
+          )}
         </Route>
 
         <Route path="/app/hod/certificates">
@@ -693,10 +1032,32 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/teacher/quizzes/review/:attemptId">
+          {params => (
+            <ProtectedRoute role="teacher" pageId="quizzes">
+              <TeacherAssessmentPage
+                view="review-detail"
+                reviewAttemptId={params.attemptId}
+              />
+            </ProtectedRoute>
+          )}
+        </Route>
+
         <Route path="/app/teacher/quizzes/review">
           <ProtectedRoute role="teacher" pageId="quizzes">
             <TeacherAssessmentPage view="review" />
           </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/quizzes/:quizId">
+          {params => (
+            <ProtectedRoute role="teacher" pageId="quizzes">
+              <TeacherAssessmentPage
+                view="quiz-detail"
+                quizId={params.quizId}
+              />
+            </ProtectedRoute>
+          )}
         </Route>
 
         <Route path="/app/teacher/quizzes">
@@ -740,9 +1101,26 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/teacher/grading/:submissionId">
+          {params => (
+            <ProtectedRoute role="teacher" pageId="grading">
+              <TeacherWorkPage
+                view="grading-detail"
+                submissionId={params.submissionId}
+              />
+            </ProtectedRoute>
+          )}
+        </Route>
+
         <Route path="/app/teacher/grading">
           <ProtectedRoute role="teacher" pageId="grading">
             <TeacherWorkPage view="grading" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/calendar/new">
+          <ProtectedRoute role="teacher" pageId="calendar">
+            <TeacherWorkPage view="calendar-new" />
           </ProtectedRoute>
         </Route>
 
@@ -750,6 +1128,17 @@ function Router() {
           <ProtectedRoute role="teacher" pageId="calendar">
             <TeacherWorkPage view="calendar" />
           </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/quran-review/:recitationId">
+          {params => (
+            <ProtectedRoute role="teacher" pageId="quran-review">
+              <TeacherWorkPage
+                view="quran-detail"
+                recitationId={params.recitationId}
+              />
+            </ProtectedRoute>
+          )}
         </Route>
 
         <Route path="/app/teacher/quran-review">
@@ -850,6 +1239,12 @@ function Router() {
           )}
         </Route>
 
+        <Route path="/app/student/courses">
+          <ProtectedRoute role="student" pageId="courses">
+            <StudentWorkspacePage view="courses" />
+          </ProtectedRoute>
+        </Route>
+
         <Route path="/app/student/assignments/:assignmentId">
           {params => (
             <ProtectedRoute role="student" pageId="assignment-detail">
@@ -870,6 +1265,24 @@ function Router() {
               />
             </ProtectedRoute>
           )}
+        </Route>
+
+        <Route path="/app/student/assignments">
+          <ProtectedRoute role="student" pageId="assignments">
+            <StudentWorkspacePage view="assignments" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/student/quizzes">
+          <ProtectedRoute role="student" pageId="quizzes">
+            <StudentWorkspacePage view="quizzes" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/student/calendar">
+          <ProtectedRoute role="student" pageId="calendar">
+            <StudentWorkspacePage view="calendar" />
+          </ProtectedRoute>
         </Route>
 
         <Route path="/app/teacher/moodle-source">
@@ -893,6 +1306,12 @@ function Router() {
         <Route path="/app/student/profile">
           <ProtectedRoute role="student" pageId="profile">
             <ProfileWorkspace role="student" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/student/support/new">
+          <ProtectedRoute role="student" pageId="support">
+            <StudentSupportPage mode="create" />
           </ProtectedRoute>
         </Route>
 
@@ -980,9 +1399,21 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/student/messages/new">
+          <ProtectedRoute role="student" pageId="messages">
+            <PortalMessagesPage role="student" mode="compose" />
+          </ProtectedRoute>
+        </Route>
+
         <Route path="/app/student/messages">
           <ProtectedRoute role="student" pageId="messages">
             <PortalMessagesPage role="student" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/teacher/messages/new">
+          <ProtectedRoute role="teacher" pageId="messages">
+            <PortalMessagesPage role="teacher" mode="compose" />
           </ProtectedRoute>
         </Route>
 
@@ -992,9 +1423,21 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/registrar/messages/new">
+          <ProtectedRoute role="registrar" pageId="messages">
+            <PortalMessagesPage role="registrar" mode="compose" />
+          </ProtectedRoute>
+        </Route>
+
         <Route path="/app/registrar/messages">
           <ProtectedRoute role="registrar" pageId="messages">
             <PortalMessagesPage role="registrar" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/hod/messages/new">
+          <ProtectedRoute role="headofdepartment" pageId="messages">
+            <PortalMessagesPage role="headofdepartment" mode="compose" />
           </ProtectedRoute>
         </Route>
 
@@ -1004,9 +1447,21 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
+        <Route path="/app/branch/messages/new">
+          <ProtectedRoute role="branchadmin" pageId="messages">
+            <PortalMessagesPage role="branchadmin" mode="compose" />
+          </ProtectedRoute>
+        </Route>
+
         <Route path="/app/branch/messages">
           <ProtectedRoute role="branchadmin" pageId="messages">
             <PortalMessagesPage role="branchadmin" />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/app/admin/messages/new">
+          <ProtectedRoute role="superadmin" pageId="messages">
+            <PortalMessagesPage role="superadmin" mode="compose" />
           </ProtectedRoute>
         </Route>
 

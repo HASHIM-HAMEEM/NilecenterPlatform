@@ -31,7 +31,15 @@ export type Permission =
   | "settings:write"
   | "reports:read"
   | "messages:write"
-  | "audit:read";
+  | "audit:read"
+  | "forms:read"
+  | "forms:write"
+  | "forms:publish"
+  | "forms:assign"
+  | "forms:respond"
+  | "form_submissions:read"
+  | "form_submissions:review"
+  | "form_submissions:export";
 
 export type NavItem = {
   label: string;
@@ -322,10 +330,13 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "certificates:read",
     "messages:write",
     "reports:read",
+    "forms:read",
+    "forms:respond",
   ],
   teacher: [
     "dashboard:read",
     "courses:read",
+    "courses:write",
     "classes:read",
     "students:read",
     "schedule:read",
@@ -336,6 +347,8 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "assessments:write",
     "messages:write",
     "reports:read",
+    "forms:read",
+    "forms:respond",
   ],
   registrar: [
     "dashboard:read",
@@ -350,6 +363,14 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "messages:write",
     "reports:read",
     "settings:write",
+    "forms:read",
+    "forms:write",
+    "forms:publish",
+    "forms:assign",
+    "forms:respond",
+    "form_submissions:read",
+    "form_submissions:review",
+    "form_submissions:export",
   ],
   headofdepartment: [
     "dashboard:read",
@@ -368,6 +389,14 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "messages:write",
     "reports:read",
     "settings:write",
+    "forms:read",
+    "forms:write",
+    "forms:publish",
+    "forms:assign",
+    "forms:respond",
+    "form_submissions:read",
+    "form_submissions:review",
+    "form_submissions:export",
   ],
   branchadmin: [
     "dashboard:read",
@@ -386,6 +415,14 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "messages:write",
     "reports:read",
     "settings:write",
+    "forms:read",
+    "forms:write",
+    "forms:publish",
+    "forms:assign",
+    "forms:respond",
+    "form_submissions:read",
+    "form_submissions:review",
+    "form_submissions:export",
   ],
   superadmin: [
     "dashboard:read",
@@ -411,6 +448,14 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "reports:read",
     "messages:write",
     "audit:read",
+    "forms:read",
+    "forms:write",
+    "forms:publish",
+    "forms:assign",
+    "forms:respond",
+    "form_submissions:read",
+    "form_submissions:review",
+    "form_submissions:export",
   ],
 };
 
@@ -441,6 +486,7 @@ export const sidebarByRole: Record<Role, NavItem[]> = {
       icon: "CheckSquare",
     },
     { label: "Calendar", href: "/app/student/calendar", icon: "CalendarDays" },
+    { label: "Forms", href: "/app/student/forms", icon: "ClipboardList" },
     { label: "Messages", href: "/app/student/messages", icon: "MessageSquare" },
     { label: "Certificates", href: "/app/student/certificates", icon: "Award" },
     { label: "Reports", href: "/app/student/reports", icon: "BarChart3" },
@@ -479,6 +525,7 @@ export const sidebarByRole: Record<Role, NavItem[]> = {
       icon: "Database",
     },
     { label: "Calendar", href: "/app/teacher/calendar", icon: "CalendarDays" },
+    { label: "Forms", href: "/app/teacher/forms", icon: "ClipboardList" },
     { label: "Messages", href: "/app/teacher/messages", icon: "MessageSquare" },
     { label: "Reports", href: "/app/teacher/reports", icon: "BarChart3" },
     {
@@ -530,6 +577,7 @@ export const sidebarByRole: Record<Role, NavItem[]> = {
       icon: "MessageSquare",
     },
     { label: "Reports", href: "/app/registrar/reports", icon: "BarChart3" },
+    { label: "Forms", href: "/app/registrar/forms", icon: "ClipboardList" },
     { label: "Profile", href: "/app/registrar/profile", icon: "UserCircle" },
     { label: "Settings", href: "/app/registrar/settings", icon: "Settings" },
   ],
@@ -552,6 +600,7 @@ export const sidebarByRole: Record<Role, NavItem[]> = {
       badge: "5",
     },
     { label: "Reports", href: "/app/hod/reports", icon: "BarChart3" },
+    { label: "Forms", href: "/app/hod/forms", icon: "ClipboardList" },
     { label: "Messages", href: "/app/hod/messages", icon: "MessageSquare" },
     { label: "Profile", href: "/app/hod/profile", icon: "UserCircle" },
     { label: "Settings", href: "/app/hod/settings", icon: "Settings" },
@@ -575,6 +624,7 @@ export const sidebarByRole: Record<Role, NavItem[]> = {
     },
     { label: "Payments", href: "/app/branch/payments", icon: "CreditCard" },
     { label: "Reports", href: "/app/branch/reports", icon: "BarChart3" },
+    { label: "Forms", href: "/app/branch/forms", icon: "ClipboardList" },
     { label: "Messages", href: "/app/branch/messages", icon: "MessageSquare" },
     { label: "Profile", href: "/app/branch/profile", icon: "UserCircle" },
     { label: "Settings", href: "/app/branch/settings", icon: "Settings" },
@@ -610,6 +660,7 @@ export const sidebarByRole: Record<Role, NavItem[]> = {
       icon: "ScrollText",
     },
     { label: "Reports", href: "/app/admin/reports", icon: "BarChart3" },
+    { label: "Forms", href: "/app/admin/forms", icon: "ClipboardList" },
     { label: "Health", href: "/app/admin/system-health", icon: "Activity" },
   ],
 };

@@ -87,7 +87,7 @@ export default function PortalSettingsPage({ role }: PortalSettingsPageProps) {
     }
     platformStore.setState(result.data.state);
     setVersion(current => current + 1);
-    setMessage(`Settings saved · ${result.data.persistence}`);
+    setMessage("Settings saved.");
   };
 
   return (

@@ -4,6 +4,10 @@ import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
 import { ReportLayout } from "@/components/platform/PlatformLayouts";
 import {
+  PortalInsight,
+  countInsightPoints,
+} from "@/components/platform/PortalInsights";
+import {
   DataTableCard,
   StatusBadge,
 } from "@/components/platform/PlatformPrimitives";
@@ -81,6 +85,17 @@ function attendanceTone(
   if (status === "late" || status === "excused") return "amber";
   if (status === "absent") return "red";
   return "slate";
+}
+
+function formatStatus(status: string) {
+  return status.replaceAll("_", " ");
+}
+
+function formatRole(role: string) {
+  if (role === "headofdepartment") return "Head of Department";
+  if (role === "branchadmin") return "Branch Admin";
+  if (role === "superadmin") return "Super Admin";
+  return role.replace(/\b\w/g, character => character.toUpperCase());
 }
 
 function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
@@ -416,45 +431,65 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
     Object.keys(reportRows[0] ?? { Report: "No rows" }),
     ...reportRows.map(row => Object.values(row)),
   ];
+  const reportInsightStatusValues =
+    view === "attendance"
+      ? attendanceRows.map(row => row.status)
+      : view === "finance"
+        ? financeRows.map(row => row.status)
+        : view === "certificates"
+          ? certificateRows.map(row => row.status)
+          : view === "admissions"
+            ? admissionRows.map(row => row.status)
+            : view === "classes"
+              ? classRows.map(row => row.status)
+              : view === "saved-views"
+                ? savedViewRows.map(row => row.reportType)
+                : [];
+  const reportInsightPoints =
+    view === "overview"
+      ? reportAreas.map(area => ({ label: area.title, value: area.rows }))
+      : countInsightPoints(reportInsightStatusValues);
+  const reportInsightTitles: Record<AdminReportsPageProps["view"], string> = {
+    overview: "Report volume",
+    attendance: "Attendance mix",
+    finance: "Invoice status",
+    certificates: "Certificate status",
+    admissions: "Admissions status",
+    classes: "Class status",
+    "saved-views": "Saved view use",
+  };
 
   const overview = (
     <DataTableCard
       title="Report areas"
       subtitle="Choose one area to review"
-      className="admin-ia-table-card admin-reports-overview-table"
+      className="admin-reports-record-card"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Area</th>
-              <th>Purpose</th>
-              <th>Rows</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {reportAreas.map(area => (
-              <tr key={area.title}>
-                <td>
-                  <strong>{area.title}</strong>
-                  <small>{area.available ? "Ready" : "Planned"}</small>
-                </td>
-                <td>{area.purpose}</td>
-                <td>{area.rows}</td>
-                <td>
-                  {area.available ? (
-                    <Link className="platform-row-link" href={area.href}>
-                      Open
-                    </Link>
-                  ) : (
-                    <StatusBadge tone="slate">Not ready</StatusBadge>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="admin-record-list admin-reports-record-list">
+        {reportAreas.map(area => (
+          <article key={area.title}>
+            <div className="admin-record-list-copy">
+              <span>{area.available ? "Available" : "Planned"}</span>
+              <strong>{area.title}</strong>
+              <p>{area.purpose}</p>
+            </div>
+            <dl className="admin-record-list-facts">
+              <div>
+                <dt>Records</dt>
+                <dd>{area.rows}</dd>
+              </div>
+            </dl>
+            <div className="admin-record-list-actions">
+              {area.available ? (
+                <Link className="simple-portal-row-action" href={area.href}>
+                  Open
+                </Link>
+              ) : (
+                <StatusBadge tone="slate">Not ready</StatusBadge>
+              )}
+            </div>
+          </article>
+        ))}
       </div>
     </DataTableCard>
   );
@@ -463,51 +498,40 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
     <DataTableCard
       title="Attendance records"
       subtitle={`${attendanceRows.length} matching record(s)`}
-      className="admin-ia-table-card admin-reports-attendance-table"
+      className="admin-reports-record-card"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Class</th>
-              <th>Branch</th>
-              <th>Date</th>
-              <th>Status</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {attendanceRows.map(record => (
-              <tr key={record.id}>
-                <td>
-                  <strong>{record.studentName}</strong>
-                  <small>{record.id}</small>
-                </td>
-                <td>{record.className}</td>
-                <td>{record.branchName}</td>
-                <td>{formatDateTime(record.date)}</td>
-                <td>
-                  <StatusBadge tone={attendanceTone(record.status)}>
-                    {record.status}
-                  </StatusBadge>
-                </td>
-                <td>{record.notes || "No note"}</td>
-              </tr>
-            ))}
-            {!attendanceRows.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No attendance records</strong>
-                    <span>Try a different search or status filter.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+      {attendanceRows.length ? (
+        <div className="admin-record-list admin-reports-record-list">
+          {attendanceRows.map(record => (
+            <article key={record.id}>
+              <div className="admin-record-list-copy">
+                <span>{record.branchName}</span>
+                <strong>{record.studentName}</strong>
+                <p>
+                  {record.className}
+                  {record.notes ? ` · ${record.notes}` : ""}
+                </p>
+              </div>
+              <dl className="admin-record-list-facts">
+                <div>
+                  <dt>Session</dt>
+                  <dd>{formatDateTime(record.date)}</dd>
+                </div>
+              </dl>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={attendanceTone(record.status)}>
+                  {formatStatus(record.status)}
+                </StatusBadge>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="platform-empty-state">
+          <strong>No attendance records</strong>
+          <span>Try a different search or status filter.</span>
+        </div>
+      )}
     </DataTableCard>
   );
 
@@ -515,55 +539,45 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
     <DataTableCard
       title="Finance report"
       subtitle={`${financeRows.length} matching invoice(s)`}
-      className="admin-ia-table-card admin-reports-finance-table"
+      className="admin-reports-record-card"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Branch</th>
-              <th>Amount</th>
-              <th>Paid</th>
-              <th>Due</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {financeRows.map(row => (
-              <tr key={row.id}>
-                <td>
-                  <strong>{row.studentName}</strong>
-                  <small>{row.id}</small>
-                </td>
-                <td>{row.branchName}</td>
-                <td>
-                  {row.amount} {row.currency}
-                </td>
-                <td>
-                  {row.paid} {row.currency}
-                </td>
-                <td>{formatDateTime(row.dueAt)}</td>
-                <td>
-                  <StatusBadge tone={statusTone(row.status)}>
-                    {row.status}
-                  </StatusBadge>
-                </td>
-              </tr>
-            ))}
-            {!financeRows.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No invoice rows</strong>
-                    <span>Try a different search or payment status.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+      {financeRows.length ? (
+        <div className="admin-record-list admin-reports-record-list">
+          {financeRows.map(row => (
+            <article key={row.id}>
+              <div className="admin-record-list-copy">
+                <span>{row.branchName}</span>
+                <strong>{row.studentName}</strong>
+                <p>Due {formatDateTime(row.dueAt)}</p>
+              </div>
+              <dl className="admin-record-list-facts">
+                <div>
+                  <dt>Invoice</dt>
+                  <dd>
+                    {row.amount} {row.currency}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Received</dt>
+                  <dd>
+                    {row.paid} {row.currency}
+                  </dd>
+                </div>
+              </dl>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={statusTone(row.status)}>
+                  {formatStatus(row.status)}
+                </StatusBadge>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="platform-empty-state">
+          <strong>No invoice rows</strong>
+          <span>Try a different search or payment status.</span>
+        </div>
+      )}
     </DataTableCard>
   );
 
@@ -571,51 +585,45 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
     <DataTableCard
       title="Certificate report"
       subtitle={`${certificateRows.length} matching certificate(s)`}
-      className="admin-ia-table-card admin-reports-certificates-table"
+      className="admin-reports-record-card"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Course</th>
-              <th>Grade</th>
-              <th>Attendance</th>
-              <th>Status</th>
-              <th>Issued</th>
-            </tr>
-          </thead>
-          <tbody>
-            {certificateRows.map(row => (
-              <tr key={row.id}>
-                <td>
-                  <strong>{row.studentName}</strong>
-                  <small>{row.verificationCode}</small>
-                </td>
-                <td>{row.courseTitle}</td>
-                <td>{row.grade}%</td>
-                <td>{row.attendanceRate}%</td>
-                <td>
-                  <StatusBadge tone={statusTone(row.status)}>
-                    {row.status}
-                  </StatusBadge>
-                </td>
-                <td>{formatDateTime(row.issuedAt)}</td>
-              </tr>
-            ))}
-            {!certificateRows.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No certificates</strong>
-                    <span>Try a different search or certificate status.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+      {certificateRows.length ? (
+        <div className="admin-record-list admin-reports-record-list">
+          {certificateRows.map(row => (
+            <article key={row.id}>
+              <div className="admin-record-list-copy">
+                <span>{row.courseTitle}</span>
+                <strong>{row.studentName}</strong>
+                <p>
+                  {row.issuedAt
+                    ? `Issued ${formatDateTime(row.issuedAt)}`
+                    : "Awaiting issue"}
+                </p>
+              </div>
+              <dl className="admin-record-list-facts">
+                <div>
+                  <dt>Grade</dt>
+                  <dd>{row.grade}%</dd>
+                </div>
+                <div>
+                  <dt>Attendance</dt>
+                  <dd>{row.attendanceRate}%</dd>
+                </div>
+              </dl>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={statusTone(row.status)}>
+                  {formatStatus(row.status)}
+                </StatusBadge>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="platform-empty-state">
+          <strong>No certificates</strong>
+          <span>Try a different search or certificate status.</span>
+        </div>
+      )}
     </DataTableCard>
   );
 
@@ -623,51 +631,41 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
     <DataTableCard
       title="Admissions report"
       subtitle={`${admissionRows.length} matching pipeline row(s)`}
-      className="admin-ia-table-card admin-reports-admissions-table"
+      className="admin-reports-record-card"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Applicant</th>
-              <th>Stage</th>
-              <th>Branch</th>
-              <th>Course</th>
-              <th>Status</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {admissionRows.map(row => (
-              <tr key={row.id}>
-                <td>
-                  <strong>{row.person}</strong>
-                  <small>{row.id}</small>
-                </td>
-                <td>{row.stage}</td>
-                <td>{row.branch}</td>
-                <td>{row.course}</td>
-                <td>
-                  <StatusBadge tone={statusTone(row.status)}>
-                    {row.status}
-                  </StatusBadge>
-                </td>
-                <td>{formatDateTime(row.date)}</td>
-              </tr>
-            ))}
-            {!admissionRows.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No admissions rows</strong>
-                    <span>Try a different applicant or status filter.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+      {admissionRows.length ? (
+        <div className="admin-record-list admin-reports-record-list">
+          {admissionRows.map(row => (
+            <article key={row.id}>
+              <div className="admin-record-list-copy">
+                <span>{row.stage}</span>
+                <strong>{row.person}</strong>
+                <p>{row.course}</p>
+              </div>
+              <dl className="admin-record-list-facts">
+                <div>
+                  <dt>Branch</dt>
+                  <dd>{row.branch}</dd>
+                </div>
+                <div>
+                  <dt>Received</dt>
+                  <dd>{formatDateTime(row.date)}</dd>
+                </div>
+              </dl>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={statusTone(row.status)}>
+                  {formatStatus(row.status)}
+                </StatusBadge>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="platform-empty-state">
+          <strong>No admissions rows</strong>
+          <span>Try a different applicant or status filter.</span>
+        </div>
+      )}
     </DataTableCard>
   );
 
@@ -675,51 +673,45 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
     <DataTableCard
       title="Classes report"
       subtitle={`${classRows.length} matching class(es)`}
-      className="admin-ia-table-card admin-reports-classes-table"
+      className="admin-reports-record-card"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Class</th>
-              <th>Course</th>
-              <th>Teacher</th>
-              <th>Branch</th>
-              <th>Learners</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {classRows.map(row => (
-              <tr key={row.id}>
-                <td>
-                  <strong>{row.name}</strong>
-                  <small>{row.schedule}</small>
-                </td>
-                <td>{row.courseTitle}</td>
-                <td>{row.teacherName}</td>
-                <td>{row.branchName}</td>
-                <td>{row.studentIds.length}</td>
-                <td>
-                  <StatusBadge tone={statusTone(row.status)}>
-                    {row.status}
-                  </StatusBadge>
-                </td>
-              </tr>
-            ))}
-            {!classRows.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No classes</strong>
-                    <span>Try a different class, branch, or status.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+      {classRows.length ? (
+        <div className="admin-record-list admin-reports-record-list">
+          {classRows.map(row => (
+            <article key={row.id}>
+              <div className="admin-record-list-copy">
+                <span>{row.courseTitle}</span>
+                <strong>{row.name}</strong>
+                <p>{row.schedule}</p>
+              </div>
+              <dl className="admin-record-list-facts">
+                <div>
+                  <dt>Teacher</dt>
+                  <dd>{row.teacherName}</dd>
+                </div>
+                <div>
+                  <dt>Branch</dt>
+                  <dd>{row.branchName}</dd>
+                </div>
+                <div>
+                  <dt>Learners</dt>
+                  <dd>{row.studentIds.length}</dd>
+                </div>
+              </dl>
+              <div className="admin-record-list-meta">
+                <StatusBadge tone={statusTone(row.status)}>
+                  {formatStatus(row.status)}
+                </StatusBadge>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="platform-empty-state">
+          <strong>No classes</strong>
+          <span>Try a different class, branch, or status.</span>
+        </div>
+      )}
     </DataTableCard>
   );
 
@@ -727,47 +719,40 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
     <DataTableCard
       title="Saved report views"
       subtitle={`${savedViewRows.length} saved view(s)`}
-      className="admin-ia-table-card admin-reports-saved-table"
+      className="admin-reports-record-card"
     >
-      <div className="admin-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>View</th>
-              <th>Report</th>
-              <th>Role</th>
-              <th>Filter</th>
-              <th>Rows</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {savedViewRows.map(row => (
-              <tr key={row.id}>
-                <td>
-                  <strong>{row.label}</strong>
-                  <small>{row.id}</small>
-                </td>
-                <td>{row.reportType}</td>
-                <td>{row.role}</td>
-                <td>{row.search || row.status}</td>
-                <td>{row.rowCount}</td>
-                <td>{formatDateTime(row.createdAt)}</td>
-              </tr>
-            ))}
-            {!savedViewRows.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No saved views</strong>
-                    <span>Saved report filters will appear here.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+      {savedViewRows.length ? (
+        <div className="admin-record-list admin-reports-record-list">
+          {savedViewRows.map(row => (
+            <article key={row.id}>
+              <div className="admin-record-list-copy">
+                <span>{row.reportType}</span>
+                <strong>{row.label}</strong>
+                <p>{row.search || row.status || "No filter"}</p>
+              </div>
+              <dl className="admin-record-list-facts">
+                <div>
+                  <dt>For</dt>
+                  <dd>{formatRole(row.role)}</dd>
+                </div>
+                <div>
+                  <dt>Rows</dt>
+                  <dd>{row.rowCount}</dd>
+                </div>
+                <div>
+                  <dt>Created</dt>
+                  <dd>{formatDateTime(row.createdAt)}</dd>
+                </div>
+              </dl>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="platform-empty-state">
+          <strong>No saved views</strong>
+          <span>Saved report filters will appear here.</span>
+        </div>
+      )}
     </DataTableCard>
   );
 
@@ -964,6 +949,26 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
           </div>
         }
         main={mainByView[view]}
+        side={
+          <PortalInsight
+            compact
+            eyebrow="Report signal"
+            title={reportInsightTitles[view]}
+            value={
+              view === "overview"
+                ? reportAreas.reduce((sum, area) => sum + area.rows, 0)
+                : reportInsightStatusValues.length
+            }
+            valueLabel={
+              view === "overview" ? "records across reports" : "visible records"
+            }
+            description="Use this compact summary to focus the next operational review."
+            points={reportInsightPoints}
+            variant="bars"
+            tone="slate"
+            testId="admin-reports-insight"
+          />
+        }
       />
     </PlatformShell>
   );

@@ -1,12 +1,24 @@
 import { useMemo, useState } from "react";
-import { CreditCard, Filter, Search, ShieldCheck } from "lucide-react";
+import { CheckCircle2, CreditCard, Search } from "lucide-react";
+import { Link } from "wouter";
 import { toast } from "sonner";
 import PlatformShell from "@/components/platform/PlatformShell";
-import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
+import {
+  DetailLayout,
+  WorkspaceLayout,
+} from "@/components/platform/PlatformLayouts";
+import {
+  DataTableCard,
+  StatusBadge,
+} from "@/components/platform/PlatformPrimitives";
 import { runPlatformWorkflowActionRequest } from "@/lib/backend/api";
 import { platformStore } from "@/lib/domain/store";
-import type { Payment } from "@/lib/domain/types";
+import type { Payment, PaymentStatus } from "@/lib/domain/types";
 import { getDemoUser } from "@/lib/platformData";
+
+type RegistrarPaymentsPageProps = {
+  invoiceId?: string;
+};
 
 const paymentMethods: Payment["method"][] = [
   "manual",
@@ -15,28 +27,50 @@ const paymentMethods: Payment["method"][] = [
   "card",
 ];
 
-export default function RegistrarPaymentsPage() {
+function formatDate(value?: string) {
+  if (!value) return "No date";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function humanize(value: string) {
+  return value.replace(/_/g, " ").replace(/\b\w/g, item => item.toUpperCase());
+}
+
+function statusTone(
+  status: PaymentStatus
+): "green" | "amber" | "red" | "slate" {
+  if (status === "paid") return "green";
+  if (status === "overdue") return "red";
+  if (status === "pending" || status === "issued" || status === "draft") {
+    return "amber";
+  }
+  return "slate";
+}
+
+export default function RegistrarPaymentsPage({
+  invoiceId,
+}: RegistrarPaymentsPageProps) {
   const [version, setVersion] = useState(0);
-  const [paymentSearch, setPaymentSearch] = useState("");
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
     "all" | "open" | "paid" | "overdue"
   >("all");
-  const [paymentAmountDrafts, setPaymentAmountDrafts] = useState<
-    Record<string, string>
-  >({});
-  const [paymentMethodDrafts, setPaymentMethodDrafts] = useState<
-    Record<string, Payment["method"]>
-  >({});
-  const [paymentReferenceDrafts, setPaymentReferenceDrafts] = useState<
-    Record<string, string>
-  >({});
-  const [pendingAction, setPendingAction] = useState("");
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState<Payment["method"]>("manual");
+  const [reference, setReference] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [recorded, setRecorded] = useState(false);
 
   const state = useMemo(() => platformStore.getState(), [version]);
   const actorId = getDemoUser("registrar").id;
   const refresh = () => setVersion(current => current + 1);
-  const isAnyActionPending = Boolean(pendingAction);
-  const isActionPending = (actionKey: string) => pendingAction === actionKey;
 
   const paymentRows = state.invoices.map(invoice => {
     const student = state.students.find(item => item.id === invoice.studentId);
@@ -52,40 +86,44 @@ export default function RegistrarPaymentsPage() {
     const classGroup = state.classGroups.find(
       item => item.id === enrollment?.classGroupId
     );
-    const payments = state.payments.filter(
-      payment => payment.invoiceId === invoice.id && payment.status === "paid"
-    );
-    const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    const payments = state.payments
+      .filter(payment => payment.invoiceId === invoice.id)
+      .sort(
+        (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime()
+      );
+    const paid = payments
+      .filter(payment => payment.status === "paid")
+      .reduce((sum, payment) => sum + payment.amount, 0);
     const balance = Math.max(0, invoice.amount - paid);
-    const lastPayment = [...payments].sort((a, b) =>
-      b.paidAt.localeCompare(a.paidAt)
-    )[0];
-    const status = balance <= 0 ? "paid" : invoice.status;
+    const status: PaymentStatus = balance <= 0 ? "paid" : invoice.status;
 
     return {
       invoice,
-      student,
       user,
       branch,
       enrollment,
-      run,
       course,
       classGroup,
       payments,
       paid,
       balance,
-      lastPayment,
       status,
     };
   });
 
-  const filteredPaymentRows = paymentRows.filter(row => {
-    const query = paymentSearch.trim().toLowerCase();
+  const selectedRow = invoiceId
+    ? paymentRows.find(row => row.invoice.id === invoiceId)
+    : undefined;
+  const firstOpenInvoice = paymentRows.find(
+    row =>
+      row.balance > 0 && row.status !== "cancelled" && row.status !== "refunded"
+  );
+  const filteredRows = paymentRows.filter(row => {
+    const query = search.trim().toLowerCase();
     const matchesQuery =
       !query ||
       [
         row.invoice.id,
-        row.enrollment?.id,
         row.user?.name,
         row.user?.email,
         row.branch?.name,
@@ -96,308 +134,369 @@ export default function RegistrarPaymentsPage() {
         .filter(Boolean)
         .some(value => String(value).toLowerCase().includes(query));
     const matchesStatus =
-      paymentStatusFilter === "all" ||
-      (paymentStatusFilter === "open" &&
+      statusFilter === "all" ||
+      (statusFilter === "open" &&
         row.balance > 0 &&
         row.status !== "overdue") ||
-      (paymentStatusFilter === "paid" && row.balance <= 0) ||
-      (paymentStatusFilter === "overdue" && row.status === "overdue");
+      (statusFilter === "paid" && row.balance <= 0) ||
+      (statusFilter === "overdue" && row.status === "overdue");
     return matchesQuery && matchesStatus;
   });
 
-  const paymentTotals = {
-    invoices: paymentRows.length,
-    open: paymentRows.filter(row => row.balance > 0).length,
-    paid: paymentRows.filter(row => row.balance <= 0).length,
-    collected: paymentRows.reduce((sum, row) => sum + row.paid, 0),
-    balance: paymentRows.reduce((sum, row) => sum + row.balance, 0),
-  };
-
-  const recordInvoicePayment = async (invoiceId: string, balance: number) => {
-    const paymentRow = Array.from(
-      document.querySelectorAll<HTMLElement>(".registrar-payment-row")
-    ).find(row => row.dataset.invoiceId === invoiceId);
-    const amountInput = paymentRow?.querySelector<HTMLInputElement>(
-      ".registrar-payment-amount-input"
-    );
-    const methodSelect = paymentRow?.querySelector<HTMLSelectElement>(
-      ".registrar-payment-record-fields select"
-    );
-    const referenceInput = Array.from(
-      paymentRow?.querySelectorAll<HTMLInputElement>(
-        ".registrar-payment-record-fields input"
-      ) ?? []
-    ).find(input => !input.classList.contains("registrar-payment-amount-input"));
-    const requestedAmount = Number(
-      paymentAmountDrafts[invoiceId] ?? amountInput?.value ?? balance
-    );
-    const actionKey = `payment.record:${invoiceId}`;
-
-    setPendingAction(actionKey);
-    try {
-      const response = await runPlatformWorkflowActionRequest({
-        type: "payment.record",
-        invoiceId,
-        amount: Number.isFinite(requestedAmount) ? requestedAmount : balance,
-        method: (paymentMethodDrafts[invoiceId] ??
-          methodSelect?.value ??
-          "manual") as Payment["method"],
-        reference:
-          paymentReferenceDrafts[invoiceId]?.trim() ||
-          referenceInput?.value.trim() ||
-          undefined,
-        actorId,
-      });
-
-      if (!response.data) {
-        throw new Error(response.error ?? "Payment action returned no state.");
-      }
-
-      platformStore.setState(response.data.state);
-      refresh();
-      toast.success("Payment recorded");
-      setPaymentAmountDrafts(current => {
-        const next = { ...current };
-        delete next[invoiceId];
-        return next;
-      });
-      setPaymentReferenceDrafts(current => {
-        const next = { ...current };
-        delete next[invoiceId];
-        return next;
-      });
-    } catch (error) {
-      toast.error("Payment could not be recorded", {
-        description:
-          error instanceof Error
-            ? error.message
-            : "Check the invoice and try again.",
-      });
-    } finally {
-      setPendingAction("");
+  const recordPayment = async () => {
+    if (!selectedRow || saving) return;
+    const requestedAmount = Number(amount || selectedRow.balance);
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+      setError("Enter a payment amount greater than zero.");
+      return;
     }
+
+    setSaving(true);
+    setError("");
+    setRecorded(false);
+    const response = await runPlatformWorkflowActionRequest({
+      type: "payment.record",
+      invoiceId: selectedRow.invoice.id,
+      amount: Math.min(requestedAmount, selectedRow.balance),
+      method,
+      reference: reference.trim() || undefined,
+      actorId,
+    });
+    setSaving(false);
+
+    if (!response.ok || !response.data) {
+      const message = response.error ?? "Check the invoice and try again.";
+      setError(message);
+      toast.error("Payment could not be recorded", { description: message });
+      return;
+    }
+
+    platformStore.setState(response.data.state);
+    refresh();
+    setAmount("");
+    setReference("");
+    setRecorded(true);
+    toast.success("Payment recorded");
   };
+
+  if (invoiceId) {
+    const canRecord = Boolean(
+      selectedRow &&
+        selectedRow.balance > 0 &&
+        selectedRow.status !== "cancelled" &&
+        selectedRow.status !== "refunded"
+    );
+
+    return (
+      <PlatformShell role="registrar" title="Record payment">
+        <DetailLayout
+          className="registrar-payments-page registrar-payment-detail-page"
+          title={selectedRow?.user?.name ?? "Invoice"}
+          description={
+            selectedRow
+              ? "Review one invoice and record a receipt."
+              : "This invoice is no longer available."
+          }
+          context="Registrar"
+          actions={
+            <Link
+              className="platform-secondary-button"
+              href="/app/registrar/payments"
+            >
+              Back to payments
+            </Link>
+          }
+          main={
+            selectedRow ? (
+              <div className="registrar-payment-detail-stack">
+                <section className="registrar-payment-detail-summary">
+                  <div>
+                    <span>Invoice</span>
+                    <strong>{selectedRow.invoice.id}</strong>
+                    <p>
+                      {selectedRow.course?.title ?? "Course"} ·{" "}
+                      {selectedRow.branch?.name ?? "Branch"}
+                    </p>
+                  </div>
+                  <StatusBadge tone={statusTone(selectedRow.status)}>
+                    {humanize(selectedRow.status)}
+                  </StatusBadge>
+                </section>
+
+                <dl className="registrar-payment-detail-facts">
+                  <div>
+                    <dt>Total due</dt>
+                    <dd>
+                      {selectedRow.invoice.currency}{" "}
+                      {selectedRow.invoice.amount}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Already paid</dt>
+                    <dd>
+                      {selectedRow.invoice.currency} {selectedRow.paid}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Remaining</dt>
+                    <dd>
+                      {selectedRow.invoice.currency} {selectedRow.balance}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Due date</dt>
+                    <dd>{formatDate(selectedRow.invoice.dueAt)}</dd>
+                  </div>
+                </dl>
+
+                {canRecord ? (
+                  <section
+                    className="portal-ia-form-card registrar-payment-record-form"
+                    data-testid="registrar-payment-record-form"
+                  >
+                    <div>
+                      <h2>Record receipt</h2>
+                      <p>
+                        Enter the amount received and the receipt reference.
+                      </p>
+                    </div>
+                    {error ? (
+                      <p className="platform-form-error">{error}</p>
+                    ) : null}
+                    {recorded ? (
+                      <div
+                        className="registrar-payment-success"
+                        data-testid="registrar-payment-success"
+                      >
+                        <CheckCircle2 size={18} />
+                        <span>
+                          Payment recorded. The invoice balance is up to date.
+                        </span>
+                      </div>
+                    ) : null}
+                    <div className="portal-ia-form-grid">
+                      <label>
+                        Amount
+                        <input
+                          type="number"
+                          min="0"
+                          max={selectedRow.balance}
+                          value={amount || String(selectedRow.balance)}
+                          disabled={saving}
+                          onChange={event => setAmount(event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Method
+                        <select
+                          value={method}
+                          disabled={saving}
+                          onChange={event =>
+                            setMethod(event.target.value as Payment["method"])
+                          }
+                        >
+                          {paymentMethods.map(option => (
+                            <option key={option} value={option}>
+                              {humanize(option)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="wide">
+                        Receipt reference
+                        <input
+                          value={reference}
+                          disabled={saving}
+                          placeholder="Optional receipt or transfer reference"
+                          onChange={event => setReference(event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <div className="portal-ia-actions">
+                      <button
+                        type="button"
+                        className="platform-primary-button"
+                        disabled={saving}
+                        onClick={recordPayment}
+                      >
+                        <CreditCard size={15} />
+                        {saving ? "Recording payment" : "Record payment"}
+                      </button>
+                    </div>
+                  </section>
+                ) : (
+                  <section className="registrar-payment-complete">
+                    <CheckCircle2 size={18} />
+                    <div>
+                      <strong>No payment action needed</strong>
+                      <p>
+                        This invoice is settled or cannot accept another
+                        receipt.
+                      </p>
+                    </div>
+                  </section>
+                )}
+
+                <DataTableCard
+                  title="Payment history"
+                  subtitle={`${selectedRow.payments.length} record(s)`}
+                  className="registrar-record-card registrar-payment-history-card"
+                >
+                  <div className="registrar-record-list registrar-payment-history-list">
+                    {selectedRow.payments.map(payment => (
+                      <article
+                        key={payment.id}
+                        className="registrar-record-row registrar-payment-history-record"
+                      >
+                        <div className="registrar-record-primary">
+                          <strong>{formatDate(payment.paidAt)}</strong>
+                          <span>{humanize(payment.method)}</span>
+                        </div>
+                        <dl className="registrar-record-facts">
+                          <div>
+                            <dt>Reference</dt>
+                            <dd>{payment.reference ?? "No reference"}</dd>
+                          </div>
+                          <div>
+                            <dt>Amount</dt>
+                            <dd>
+                              {selectedRow.invoice.currency} {payment.amount}
+                            </dd>
+                          </div>
+                        </dl>
+                        <StatusBadge tone={statusTone(payment.status)}>
+                          {humanize(payment.status)}
+                        </StatusBadge>
+                      </article>
+                    ))}
+                    {!selectedRow.payments.length ? (
+                      <div className="platform-empty-state">
+                        <strong>No receipt records yet</strong>
+                        <span>Recorded payments will appear here.</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </DataTableCard>
+              </div>
+            ) : (
+              <div className="platform-empty-state">
+                <strong>Invoice not found</strong>
+                <span>
+                  Return to the payments list and choose an available invoice.
+                </span>
+              </div>
+            )
+          }
+        />
+      </PlatformShell>
+    );
+  }
 
   return (
-    <PlatformShell role="registrar" title="Registrar payments">
+    <PlatformShell role="registrar" title="Payments">
       <WorkspaceLayout
+        className="registrar-payments-page registrar-payments-list-page"
         title="Payments"
-        description="Record receipts and review open balances."
+        description="Find invoices and record a receipt."
         context="Registrar"
-        main={
-          <div className="registrar-payment-desk">
-            <section className="registrar-payment-command registrar-panel">
-              <div className="registrar-panel-head">
-                <div>
-                  <span>Payment operations</span>
-                  <strong>Collect, reconcile, and audit invoices</strong>
-                </div>
-                <CreditCard size={18} />
-              </div>
-              <div className="registrar-payment-summary">
-                <article>
-                  <span>Total invoices</span>
-                  <strong>{paymentTotals.invoices}</strong>
-                  <small>Visible in registrar scope</small>
-                </article>
-                <article>
-                  <span>Open balances</span>
-                  <strong>{paymentTotals.open}</strong>
-                  <small>EGP {paymentTotals.balance} remaining</small>
-                </article>
-                <article>
-                  <span>Collected</span>
-                  <strong>EGP {paymentTotals.collected}</strong>
-                  <small>{paymentTotals.paid} settled invoice(s)</small>
-                </article>
-              </div>
-              <div className="registrar-payment-toolbar">
-                <label>
-                  <Search size={15} />
-                  <input
-                    aria-label="Search registrar payment ledger"
-                    value={paymentSearch}
-                    onChange={event => setPaymentSearch(event.target.value)}
-                    placeholder="Search invoice, student, email, branch"
-                  />
-                </label>
-                <label>
-                  <Filter size={15} />
-                  <select
-                    value={paymentStatusFilter}
-                    onChange={event =>
-                      setPaymentStatusFilter(
-                        event.target.value as typeof paymentStatusFilter
-                      )
-                    }
-                  >
-                    <option value="all">All statuses</option>
-                    <option value="open">Open balance</option>
-                    <option value="paid">Paid</option>
-                    <option value="overdue">Overdue</option>
-                  </select>
-                </label>
-              </div>
-            </section>
-
-            <section className="registrar-panel registrar-payment-table-card">
-              <div className="registrar-panel-head">
-                <div>
-                  <span>Invoice ledger</span>
-                  <strong>{filteredPaymentRows.length} row(s)</strong>
-                </div>
-                <ShieldCheck size={18} />
-              </div>
-              <div
-                className="registrar-payment-table"
-                role="table"
-                aria-label="Registrar invoice ledger"
+        actions={
+          firstOpenInvoice ? (
+            <Link
+              className="platform-primary-button"
+              href={`/app/registrar/payments/${firstOpenInvoice.invoice.id}`}
+            >
+              <CreditCard size={15} />
+              Record payment
+            </Link>
+          ) : undefined
+        }
+        toolbar={
+          <div
+            className="registrar-list-toolbar-v3"
+            data-testid="registrar-payments-toolbar"
+          >
+            <label className="registrar-list-search">
+              <span className="sr-only">Search payments</span>
+              <Search size={15} />
+              <input
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder="Search invoices"
+              />
+            </label>
+            <label className="registrar-list-select">
+              <span>Status</span>
+              <select
+                value={statusFilter}
+                onChange={event =>
+                  setStatusFilter(event.target.value as typeof statusFilter)
+                }
               >
-                <div className="registrar-payment-table-head" role="row">
-                  <span role="columnheader">Student</span>
-                  <span role="columnheader">Invoice</span>
-                  <span role="columnheader">Amount</span>
-                  <span role="columnheader">Paid</span>
-                  <span role="columnheader">Balance</span>
-                  <span role="columnheader">Status</span>
-                  <span role="columnheader">Record</span>
-                  <span role="columnheader">Action</span>
-                </div>
-                {filteredPaymentRows.map(row => (
-                  <article
-                    key={row.invoice.id}
-                    className="registrar-payment-row"
-                    data-invoice-id={row.invoice.id}
-                    role="row"
-                  >
-                    <div role="cell">
-                      <strong>{row.user?.name ?? row.invoice.studentId}</strong>
-                      <small>
-                        {row.user?.email ?? "No email"} ·{" "}
-                        {row.branch?.name ?? "No branch"} ·{" "}
-                        {row.course?.title ?? "No course"}
-                      </small>
-                    </div>
-                    <div role="cell">
-                      <strong>{row.invoice.id}</strong>
-                      <small>
-                        {row.enrollment?.id ?? "No enrollment"} ·{" "}
-                        {row.classGroup?.name ?? "Class pending"} · due{" "}
-                        {row.invoice.dueAt} ·{" "}
-                        {row.lastPayment
-                          ? `${row.lastPayment.method}${row.lastPayment.reference ? ` · ${row.lastPayment.reference}` : ""} · ${row.lastPayment.paidAt.slice(0, 10)}`
-                          : "No receipt yet"}
-                      </small>
-                    </div>
-                    <span role="cell">
-                      {row.invoice.currency} {row.invoice.amount}
-                    </span>
-                    <span role="cell">
-                      {row.invoice.currency} {row.paid}
-                    </span>
-                    <span
-                      role="cell"
-                      className={row.balance > 0 ? "attention" : "settled"}
-                    >
-                      {row.invoice.currency} {row.balance}
-                    </span>
-                    <span
-                      role="cell"
-                      className={`registrar-payment-status ${row.status}`}
-                    >
-                      {row.status}
-                    </span>
-                    <div className="registrar-payment-record-fields" role="cell">
-                      <input
-                        className="registrar-payment-amount-input"
-                        type="number"
-                        min="0"
-                        max={row.balance}
-                        value={
-                          paymentAmountDrafts[row.invoice.id] ??
-                          String(row.balance)
-                        }
-                        disabled={
-                          row.balance <= 0 ||
-                          row.invoice.status === "paid" ||
-                          isAnyActionPending
-                        }
-                        aria-label={`Payment amount for ${row.invoice.id}`}
-                        onChange={event =>
-                          setPaymentAmountDrafts(current => ({
-                            ...current,
-                            [row.invoice.id]: event.target.value,
-                          }))
-                        }
-                      />
-                      <select
-                        value={paymentMethodDrafts[row.invoice.id] ?? "manual"}
-                        disabled={
-                          row.balance <= 0 ||
-                          row.invoice.status === "paid" ||
-                          isAnyActionPending
-                        }
-                        aria-label={`Payment method for ${row.invoice.id}`}
-                        onChange={event =>
-                          setPaymentMethodDrafts(current => ({
-                            ...current,
-                            [row.invoice.id]: event.target
-                              .value as Payment["method"],
-                          }))
-                        }
-                      >
-                        {paymentMethods.map(method => (
-                          <option key={method} value={method}>
-                            {method.replace("_", " ")}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        value={paymentReferenceDrafts[row.invoice.id] ?? ""}
-                        disabled={
-                          row.balance <= 0 ||
-                          row.invoice.status === "paid" ||
-                          isAnyActionPending
-                        }
-                        aria-label={`Payment reference for ${row.invoice.id}`}
-                        placeholder="Reference"
-                        onChange={event =>
-                          setPaymentReferenceDrafts(current => ({
-                            ...current,
-                            [row.invoice.id]: event.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      disabled={
-                        row.balance <= 0 ||
-                        row.invoice.status === "paid" ||
-                        isAnyActionPending
-                      }
-                      onClick={() =>
-                        recordInvoicePayment(row.invoice.id, row.balance)
-                      }
-                    >
-                      {isActionPending(`payment.record:${row.invoice.id}`)
-                        ? "Recording..."
-                        : row.balance <= 0 || row.invoice.status === "paid"
-                          ? "Settled"
-                          : "Record payment"}
-                    </button>
-                  </article>
-                ))}
-                {filteredPaymentRows.length === 0 ? (
-                  <div className="registrar-payment-empty">
-                    <CreditCard size={18} />
-                    <strong>No invoices match this view</strong>
-                    <small>Clear the search or switch the status filter.</small>
-                  </div>
-                ) : null}
-              </div>
-            </section>
+                <option value="all">All statuses</option>
+                <option value="open">Open balance</option>
+                <option value="paid">Paid</option>
+                <option value="overdue">Overdue</option>
+              </select>
+            </label>
           </div>
+        }
+        main={
+          <DataTableCard
+            title="Invoices"
+            subtitle={`${filteredRows.length} invoice(s)`}
+            className="registrar-record-card registrar-payments-record-card"
+          >
+            <div
+              className="registrar-record-list registrar-payments-record-list"
+              data-testid="registrar-payments-list"
+            >
+              {filteredRows.map(row => (
+                <article
+                  key={row.invoice.id}
+                  className="registrar-record-row registrar-payment-record"
+                  data-invoice-id={row.invoice.id}
+                >
+                  <div className="registrar-record-primary">
+                    <strong>{row.user?.name ?? row.invoice.studentId}</strong>
+                    <span>
+                      {row.branch?.name ?? "No branch"} · {row.invoice.id}
+                    </span>
+                  </div>
+                  <dl className="registrar-record-facts">
+                    <div>
+                      <dt>Course</dt>
+                      <dd>{row.course?.title ?? "Course pending"}</dd>
+                    </div>
+                    <div>
+                      <dt>Due</dt>
+                      <dd>{formatDate(row.invoice.dueAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Balance</dt>
+                      <dd>
+                        {row.invoice.currency} {row.balance}
+                      </dd>
+                    </div>
+                  </dl>
+                  <StatusBadge tone={statusTone(row.status)}>
+                    {humanize(row.status)}
+                  </StatusBadge>
+                  <Link
+                    className="platform-row-link"
+                    href={`/app/registrar/payments/${row.invoice.id}`}
+                  >
+                    {row.balance > 0 ? "Record" : "View"}
+                  </Link>
+                </article>
+              ))}
+              {!filteredRows.length ? (
+                <div className="platform-empty-state">
+                  <strong>No invoices match this view</strong>
+                  <span>Clear the search or choose another status.</span>
+                </div>
+              ) : null}
+            </div>
+          </DataTableCard>
         }
       />
     </PlatformShell>

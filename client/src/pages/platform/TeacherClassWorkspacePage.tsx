@@ -3,11 +3,18 @@ import {
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
+  CircleSlash,
+  CircleX,
+  Clock3,
   FileText,
   Users,
 } from "lucide-react";
 import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
+import {
+  TeacherClassNavigation,
+  type TeacherClassSection,
+} from "@/components/platform/TeacherClassNavigation";
 import { WorkspaceLayout } from "@/components/platform/PlatformLayouts";
 import {
   DataTableCard,
@@ -83,11 +90,11 @@ const attendanceStatusLabels: Record<AttendanceStatus, string> = {
   excused: "Excused",
 };
 
-const attendanceStatusShortLabels: Record<AttendanceStatus, string> = {
-  present: "P",
-  late: "L",
-  absent: "A",
-  excused: "E",
+const attendanceStatusIcons: Record<AttendanceStatus, typeof CheckCircle2> = {
+  present: CheckCircle2,
+  late: Clock3,
+  absent: CircleX,
+  excused: CircleSlash,
 };
 
 function studentTone(
@@ -230,21 +237,10 @@ export default function TeacherClassWorkspacePage({
   const currentClass = classGroup;
 
   const nav = (
-    <div
-      className="portal-simple-tabs teacher-class-tabs"
-      aria-label="Class sections"
-    >
-      <Link href={`/app/teacher/classes/${currentClass.id}`}>Overview</Link>
-      {Object.entries(viewMeta).map(([key, item]) => (
-        <Link
-          key={key}
-          className={key === view ? "active" : ""}
-          href={`/app/teacher/classes/${currentClass.id}/${key}`}
-        >
-          {item.title}
-        </Link>
-      ))}
-    </div>
+    <TeacherClassNavigation
+      classId={currentClass.id}
+      active={view as TeacherClassSection}
+    />
   );
 
   const toggleResourcePublish = async (resourceId: string) => {
@@ -294,47 +290,44 @@ export default function TeacherClassWorkspacePage({
         <DataTableCard
           title="Class sessions"
           subtitle={`${sessions.length} sessions`}
+          className="teacher-class-record-card"
         >
-          <table className="teacher-class-workspace-table">
-            <thead>
-              <tr>
-                <th>Session</th>
-                <th>Starts</th>
-                <th>Ends</th>
-                <th>Status</th>
-                <th>Attendance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessions.length ? (
-                sessions.map(session => (
-                  <tr key={session.id}>
-                    <td>
-                      <strong>{session.title}</strong>
-                      <small>{room?.name ?? "Room not set"}</small>
-                    </td>
-                    <td>{formatDateTime(session.startsAt)}</td>
-                    <td>{formatDateTime(session.endsAt)}</td>
-                    <td>
-                      <StatusBadge tone={statusTone(session.status)}>
-                        {session.status}
-                      </StatusBadge>
-                    </td>
-                    <td>{session.attendanceSaved ? "Saved" : "Needs check"}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5}>
-                    <strong>No sessions yet</strong>
-                    <small>
-                      Class sessions will appear here when scheduled.
-                    </small>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          {sessions.length ? (
+            <div className="teacher-class-record-list">
+              {sessions.map(session => (
+                <article key={session.id}>
+                  <div className="teacher-class-record-copy">
+                    <span>{room?.name ?? "Room not set"}</span>
+                    <strong>{session.title}</strong>
+                  </div>
+                  <dl className="teacher-class-record-facts">
+                    <div>
+                      <dt>Starts</dt>
+                      <dd>{formatDateTime(session.startsAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Ends</dt>
+                      <dd>{formatDateTime(session.endsAt)}</dd>
+                    </div>
+                    <div>
+                      <dt>Attendance</dt>
+                      <dd>{session.attendanceSaved ? "Saved" : "To check"}</dd>
+                    </div>
+                  </dl>
+                  <div className="teacher-class-record-actions">
+                    <StatusBadge tone={statusTone(session.status)}>
+                      {session.status}
+                    </StatusBadge>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="platform-empty-state">
+              <strong>No sessions yet</strong>
+              <span>Class sessions will appear here when scheduled.</span>
+            </div>
+          )}
         </DataTableCard>
       );
     }
@@ -342,47 +335,26 @@ export default function TeacherClassWorkspacePage({
     if (view === "attendance") {
       return (
         <div className="portal-simple-stack">
-          <section className="platform-workflow-card teacher-class-attendance-panel">
-            <div className="platform-card-title compact">
+          <section
+            className="teacher-attendance-workspace"
+            data-testid="teacher-attendance-workspace"
+          >
+            <div className="teacher-attendance-workspace-header">
               <div>
                 <span>
                   {activeSession
                     ? formatDateTime(activeSession.startsAt)
-                    : "No session"}
+                    : "No session selected"}
                 </span>
-                <strong>Take attendance</strong>
+                <h2>Take attendance</h2>
+                <p>{currentClass.name}</p>
               </div>
-            </div>
-            <div className="platform-attendance-control-grid">
-              <label>
-                Class
-                <select value={currentClass.id} disabled>
-                  <option value={currentClass.id}>{currentClass.name}</option>
-                </select>
-              </label>
-              <label>
-                Learners
-                <select value={currentClass.studentIds[0] ?? ""} disabled>
-                  {currentClass.studentIds.map(studentId => {
-                    const student = state.students.find(
-                      item => item.id === studentId
-                    );
-                    const user = state.users.find(
-                      item => item.id === student?.userId
-                    );
-                    return (
-                      <option key={studentId} value={studentId}>
-                        {user?.name ?? "Student"}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-              <label>
-                Session
+              <label className="teacher-attendance-session-select">
+                <span>Session</span>
                 <select
                   value={activeSession?.id ?? ""}
                   onChange={event => setSelectedSessionId(event.target.value)}
+                  data-testid="teacher-attendance-session"
                 >
                   {sessions.map(session => (
                     <option key={session.id} value={session.id}>
@@ -392,7 +364,7 @@ export default function TeacherClassWorkspacePage({
                 </select>
               </label>
             </div>
-            <div className="platform-attendance-grid">
+            <div className="teacher-attendance-roster" role="list">
               {currentClass.studentIds.map(studentId => {
                 const student = state.students.find(
                   item => item.id === studentId
@@ -402,14 +374,27 @@ export default function TeacherClassWorkspacePage({
                 );
                 const status = attendanceStatuses[studentId] ?? "present";
                 return (
-                  <article key={studentId}>
-                    <div>
-                      <strong>{user?.name ?? "Student"}</strong>
-                      <span>
-                        {student?.currentLevel ?? course?.title ?? "Learner"}
+                  <article
+                    key={studentId}
+                    role="listitem"
+                    className="teacher-attendance-row"
+                  >
+                    <div className="teacher-attendance-identity">
+                      <span aria-hidden="true">
+                        {(user?.name ?? "Student").slice(0, 1)}
                       </span>
+                      <div>
+                        <strong>{user?.name ?? "Student"}</strong>
+                        <small>
+                          {student?.currentLevel ?? course?.title ?? "Learner"}
+                        </small>
+                      </div>
                     </div>
-                    <div>
+                    <div
+                      className="teacher-attendance-status-group"
+                      role="group"
+                      aria-label={`Attendance for ${user?.name ?? "student"}`}
+                    >
                       {(
                         [
                           "present",
@@ -417,28 +402,38 @@ export default function TeacherClassWorkspacePage({
                           "absent",
                           "excused",
                         ] as AttendanceStatus[]
-                      ).map(option => (
-                        <button
-                          key={option}
-                          type="button"
-                          title={attendanceStatusLabels[option]}
-                          aria-label={`Mark ${user?.name ?? "student"} ${attendanceStatusLabels[option]}`}
-                          className={status === option ? "active" : ""}
-                          onClick={() =>
-                            setAttendanceStatuses(previous => ({
-                              ...previous,
-                              [studentId]: option,
-                            }))
-                          }
-                        >
-                          <span aria-hidden="true">
-                            {attendanceStatusShortLabels[option]}
-                          </span>
-                          <strong>{attendanceStatusLabels[option]}</strong>
-                        </button>
-                      ))}
+                      ).map(option => {
+                        const Icon = attendanceStatusIcons[option];
+                        return (
+                          <button
+                            key={option}
+                            type="button"
+                            title={attendanceStatusLabels[option]}
+                            aria-label={`Mark ${user?.name ?? "student"} ${attendanceStatusLabels[option]}`}
+                            aria-pressed={status === option}
+                            data-status={option}
+                            data-testid={`teacher-attendance-status-${studentId}-${option}`}
+                            className={status === option ? "active" : ""}
+                            onClick={() =>
+                              setAttendanceStatuses(previous => ({
+                                ...previous,
+                                [studentId]: option,
+                              }))
+                            }
+                          >
+                            <Icon size={15} aria-hidden="true" />
+                            <span className="sr-only">
+                              {attendanceStatusLabels[option]}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <label className="teacher-attendance-note">
+                      <span className="sr-only">
+                        Note for {user?.name ?? "student"}
+                      </span>
                       <input
-                        className="platform-attendance-note-input"
                         aria-label={`${user?.name ?? "Student"} attendance note`}
                         value={attendanceNotes[studentId] ?? ""}
                         onChange={event =>
@@ -447,80 +442,83 @@ export default function TeacherClassWorkspacePage({
                             [studentId]: event.target.value,
                           }))
                         }
-                        placeholder="Note"
+                        placeholder="Add note"
                       />
-                    </div>
+                    </label>
                   </article>
                 );
               })}
             </div>
-            <button
-              type="button"
-              onClick={() => void saveAttendance()}
-              disabled={attendanceSaving || !activeSession}
-            >
-              {attendanceSaving ? "Saving..." : "Save attendance"}
-            </button>
+            <div className="teacher-attendance-save-bar">
+              <span>
+                {currentClass.studentIds.length} learner
+                {currentClass.studentIds.length === 1 ? "" : "s"} in this roster
+              </span>
+              <button
+                type="button"
+                className="platform-primary-button"
+                onClick={() => void saveAttendance()}
+                disabled={attendanceSaving || !activeSession}
+                data-testid="teacher-attendance-save"
+              >
+                <CheckCircle2 size={15} />
+                {attendanceSaving ? "Saving attendance" : "Save attendance"}
+              </button>
+            </div>
           </section>
 
           <DataTableCard
             title="Attendance records"
             subtitle={`${attendanceRecords.length} records`}
+            className="teacher-class-record-card"
           >
-            <table className="teacher-class-workspace-table">
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Session</th>
-                  <th>Status</th>
-                  <th>Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attendanceRecords.length ? (
-                  attendanceRecords.map(record => {
-                    const student = state.students.find(
-                      item => item.id === record.studentId
-                    );
-                    const user = state.users.find(
-                      item => item.id === student?.userId
-                    );
-                    const session = sessions.find(
-                      item => item.id === record.sessionId
-                    );
-                    return (
-                      <tr key={record.id}>
-                        <td>
-                          <strong>{user?.name ?? "Student"}</strong>
-                          <small>
-                            {student?.currentLevel ??
-                              course?.title ??
-                              "Learner"}
-                          </small>
-                        </td>
-                        <td>{session?.title ?? "Session"}</td>
-                        <td>
-                          <StatusBadge tone={attendanceTone(record.status)}>
-                            {record.status}
-                          </StatusBadge>
-                        </td>
-                        <td>{record.notes ?? "No note"}</td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={4}>
-                      <strong>No attendance records</strong>
-                      <small>
-                        Attendance records will appear after a class session is
-                        saved.
-                      </small>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            {attendanceRecords.length ? (
+              <div className="teacher-class-record-list">
+                {attendanceRecords.map(record => {
+                  const student = state.students.find(
+                    item => item.id === record.studentId
+                  );
+                  const user = state.users.find(
+                    item => item.id === student?.userId
+                  );
+                  const session = sessions.find(
+                    item => item.id === record.sessionId
+                  );
+                  return (
+                    <article key={record.id}>
+                      <div className="teacher-class-record-copy">
+                        <span>
+                          {student?.currentLevel ?? course?.title ?? "Learner"}
+                        </span>
+                        <strong>{user?.name ?? "Student"}</strong>
+                      </div>
+                      <dl className="teacher-class-record-facts">
+                        <div>
+                          <dt>Session</dt>
+                          <dd>{session?.title ?? "Session"}</dd>
+                        </div>
+                        <div>
+                          <dt>Note</dt>
+                          <dd>{record.notes ?? "No note"}</dd>
+                        </div>
+                      </dl>
+                      <div className="teacher-class-record-actions">
+                        <StatusBadge tone={attendanceTone(record.status)}>
+                          {record.status}
+                        </StatusBadge>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="platform-empty-state">
+                <strong>No attendance records</strong>
+                <span>
+                  Attendance records will appear after a class session is saved.
+                </span>
+              </div>
+            )}
           </DataTableCard>
         </div>
       );
@@ -531,60 +529,52 @@ export default function TeacherClassWorkspacePage({
         <DataTableCard
           title="Class students"
           subtitle={`${enrollments.length || currentClass.studentIds.length} learners`}
+          className="teacher-class-record-card"
         >
-          <table className="teacher-class-workspace-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Level</th>
-                <th>Status</th>
-                <th>Attendance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(enrollments.length
-                ? enrollments
-                : currentClass.studentIds.map(studentId => ({
-                    id: studentId,
-                    studentId,
-                  }))
-              ).map(item => {
-                const student = state.students.find(
-                  profile => profile.id === item.studentId
-                );
-                const user = state.users.find(
-                  profile => profile.id === student?.userId
-                );
-                const attendanceRate =
-                  "attendanceRate" in item ? item.attendanceRate : undefined;
-                return (
-                  <tr key={item.id}>
-                    <td>
-                      <strong>{user?.name ?? "Student"}</strong>
-                      <small>{user?.email ?? "Student profile"}</small>
-                    </td>
-                    <td>
-                      {student?.currentLevel ??
-                        course?.title ??
-                        "Course learner"}
-                    </td>
-                    <td>
-                      <StatusBadge
-                        tone={studentTone(student?.status ?? "active")}
-                      >
-                        {student?.status ?? "active"}
-                      </StatusBadge>
-                    </td>
-                    <td>
-                      {typeof attendanceRate === "number"
-                        ? `${attendanceRate}%`
-                        : "Not recorded"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="teacher-class-record-list">
+            {(enrollments.length
+              ? enrollments
+              : currentClass.studentIds.map(studentId => ({
+                  id: studentId,
+                  studentId,
+                }))
+            ).map(item => {
+              const student = state.students.find(
+                profile => profile.id === item.studentId
+              );
+              const user = state.users.find(
+                profile => profile.id === student?.userId
+              );
+              const attendanceRate =
+                "attendanceRate" in item ? item.attendanceRate : undefined;
+              return (
+                <article key={item.id}>
+                  <div className="teacher-class-record-copy">
+                    <span>{student?.currentLevel ?? "Course learner"}</span>
+                    <strong>{user?.name ?? "Student"}</strong>
+                    <p>{user?.email ?? "Student profile"}</p>
+                  </div>
+                  <dl className="teacher-class-record-facts">
+                    <div>
+                      <dt>Attendance</dt>
+                      <dd>
+                        {typeof attendanceRate === "number"
+                          ? `${attendanceRate}%`
+                          : "Not recorded"}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="teacher-class-record-actions">
+                    <StatusBadge
+                      tone={studentTone(student?.status ?? "active")}
+                    >
+                      {student?.status ?? "active"}
+                    </StatusBadge>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </DataTableCard>
       );
     }

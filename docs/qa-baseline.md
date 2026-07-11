@@ -2,10 +2,83 @@
 
 Nile Learn is currently in internal alpha stabilization. The protected portal QA baseline is:
 
-- Portal QA: 1,205 checks, 0 failures.
-- Checked at: `2026-07-08T16:06:57.597Z`.
+- Portal QA: 1,501 checks, 0 failures.
+- Checked at: `2026-07-11T21:22:31+03:00`.
 - Validation command: `scripts/verify.sh`.
 - QA summary artifact: `output/playwright/portal-qa-summary.json`.
+
+`docs/NILE_LEARN_MASTER_PLAN.md` defines the next architecture phases, and
+`docs/MODERNIZATION_EXECUTION_CONTRACT.md` defines how this baseline is
+protected during each slice.
+
+## Latest Preservation Evidence
+
+The accepted count is expanded after Nile Forms online, registered promotion,
+offline, and finite-migration routes were verified with the existing academic,
+delivery, attendance, linked-admissions, and assignment-publication regression
+suite:
+
+- Checked at: `2026-07-11T21:22:31+03:00`.
+- Validation command: `scripts/verify.sh`.
+- QA summary artifact: `output/playwright/portal-qa-summary.json`.
+- Result: 1,501 checks, 0 failures.
+- Supporting validation: TypeScript passed, 447 unit tests passed, and the
+  production build passed. The repository verification gate is recorded
+  separately after this evidence update.
+
+This evidence proves regression preservation for exact enrollment assignment,
+active delivery gates, registrar branch scope, attendance session state,
+branch-scoped class creation and updates, HOD-scoped course-run creation,
+room/capacity/schedule constraints, enrollment transfer and status transitions,
+atomic roster membership, class-session rescheduling and cancellation,
+attendance-history locks, learner notifications, and scoped audit projection in
+the compatibility state. It also proves exact attendance-exception submission,
+branch-scoped approval/rejection, atomic excused-status and attendance-rate
+updates, and role-scoped exception/audit projections. It does not prove a
+production durable-session activation, remote Supabase promotion, or normalized
+workflow persistence. Assignment creation now produces an exact course-run
+draft; assigned Teacher and scoped HOD or Super Admin actions can edit and
+publish it, only published or completed rows reach Student projections, terminal
+and submission guards preserve history, and publish/cancel/close transitions
+write learner notifications and scoped audit evidence. It does not prove a
+Moodle assignment sync or production normalized assignment persistence.
+Quiz creation now produces an exact course-run draft; question-set, future
+delivery-window, and active-class checks guard publication; student attempts
+are denied before publication; and cancellation or editing is locked after an
+attempt. Closed quizzes retain attempts and grades, while the Student view is
+read-only. This does not prove a Moodle quiz sync or production normalized quiz
+persistence.
+
+Assignment and manual-quiz reviews now finalize exact pending submissions and
+attempts once. Missing, malformed, out-of-scope, and already-finalized reviews
+are rejected before mutation. A successful review preserves the result,
+gradebook entry, learner notification, and scoped audit evidence; a manual quiz
+submission also alerts the assigned Teacher. Regrade and appeal history remain
+outside this baseline until a separate authority model is approved.
+
+## What This Baseline Proves
+
+- The accepted route matrix and portal workflows completed without a recorded
+  failure in the controlled alpha fixture.
+- Current TypeScript, unit, build, server, browser, and accessibility checks in
+  `scripts/verify.sh` agreed for that run.
+- The tested role routes, actions, labels, and responsive assertions matched the
+  current product contract.
+
+## What This Baseline Does Not Prove
+
+- Production-scale correctness or real legacy EMS parity.
+- A working live Moodle connector or correct provider reconciliation.
+- A completed legacy EMS migration, cutover, or balance reconciliation.
+- Durable sessions across instances and deployments.
+- Normalized Postgres authority, RLS coverage, concurrent-write safety, or
+  transaction rollback.
+- Atomic domain, audit, and outbox persistence.
+- Delivery through payment, email/SMS/WhatsApp, meeting, or media providers.
+- Security of credentials that were exposed outside the repository.
+
+These require separate phase-specific evidence. A green portal run must never
+be used to claim that an unimplemented provider or persistence boundary works.
 
 Admin governance is now separated across focused Simple UI routes:
 

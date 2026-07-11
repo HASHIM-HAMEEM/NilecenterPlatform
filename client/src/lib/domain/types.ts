@@ -24,11 +24,29 @@ export type StudentStatus =
   | "completed"
   | "cancelled";
 
-export type StudentEntrySource = "direct" | "lead" | "application" | "placement";
+export type StudentEntrySource =
+  | "direct"
+  | "lead"
+  | "application"
+  | "placement";
 
 export type AttendanceStatus = "present" | "late" | "absent" | "excused";
-export type PaymentStatus = "draft" | "issued" | "pending" | "paid" | "overdue" | "cancelled" | "refunded";
-export type CertificateStatus = "draft" | "pending_approval" | "approved" | "issued" | "rejected" | "revoked";
+export type AttendanceExceptionStatus = "pending" | "approved" | "rejected";
+export type PaymentStatus =
+  | "draft"
+  | "issued"
+  | "pending"
+  | "paid"
+  | "overdue"
+  | "cancelled"
+  | "refunded";
+export type CertificateStatus =
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "issued"
+  | "rejected"
+  | "revoked";
 export type LessonProgressStatus = "not_started" | "in_progress" | "completed";
 export type CalendarEventType =
   | "class_session"
@@ -189,6 +207,10 @@ export type ClassGroup = {
   roomId?: string;
   meetingLinkId?: string;
   studentIds: string[];
+  status: Extract<
+    EntityStatus,
+    "active" | "paused" | "completed" | "cancelled"
+  >;
 };
 
 export type StudentProfile = {
@@ -224,9 +246,18 @@ export type TeacherProfile = {
 
 export type StaffRole = Exclude<Role, "student">;
 
-export type StaffPermissionScope = "department" | "branch" | "admissions" | "operations" | "global";
+export type StaffPermissionScope =
+  | "department"
+  | "branch"
+  | "admissions"
+  | "operations"
+  | "global";
 
-export type StaffAvailabilityStatus = "available" | "limited" | "unavailable" | "not_applicable";
+export type StaffAvailabilityStatus =
+  | "available"
+  | "limited"
+  | "unavailable"
+  | "not_applicable";
 
 export type StaffProfile = {
   id: string;
@@ -317,7 +348,14 @@ export type QuestionBankItem = {
 
 export type QuizQuestionPreview = Pick<
   QuestionBankItem,
-  "id" | "courseRunId" | "prompt" | "type" | "difficulty" | "tags" | "choices" | "status"
+  | "id"
+  | "courseRunId"
+  | "prompt"
+  | "type"
+  | "difficulty"
+  | "tags"
+  | "choices"
+  | "status"
 > & {
   quizId: string;
 };
@@ -349,6 +387,7 @@ export type Grade = {
 export type LessonProgress = {
   id: string;
   studentId: string;
+  enrollmentId: string;
   lessonId: string;
   status: LessonProgressStatus;
   completedAt?: string;
@@ -377,6 +416,20 @@ export type ClassSession = {
   endsAt: string;
   status: EntityStatus;
   attendanceSaved: boolean;
+};
+
+export type AttendanceExceptionRequest = {
+  id: string;
+  attendanceRecordId: string;
+  studentId: string;
+  classGroupId: string;
+  sessionId: string;
+  reason: string;
+  status: AttendanceExceptionStatus;
+  submittedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewNote?: string;
 };
 
 export type TeacherAvailability = {
@@ -643,6 +696,8 @@ export type SupportTicket = {
   id: string;
   requesterId: string;
   subject: string;
+  details?: string;
+  category?: string;
   status: EntityStatus;
   priority: "low" | "normal" | "high" | "urgent";
   lastUpdatedAt: string;
@@ -672,10 +727,22 @@ export type ReportPreset = {
   createdAt: string;
 };
 
-export type IntegrationStatus = "not_configured" | "mock_mode" | "connected" | "error";
+export type IntegrationStatus =
+  | "not_configured"
+  | "mock_mode"
+  | "connected"
+  | "error";
 
 export type IntegrationConfig = {
-  id: "supabase" | "moodle" | "ems" | "email" | "whatsapp" | "meeting" | "payment" | "jotform";
+  id:
+    | "supabase"
+    | "moodle"
+    | "ems"
+    | "email"
+    | "whatsapp"
+    | "meeting"
+    | "payment"
+    | "jotform";
   label: string;
   status: IntegrationStatus;
   envVars: string[];
@@ -693,7 +760,10 @@ export type PlatformSettings = {
   updatedBy?: string;
 };
 
-export type PortalSettingsRole = "registrar" | "headofdepartment" | "branchadmin";
+export type PortalSettingsRole =
+  | "registrar"
+  | "headofdepartment"
+  | "branchadmin";
 
 export type ScopedPortalSettings = {
   role: PortalSettingsRole;
@@ -741,6 +811,7 @@ export type PlatformState = {
   rooms: Room[];
   meetingLinks: MeetingLink[];
   attendance: AttendanceRecord[];
+  attendanceExceptions: AttendanceExceptionRequest[];
   leads: Lead[];
   applications: Application[];
   placementTests: PlacementTestBooking[];

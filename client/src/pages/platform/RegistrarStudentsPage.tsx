@@ -15,6 +15,7 @@ import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
 import {
   DetailLayout,
+  FormFlowLayout,
   WorkspaceLayout,
 } from "@/components/platform/PlatformLayouts";
 import {
@@ -27,9 +28,11 @@ import type { StudentStatus } from "@/lib/domain/types";
 import { getDemoUser } from "@/lib/platformData";
 
 type RegistrarStudentsPageProps = {
-  view?: "list" | "detail";
+  view?: "list" | "detail" | "create";
   studentId?: string;
 };
+
+type StudentCreateStep = 1 | 2 | 3;
 
 type StudentDraft = {
   fullName: string;
@@ -75,6 +78,11 @@ export default function RegistrarStudentsPage({
 }: RegistrarStudentsPageProps) {
   const [version, setVersion] = useState(0);
   const [search, setSearch] = useState("");
+  const [createStep, setCreateStep] = useState<StudentCreateStep>(1);
+  const [createResult, setCreateResult] = useState<{
+    studentId?: string;
+    message: string;
+  } | null>(null);
   const [pendingAction, setPendingAction] = useState("");
   const [studentStatusDrafts, setStudentStatusDrafts] = useState<
     Record<string, StudentStatus>
@@ -99,6 +107,28 @@ export default function RegistrarStudentsPage({
   const actorId = getDemoUser("registrar").id;
   const refresh = () => setVersion(current => current + 1);
   const isAnyActionPending = Boolean(pendingAction);
+
+  const advanceCreateFlow = () => {
+    if (
+      createStep === 1 &&
+      (!studentDraft.fullName.trim() ||
+        !studentDraft.email.trim() ||
+        !studentDraft.phone.trim())
+    ) {
+      toast.error(
+        "Add the student's name, email, and phone before continuing."
+      );
+      return;
+    }
+    if (
+      createStep === 2 &&
+      (!selectedStudentCreateRun || !selectedStudentCreateClass)
+    ) {
+      toast.error("Choose a course run and class before continuing.");
+      return;
+    }
+    setCreateStep(step => Math.min(3, step + 1) as StudentCreateStep);
+  };
 
   const studentCreateCourseRuns = state.courseRuns.filter(
     run => run.branchId === studentDraft.branchId
@@ -237,7 +267,9 @@ export default function RegistrarStudentsPage({
     try {
       const response = await runPlatformWorkflowActionRequest(action);
       if (!response.data) {
-        throw new Error(response.error ?? "Registrar action returned no state.");
+        throw new Error(
+          response.error ?? "Registrar action returned no state."
+        );
       }
       platformStore.setState(response.data.state);
       refresh();
@@ -359,6 +391,12 @@ export default function RegistrarStudentsPage({
         guardianPhone: "",
         notes: "",
       }));
+      setCreateResult({
+        studentId: (result as { id?: string } | undefined)?.id,
+        message:
+          "The student is enrolled and ready for the next admissions step.",
+      });
+      setCreateStep(1);
     }
   };
 
@@ -384,279 +422,345 @@ export default function RegistrarStudentsPage({
     <section className="registrar-panel registrar-student-create-panel">
       <div className="registrar-panel-head">
         <div>
-          <span>Direct student creation</span>
-          <strong>Profile, enrollment, class, teacher, and portal</strong>
+          <span>Step {createStep} of 3</span>
+          <strong>
+            {createStep === 1
+              ? "Student details"
+              : createStep === 2
+                ? "Learning placement"
+                : "Family and review"}
+          </strong>
         </div>
-        <UserPlus size={18} />
+        <Link className="registrar-inline-close" href="/app/registrar/students">
+          Cancel
+        </Link>
       </div>
       <form className="registrar-student-create-form" onSubmit={createStudent}>
-        <label>
-          Full name
-          <input
-            value={studentDraft.fullName}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                fullName: event.target.value,
-              }))
-            }
-            placeholder="Student full name"
-          />
-        </label>
-        <label>
-          Email
-          <input
-            type="email"
-            value={studentDraft.email}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                email: event.target.value,
-              }))
-            }
-            placeholder="student@nilelearn.local"
-          />
-        </label>
-        <label>
-          Phone / WhatsApp
-          <input
-            value={studentDraft.phone}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                phone: event.target.value,
-              }))
-            }
-            placeholder="+20..."
-          />
-        </label>
-        <label>
-          Branch
-          <select
-            value={studentDraft.branchId}
-            onChange={event => {
-              const branchId = event.target.value;
-              const run =
-                state.courseRuns.find(item => item.branchId === branchId) ??
-                state.courseRuns[0];
-              const group =
-                state.classGroups.find(
-                  item =>
-                    item.courseRunId === run?.id &&
-                    item.studentIds.length < item.capacity
-                ) ?? undefined;
-              setStudentDraft(value => ({
-                ...value,
-                branchId,
-                courseRunId: run?.id ?? "",
-                classGroupId: group?.id ?? "",
-              }));
-            }}
-          >
-            {state.branches.map(branch => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Preferred language
-          <select
-            value={studentDraft.preferredLanguage}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                preferredLanguage: event.target.value,
-              }))
-            }
-          >
-            <option value="English">English</option>
-            <option value="Arabic">Arabic</option>
-            <option value="Turkish">Turkish</option>
-            <option value="Russian">Russian</option>
-          </select>
-        </label>
-        <label>
-          Subject / course interest
-          <input
-            value={studentDraft.courseInterest}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                courseInterest: event.target.value,
-              }))
-            }
-          />
-        </label>
-        <label>
-          Age group
-          <select
-            value={studentDraft.ageGroup}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                ageGroup: event.target.value,
-              }))
-            }
-          >
-            <option value="Adult">Adult</option>
-            <option value="Teen minor">Teen minor</option>
-            <option value="Child minor">Child minor</option>
-          </select>
-        </label>
-        <label>
-          Current level / placement
-          <input
-            value={studentDraft.currentLevel}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                currentLevel: event.target.value,
-              }))
-            }
-            placeholder="Arabic Level 3"
-          />
-        </label>
-        <label>
-          Course run
-          <select
-            value={selectedStudentCreateRun?.id ?? ""}
-            onChange={event => {
-              const runId = event.target.value;
-              const group =
-                state.classGroups.find(
-                  item =>
-                    item.courseRunId === runId &&
-                    item.studentIds.length < item.capacity
-                ) ?? undefined;
-              setStudentDraft(value => ({
-                ...value,
-                courseRunId: runId,
-                classGroupId: group?.id ?? "",
-              }));
-            }}
-          >
-            {studentCreateCourseRuns.length ? (
-              studentCreateCourseRuns.map(run => {
-                const course = state.courses.find(
-                  item => item.id === run.courseId
-                );
-                return (
-                  <option key={run.id} value={run.id}>
-                    {course?.title ?? run.courseId} · {run.term}
-                  </option>
-                );
-              })
-            ) : (
-              <option value="">No course runs in branch</option>
-            )}
-          </select>
-        </label>
-        <label>
-          Class / group
-          <select
-            value={selectedStudentCreateClass?.id ?? ""}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                classGroupId: event.target.value,
-              }))
-            }
-          >
-            {studentCreateClassGroups.length ? (
-              studentCreateClassGroups.map(group => (
-                <option key={group.id} value={group.id}>
-                  {group.name} · {group.studentIds.length}/{group.capacity}
-                </option>
-              ))
-            ) : (
-              <option value="">No class groups</option>
-            )}
-          </select>
-        </label>
-        <label>
-          Student status
-          <select
-            value={studentDraft.status}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                status: event.target.value as StudentDraft["status"],
-              }))
-            }
-          >
-            <option value="active">Active portal</option>
-            <option value="enrolled">Enrolled</option>
-            <option value="ready_to_enroll">Ready to enroll</option>
-            <option value="paused">Paused</option>
-          </select>
-        </label>
-        <label>
-          Guardian name
-          <input
-            value={studentDraft.guardianName}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                guardianName: event.target.value,
-              }))
-            }
-            placeholder="Required for minors"
-          />
-        </label>
-        <label>
-          Guardian phone
-          <input
-            value={studentDraft.guardianPhone}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                guardianPhone: event.target.value,
-              }))
-            }
-            placeholder="Required for minors"
-          />
-        </label>
-        <label className="wide">
-          Notes
-          <input
-            value={studentDraft.notes}
-            onChange={event =>
-              setStudentDraft(value => ({
-                ...value,
-                notes: event.target.value,
-              }))
-            }
-            placeholder="Placement, schedule, guardian, or class notes"
-          />
-        </label>
-        <div className="registrar-student-create-summary">
-          <span>
-            {selectedStudentCreateClass
-              ? `${Math.max(0, selectedStudentCreateClass.capacity - selectedStudentCreateClass.studentIds.length)} seats left`
-              : "No available class selected"}
-          </span>
-          <small>
-            {selectedStudentCreateClass?.schedule ??
-              "Choose a class group with an open seat"}{" "}
-            · teacher{" "}
-            {state.users.find(
-              user => user.id === selectedStudentCreateRun?.teacherId
-            )?.name ?? "pending"}
-          </small>
-        </div>
-        <button
-          type="submit"
-          disabled={
-            isAnyActionPending ||
-            !selectedStudentCreateRun ||
-            !selectedStudentCreateClass
-          }
+        <ol
+          className="registrar-create-stepper"
+          aria-label="Student creation steps"
         >
-          <UserPlus size={15} />
-          {pendingAction === "student.create" ? "Creating..." : "Create and enroll"}
-        </button>
+          {[
+            { id: 1 as StudentCreateStep, label: "Details" },
+            { id: 2 as StudentCreateStep, label: "Placement" },
+            { id: 3 as StudentCreateStep, label: "Review" },
+          ].map(({ id: step, label }) => (
+            <li
+              key={String(step)}
+              className={
+                step === createStep
+                  ? "active"
+                  : step < createStep
+                    ? "complete"
+                    : ""
+              }
+            >
+              <span>{step}</span>
+              {label}
+            </li>
+          ))}
+        </ol>
+        {createStep === 1 ? (
+          <>
+            <label>
+              Full name
+              <input
+                value={studentDraft.fullName}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    fullName: event.target.value,
+                  }))
+                }
+                placeholder="Student full name"
+              />
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                value={studentDraft.email}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    email: event.target.value,
+                  }))
+                }
+                placeholder="student@nilelearn.local"
+              />
+            </label>
+            <label>
+              Phone / WhatsApp
+              <input
+                value={studentDraft.phone}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    phone: event.target.value,
+                  }))
+                }
+                placeholder="+20..."
+              />
+            </label>
+            <label>
+              Branch
+              <select
+                value={studentDraft.branchId}
+                onChange={event => {
+                  const branchId = event.target.value;
+                  const run =
+                    state.courseRuns.find(item => item.branchId === branchId) ??
+                    state.courseRuns[0];
+                  const group =
+                    state.classGroups.find(
+                      item =>
+                        item.courseRunId === run?.id &&
+                        item.studentIds.length < item.capacity
+                    ) ?? undefined;
+                  setStudentDraft(value => ({
+                    ...value,
+                    branchId,
+                    courseRunId: run?.id ?? "",
+                    classGroupId: group?.id ?? "",
+                  }));
+                }}
+              >
+                {state.branches.map(branch => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Preferred language
+              <select
+                value={studentDraft.preferredLanguage}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    preferredLanguage: event.target.value,
+                  }))
+                }
+              >
+                <option value="English">English</option>
+                <option value="Arabic">Arabic</option>
+                <option value="Turkish">Turkish</option>
+                <option value="Russian">Russian</option>
+              </select>
+            </label>
+            <label>
+              Subject / course interest
+              <input
+                value={studentDraft.courseInterest}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    courseInterest: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label>
+              Age group
+              <select
+                value={studentDraft.ageGroup}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    ageGroup: event.target.value,
+                  }))
+                }
+              >
+                <option value="Adult">Adult</option>
+                <option value="Teen minor">Teen minor</option>
+                <option value="Child minor">Child minor</option>
+              </select>
+            </label>
+          </>
+        ) : null}
+        {createStep === 2 ? (
+          <>
+            <label>
+              Current level / placement
+              <input
+                value={studentDraft.currentLevel}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    currentLevel: event.target.value,
+                  }))
+                }
+                placeholder="Arabic Level 3"
+              />
+            </label>
+            <label>
+              Course run
+              <select
+                value={selectedStudentCreateRun?.id ?? ""}
+                onChange={event => {
+                  const runId = event.target.value;
+                  const group =
+                    state.classGroups.find(
+                      item =>
+                        item.courseRunId === runId &&
+                        item.studentIds.length < item.capacity
+                    ) ?? undefined;
+                  setStudentDraft(value => ({
+                    ...value,
+                    courseRunId: runId,
+                    classGroupId: group?.id ?? "",
+                  }));
+                }}
+              >
+                {studentCreateCourseRuns.length ? (
+                  studentCreateCourseRuns.map(run => {
+                    const course = state.courses.find(
+                      item => item.id === run.courseId
+                    );
+                    return (
+                      <option key={run.id} value={run.id}>
+                        {course?.title ?? run.courseId} · {run.term}
+                      </option>
+                    );
+                  })
+                ) : (
+                  <option value="">No course runs in branch</option>
+                )}
+              </select>
+            </label>
+            <label>
+              Class / group
+              <select
+                value={selectedStudentCreateClass?.id ?? ""}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    classGroupId: event.target.value,
+                  }))
+                }
+              >
+                {studentCreateClassGroups.length ? (
+                  studentCreateClassGroups.map(group => (
+                    <option key={group.id} value={group.id}>
+                      {group.name} · {group.studentIds.length}/{group.capacity}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No class groups</option>
+                )}
+              </select>
+            </label>
+            <label>
+              Student status
+              <select
+                value={studentDraft.status}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    status: event.target.value as StudentDraft["status"],
+                  }))
+                }
+              >
+                <option value="active">Active portal</option>
+                <option value="enrolled">Enrolled</option>
+                <option value="ready_to_enroll">Ready to enroll</option>
+                <option value="paused">Paused</option>
+              </select>
+            </label>
+          </>
+        ) : null}
+        {createStep === 3 ? (
+          <>
+            <label>
+              Guardian name
+              <input
+                value={studentDraft.guardianName}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    guardianName: event.target.value,
+                  }))
+                }
+                placeholder="Required for minors"
+              />
+            </label>
+            <label>
+              Guardian phone
+              <input
+                value={studentDraft.guardianPhone}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    guardianPhone: event.target.value,
+                  }))
+                }
+                placeholder="Required for minors"
+              />
+            </label>
+            <label className="wide">
+              Notes
+              <input
+                value={studentDraft.notes}
+                onChange={event =>
+                  setStudentDraft(value => ({
+                    ...value,
+                    notes: event.target.value,
+                  }))
+                }
+                placeholder="Placement, schedule, guardian, or class notes"
+              />
+            </label>
+            <div className="registrar-student-create-summary">
+              <span>
+                {selectedStudentCreateClass
+                  ? `${Math.max(0, selectedStudentCreateClass.capacity - selectedStudentCreateClass.studentIds.length)} seats left`
+                  : "No available class selected"}
+              </span>
+              <small>
+                {selectedStudentCreateClass?.schedule ??
+                  "Choose a class group with an open seat"}{" "}
+                · teacher{" "}
+                {state.users.find(
+                  user => user.id === selectedStudentCreateRun?.teacherId
+                )?.name ?? "pending"}
+              </small>
+            </div>
+          </>
+        ) : null}
+        <div className="registrar-student-flow-actions">
+          {createStep > 1 ? (
+            <button
+              type="button"
+              className="platform-secondary-button"
+              onClick={() =>
+                setCreateStep(step => (step - 1) as StudentCreateStep)
+              }
+            >
+              Back
+            </button>
+          ) : null}
+          {createStep < 3 ? (
+            <button type="button" onClick={advanceCreateFlow}>
+              Continue
+              <ArrowRight size={15} />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={
+                isAnyActionPending ||
+                !selectedStudentCreateRun ||
+                !selectedStudentCreateClass
+              }
+            >
+              <UserPlus size={15} />
+              {pendingAction === "student.create"
+                ? "Creating..."
+                : "Create and enroll"}
+            </button>
+          )}
+        </div>
       </form>
     </section>
   );
@@ -665,61 +769,96 @@ export default function RegistrarStudentsPage({
     <DataTableCard
       title="Student records"
       subtitle={`${studentRows.length} student(s)`}
-      className="portal-ia-table-card registrar-students-table"
+      className="registrar-record-card registrar-students-record-card"
     >
-      <div className="portal-ia-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>Branch</th>
-              <th>Course</th>
-              <th>Class</th>
-              <th>Status</th>
-              <th>Open</th>
-            </tr>
-          </thead>
-          <tbody>
-            {studentRows.map(({ student, user, branch, course, classGroup }) => (
-              <tr key={student.id}>
-                <td>
-                  <strong>{user?.name ?? student.id}</strong>
-                  <small>{user?.email ?? "No email"}</small>
-                </td>
-                <td>{branch?.name ?? "No branch"}</td>
-                <td>{course?.title ?? student.courseInterest ?? "No course"}</td>
-                <td>{classGroup?.name ?? "Class pending"}</td>
-                <td>
-                  <StatusBadge tone={statusTone(student.status)}>
-                    {humanize(student.status)}
-                  </StatusBadge>
-                </td>
-                <td>
-                  <Link
-                    className="platform-row-link"
-                    href={`/app/registrar/students/${student.id}`}
-                  >
-                    Details
-                    <ArrowRight size={13} />
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {!studentRows.length ? (
-              <tr>
-                <td colSpan={6}>
-                  <div className="platform-empty-state">
-                    <strong>No students found</strong>
-                    <span>Try a different search term.</span>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      <div
+        className="registrar-record-list registrar-students-record-list"
+        data-testid="registrar-students-list"
+      >
+        {studentRows.map(({ student, user, branch, course, classGroup }) => (
+          <article
+            key={student.id}
+            className="registrar-record-row registrar-student-record"
+            data-student-id={student.id}
+          >
+            <div className="registrar-record-primary">
+              <strong>{user?.name ?? student.id}</strong>
+              <span>{user?.email ?? "No email"}</span>
+            </div>
+            <dl className="registrar-record-facts">
+              <div>
+                <dt>Learning</dt>
+                <dd>
+                  {course?.title ?? student.courseInterest ?? "Course pending"}
+                </dd>
+              </div>
+              <div>
+                <dt>Class</dt>
+                <dd>{classGroup?.name ?? "Class pending"}</dd>
+              </div>
+              <div>
+                <dt>Branch</dt>
+                <dd>{branch?.name ?? "No branch"}</dd>
+              </div>
+            </dl>
+            <StatusBadge tone={statusTone(student.status)}>
+              {humanize(student.status)}
+            </StatusBadge>
+            <Link
+              className="platform-row-link"
+              href={`/app/registrar/students/${student.id}`}
+            >
+              Open
+              <ArrowRight size={13} />
+            </Link>
+          </article>
+        ))}
+        {!studentRows.length ? (
+          <div className="platform-empty-state">
+            <strong>No students found</strong>
+            <span>Try a different search term.</span>
+          </div>
+        ) : null}
       </div>
     </DataTableCard>
   );
+
+  if (view === "create") {
+    const studentHref = createResult?.studentId
+      ? `/app/registrar/students/${createResult.studentId}`
+      : "/app/registrar/students";
+
+    return (
+      <PlatformShell role="registrar" title="New student">
+        <FormFlowLayout
+          className="portal-ia-page registrar-workspace registrar-students-page registrar-create-page registrar-student-create-page"
+          title="New student"
+          description="Create and enroll one student through a short guided flow."
+          context="Registrar"
+          actions={
+            createResult ? (
+              <Link className="platform-primary-button" href={studentHref}>
+                {createResult.studentId ? "Open student" : "View students"}
+              </Link>
+            ) : undefined
+          }
+          main={
+            createResult ? (
+              <section className="registrar-create-success" role="status">
+                <CheckCircle2 size={20} />
+                <div>
+                  <strong>Student enrolled</strong>
+                  <span>{createResult.message}</span>
+                </div>
+              </section>
+            ) : (
+              createForm
+            )
+          }
+        />
+      </PlatformShell>
+    );
+  }
 
   if (view === "detail") {
     const detailMain = selectedStudent ? (
@@ -828,7 +967,9 @@ export default function RegistrarStudentsPage({
           <div className="registrar-student-fact-list">
             <article>
               <span>Placement</span>
-              <strong>{selectedStudentPlacement?.status ?? "Not booked"}</strong>
+              <strong>
+                {selectedStudentPlacement?.status ?? "Not booked"}
+              </strong>
               <small>
                 {selectedStudentPlacement?.preferredDate ??
                   "No placement booking linked"}
@@ -907,7 +1048,9 @@ export default function RegistrarStudentsPage({
                           enrollment.classGroupId ??
                           "Class pending"}{" "}
                         ·{" "}
-                        {teacher?.name ?? enrollment.teacherId ?? "Teacher pending"}{" "}
+                        {teacher?.name ??
+                          enrollment.teacherId ??
+                          "Teacher pending"}{" "}
                         · {classGroup?.schedule ?? "Schedule pending"}
                       </small>
                     </div>
@@ -1009,7 +1152,9 @@ export default function RegistrarStudentsPage({
                 </article>
                 <article>
                   <span>Guardian</span>
-                  <strong>{selectedStudent?.guardianName ?? "Not required"}</strong>
+                  <strong>
+                    {selectedStudent?.guardianName ?? "Not required"}
+                  </strong>
                   <small>
                     {selectedStudent?.guardianPhone ??
                       selectedStudentUser?.phone ??
@@ -1027,16 +1172,16 @@ export default function RegistrarStudentsPage({
   return (
     <PlatformShell role="registrar" title="Students">
       <WorkspaceLayout
-        className="portal-ia-page registrar-workspace registrar-students-page"
+        className="portal-ia-page registrar-workspace registrar-students-page registrar-students-list-page"
         title="Students"
-        description="Create direct students and open focused student records."
+        description="Find a student and open their record."
         actions={
           <Link
-            className="platform-secondary-button"
-            href="/app/registrar/enrollments"
+            className="platform-primary-button"
+            href="/app/registrar/students/new"
           >
-            <ArrowRight size={15} />
-            Enrollment handoff
+            <UserPlus size={15} />
+            New student
           </Link>
         }
         toolbar={
@@ -1052,35 +1197,7 @@ export default function RegistrarStudentsPage({
             </label>
           </div>
         }
-        main={
-          <div className="registrar-students-split">
-            {createForm}
-            {studentList}
-          </div>
-        }
-        side={
-          <section className="registrar-panel">
-            <div className="registrar-panel-head compact">
-              <div>
-                <span>One job on this page</span>
-                <strong>Direct student creation</strong>
-              </div>
-              <UserPlus size={16} />
-            </div>
-            <div className="registrar-student-fact-list">
-              <article>
-                <span>Students</span>
-                <strong>{state.students.length}</strong>
-                <small>Student profiles in the local platform state.</small>
-              </article>
-              <article>
-                <span>Open classes</span>
-                <strong>{studentCreateAvailableClassGroups.length}</strong>
-                <small>Available for the selected branch and run.</small>
-              </article>
-            </div>
-          </section>
-        }
+        main={studentList}
       />
     </PlatformShell>
   );

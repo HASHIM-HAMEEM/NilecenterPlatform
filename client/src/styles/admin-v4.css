@@ -1,0 +1,333 @@
+/*
+  Super Admin V4
+  Governance remains capable without looking like a developer console. Keep the
+  command center concise, and make every secondary admin route a readable list,
+  detail, form, report, or settings surface.
+*/
+
+.platform-shell[data-role="superadmin"] .platform-page-header {
+  gap: 18px;
+}
+
+.platform-shell[data-role="superadmin"] .platform-page-header h1 {
+  max-width: 24ch;
+  font-size: 30px;
+  font-weight: 760;
+  line-height: 1.12;
+}
+
+.platform-shell[data-role="superadmin"] .platform-page-header p {
+  max-width: 62ch;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* The command center starts with one coherent status rail. */
+.platform-shell[data-role="superadmin"] .platform-admin-metric-grid {
+  overflow: hidden;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 12px 30px rgba(26, 26, 26, 0.025);
+}
+
+.platform-shell[data-role="superadmin"]
+  .platform-admin-metric-grid
+  .platform-metric {
+  min-height: 104px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 18px 20px;
+}
+
+.platform-shell[data-role="superadmin"]
+  .platform-admin-metric-grid
+  .platform-metric
+  + .platform-metric {
+  border-inline-start: 1px solid var(--border);
+}
+
+.platform-shell[data-role="superadmin"]
+  .platform-admin-metric-grid
+  .platform-metric
+  > div {
+  gap: 7px;
+}
+
+.platform-shell[data-role="superadmin"]
+  .platform-admin-metric-grid
+  .platform-metric
+  span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.platform-shell[data-role="superadmin"]
+  .platform-admin-metric-grid
+  .platform-metric
+  strong {
+  font-size: 27px;
+  font-weight: 760;
+  line-height: 1;
+}
+
+.platform-shell[data-role="superadmin"] .platform-v2-admin-main {
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.72fr);
+  gap: 18px;
+}
+
+.platform-shell[data-role="superadmin"] .platform-v2-admin-main > *,
+.platform-shell[data-role="superadmin"] .platform-v2-admin-lower > * {
+  overflow: hidden;
+  border-radius: 8px;
+  box-shadow: 0 14px 36px rgba(26, 26, 26, 0.03);
+}
+
+.platform-shell[data-role="superadmin"] .platform-v2-admin-map {
+  border-inline-start: 3px solid var(--role-color);
+}
+
+.platform-shell[data-role="superadmin"]
+  .platform-v2-admin-map
+  .platform-workspace-header,
+.platform-shell[data-role="superadmin"]
+  .platform-v2-attention-panel
+  .platform-workspace-header,
+.platform-shell[data-role="superadmin"]
+  .platform-v2-admin-lower
+  .platform-workspace-header {
+  min-height: auto;
+  padding: 20px 22px 0;
+}
+
+.platform-shell[data-role="superadmin"] .platform-v2-workflow-tiles {
+  gap: 0;
+  padding: 12px 22px 20px;
+}
+
+.platform-shell[data-role="superadmin"] .platform-v2-workflow-tile {
+  min-height: 94px;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  box-shadow: none;
+  padding-inline: 0;
+}
+
+.platform-shell[data-role="superadmin"]
+  .platform-v2-workflow-tile:nth-child(-n + 2) {
+  border-top: 0;
+}
+
+.platform-shell[data-role="superadmin"] .platform-v2-workflow-tile:hover {
+  background: color-mix(in srgb, var(--role-tint) 24%, var(--card));
+}
+
+.platform-shell[data-role="superadmin"] .platform-v2-attention-list {
+  gap: 0;
+  padding: 12px 22px 20px;
+}
+
+.platform-shell[data-role="superadmin"] .platform-v2-attention-list > * {
+  border-radius: 0;
+  border-inline: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  box-shadow: none;
+}
+
+.platform-shell[data-role="superadmin"]
+  .platform-v2-attention-list
+  > *:first-child {
+  border-top: 0;
+}
+
+.platform-shell[data-role="superadmin"] .platform-v2-attention-list a {
+  min-height: 68px;
+  padding-inline: 0;
+}
+
+/* Make governance pages feel like one dependable workspace family. */
+:is(
+  .platform-shell[data-role="superadmin"] .admin-users-simple-page,
+  .platform-shell[data-role="superadmin"] .admin-users-create-page,
+  .platform-shell[data-role="superadmin"] .admin-user-detail-page,
+  .platform-shell[data-role="superadmin"] .admin-roles-simple-page,
+  .platform-shell[data-role="superadmin"] .admin-permissions-page,
+  .platform-shell[data-role="superadmin"] .admin-directory-page,
+  .platform-shell[data-role="superadmin"] .admin-branches-page,
+  .platform-shell[data-role="superadmin"] .admin-settings-page,
+  .platform-shell[data-role="superadmin"] .admin-integrations-page,
+  .platform-shell[data-role="superadmin"] .admin-audit-page,
+  .platform-shell[data-role="superadmin"] .admin-system-health-page,
+  .platform-shell[data-role="superadmin"] .admin-ia-page
+) {
+  width: 100%;
+  max-width: 1560px;
+  margin-inline: auto;
+}
+
+:is(
+  .platform-shell[data-role="superadmin"] .admin-users-simple-card,
+  .platform-shell[data-role="superadmin"] .admin-access-panel,
+  .platform-shell[data-role="superadmin"] .admin-permissions-workspace,
+  .platform-shell[data-role="superadmin"] .admin-ia-table-card,
+  .platform-shell[data-role="superadmin"] .admin-reports-record-card,
+  .platform-shell[data-role="superadmin"] .admin-user-detail-section,
+  .platform-shell[data-role="superadmin"] .admin-user-detail-activity,
+  .platform-shell[data-role="superadmin"]
+    .admin-settings-page
+    .platform-table-card,
+  .platform-shell[data-role="superadmin"]
+    .admin-integrations-page
+    .platform-table-card,
+  .platform-shell[data-role="superadmin"]
+    .admin-audit-page
+    .platform-table-card,
+  .platform-shell[data-role="superadmin"]
+    .admin-directory-page
+    .platform-table-card,
+  .platform-shell[data-role="superadmin"]
+    .admin-branches-page
+    .platform-table-card,
+  .platform-shell[data-role="superadmin"]
+    .admin-system-health-page
+    .platform-table-card
+) {
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(26, 26, 26, 0.03);
+}
+
+.platform-shell[data-role="superadmin"] .admin-record-list > article {
+  border-inline-start: 3px solid transparent;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.platform-shell[data-role="superadmin"] .admin-record-list > article:hover {
+  border-inline-start-color: var(--role-color);
+  background: color-mix(in srgb, var(--role-tint) 24%, var(--card));
+}
+
+.platform-shell[data-role="superadmin"] .admin-compact-toolbar,
+.platform-shell[data-role="superadmin"] .admin-ia-toolbar,
+.platform-shell[data-role="superadmin"] .admin-users-simple-toolbar {
+  min-height: 50px;
+  border-color: color-mix(in srgb, var(--border) 88%, var(--foreground));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 96%, var(--muted));
+  box-shadow: none;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-tabs {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 50px;
+  padding: 4px;
+  border-color: color-mix(in srgb, var(--border) 88%, var(--foreground));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 96%, var(--muted));
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-tabs a {
+  min-height: 40px;
+  border-radius: 999px;
+  padding-inline: 15px;
+  font-weight: 760;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-tabs a.active {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+@media (min-width: 1600px) {
+  :is(
+    .platform-shell[data-role="superadmin"] .admin-users-simple-page,
+    .platform-shell[data-role="superadmin"] .admin-users-create-page,
+    .platform-shell[data-role="superadmin"] .admin-user-detail-page,
+    .platform-shell[data-role="superadmin"] .admin-roles-simple-page,
+    .platform-shell[data-role="superadmin"] .admin-permissions-page,
+    .platform-shell[data-role="superadmin"] .admin-directory-page,
+    .platform-shell[data-role="superadmin"] .admin-branches-page,
+    .platform-shell[data-role="superadmin"] .admin-settings-page,
+    .platform-shell[data-role="superadmin"] .admin-integrations-page,
+    .platform-shell[data-role="superadmin"] .admin-audit-page,
+    .platform-shell[data-role="superadmin"] .admin-system-health-page,
+    .platform-shell[data-role="superadmin"] .admin-ia-page
+  ) {
+    max-width: 1640px;
+  }
+}
+
+@media (max-width: 980px) {
+  .platform-shell[data-role="superadmin"] .platform-v2-admin-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .platform-shell[data-role="superadmin"] .platform-page-header h1 {
+    font-size: 26px;
+  }
+
+  .platform-shell[data-role="superadmin"] .platform-admin-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .platform-shell[data-role="superadmin"]
+    .platform-admin-metric-grid
+    .platform-metric {
+    min-height: 94px;
+    padding: 15px;
+  }
+
+  .platform-shell[data-role="superadmin"]
+    .platform-admin-metric-grid
+    .platform-metric:nth-child(odd) {
+    border-inline-start: 0;
+  }
+
+  .platform-shell[data-role="superadmin"]
+    .platform-admin-metric-grid
+    .platform-metric:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+
+  .platform-shell[data-role="superadmin"] .platform-v2-workflow-tiles,
+  .platform-shell[data-role="superadmin"] .platform-v2-attention-list {
+    padding-inline: 18px;
+  }
+
+  .platform-shell[data-role="superadmin"] .platform-v2-workflow-tile {
+    min-height: 76px;
+  }
+
+  .platform-shell[data-role="superadmin"]
+    .platform-v2-workflow-tile:nth-child(2) {
+    border-top: 1px solid var(--border);
+  }
+
+  .platform-shell[data-role="superadmin"] .admin-user-detail-tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .platform-shell[data-role="superadmin"] *,
+  .platform-shell[data-role="superadmin"] *::before,
+  .platform-shell[data-role="superadmin"] *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -36,19 +36,48 @@ function BaseLayout({
   className = "",
 }: BaseLayoutProps) {
   return (
-    <div className={`platform-v2-layout platform-v2-${archetype}-layout ${className}`.trim()} data-layout={archetype}>
-      <PlatformPageHeader compact title={title} description={description} context={context} actions={actions} />
+    <div
+      className={`platform-v2-layout platform-v2-${archetype}-layout ${className}`.trim()}
+      data-layout={archetype}
+    >
+      <PlatformPageHeader
+        compact
+        title={title}
+        description={description}
+        context={context}
+        actions={actions}
+      />
       {toolbar ? (
-        <motion.div className="platform-v2-layout-toolbar" initial="hidden" animate="visible" custom={0.08} variants={platformReveal}>
+        <motion.div
+          className="platform-v2-layout-toolbar"
+          initial="hidden"
+          animate="visible"
+          custom={0.08}
+          variants={platformReveal}
+        >
           {toolbar}
         </motion.div>
       ) : null}
-      <motion.div className="platform-v2-layout-grid" initial="hidden" animate="visible" custom={0.14} variants={platformReveal}>
-        <main className="platform-v2-layout-main">{main}</main>
-        {side ? <aside className="platform-v2-layout-side">{side}</aside> : null}
+      <motion.div
+        className="platform-v2-layout-grid"
+        initial="hidden"
+        animate="visible"
+        custom={0.14}
+        variants={platformReveal}
+      >
+        <div className="platform-v2-layout-main">{main}</div>
+        {side ? (
+          <aside className="platform-v2-layout-side">{side}</aside>
+        ) : null}
       </motion.div>
       {footer ? (
-        <motion.div className="platform-v2-layout-footer" initial="hidden" animate="visible" custom={0.2} variants={platformReveal}>
+        <motion.div
+          className="platform-v2-layout-footer"
+          initial="hidden"
+          animate="visible"
+          custom={0.2}
+          variants={platformReveal}
+        >
           {footer}
         </motion.div>
       ) : null}
@@ -81,4 +110,3 @@ export function ReportLayout(props: PlatformLayoutProps) {
 export function SettingsLayout(props: PlatformLayoutProps) {
   return <BaseLayout {...props} archetype="settings" />;
 }
-

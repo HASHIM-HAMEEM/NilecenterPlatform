@@ -10,7 +10,6 @@ import {
   CalendarDays,
   CheckCircle2,
   ClipboardList,
-  Clock,
   CreditCard,
   FileText,
   ListChecks,
@@ -27,12 +26,15 @@ import {
 import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
 import {
+  PortalInsight,
+  type InsightPoint,
+} from "@/components/platform/PortalInsights";
+import {
   PlatformPageHeader,
   PlatformWorkspaceHeader,
   platformReveal,
   StatCard,
   StatusBadge,
-  DataTableCard,
 } from "@/components/platform/PlatformPrimitives";
 import { platformStore } from "@/lib/domain/store";
 import {
@@ -58,75 +60,6 @@ function formatConnectionStatus(status: string) {
 }
 
 export default function RoleDashboard({ role }: { role: Role }) {
-  const dashboard = dashboardByRole[role];
-  const meta = roleMeta[role];
-  const primaryActionsByRole: Partial<
-    Record<Role, { label: string; href: string; Icon: LucideIcon }>
-  > = {
-    student: {
-      label: "Continue lesson",
-      href: "/app/student/courses/course_ar_l3/learn/lesson_ar_conditional",
-      Icon: BookOpen,
-    },
-    teacher: {
-      label: "Create session",
-      href: "/app/teacher/classes/class_ar_l3_a/sessions",
-      Icon: Presentation,
-    },
-    registrar: {
-      label: "Add lead",
-      href: "/app/registrar/leads",
-      Icon: Users,
-    },
-    branchadmin: {
-      label: "Resolve conflict",
-      href: "/app/branch/rooms",
-      Icon: Building2,
-    },
-  };
-  const primaryDashboardAction = primaryActionsByRole[role] ?? {
-    label: "Open workspace",
-    href: meta.defaultRoute,
-    Icon: Plus,
-  };
-  const reportActionLabel = role === "student" ? "My report" : "Reports";
-  const spotlightRoutes: Partial<Record<Role, string>> = {
-    student: "/app/student/courses/course_ar_l3/learn/lesson_ar_conditional",
-    teacher: "/app/teacher/classes/class_ar_l3_a/attendance",
-    registrar: "/app/registrar/placement-tests",
-    branchadmin: "/app/branch/rooms",
-  };
-  const spotlightHref =
-    spotlightRoutes[role] ??
-    meta.defaultRoute.replace("/dashboard", "/reports");
-  const actionRoutesByRole: Partial<Record<Role, Record<string, string>>> = {
-    student: {
-      "Join class": "/app/student/courses/course_ar_l3/live",
-      "Submit assignment": "/app/student/assignments/asg_ar_grammar",
-      "Message teacher": "/app/student/messages",
-      "View calendar": "/app/student/calendar",
-    },
-    teacher: {
-      "Create assignment": "/app/teacher/assignments",
-      "Upload material": "/app/teacher/classes/class_ar_l3_a/materials",
-      "Mark attendance": "/app/teacher/classes/class_ar_l3_a/attendance",
-      "Create quiz": "/app/teacher/quizzes",
-    },
-    registrar: {
-      "Add lead": "/app/registrar/leads",
-      "Book placement test": "/app/registrar/placement-tests",
-      "Register student": "/app/registrar/enrollments",
-      "Send message": "/app/registrar/messages",
-    },
-    branchadmin: {
-      "Add room": "/app/branch/rooms",
-      "View schedule": "/app/branch/classes",
-      "Contact student": "/app/branch/students",
-      "Resolve conflict": "/app/branch/rooms",
-    },
-  };
-  const quickActionRoutes = actionRoutesByRole[role] ?? {};
-
   if (role === "superadmin") {
     return <SuperAdminDashboard />;
   }
@@ -151,143 +84,7 @@ export default function RoleDashboard({ role }: { role: Role }) {
     return <StudentLearningDashboard />;
   }
 
-  return (
-    <PlatformShell role={role} title="Dashboard">
-      <PlatformPageHeader
-        compact
-        title={dashboard.title}
-        description={dashboard.subtitle}
-        actions={
-          <>
-            <Link
-              href={meta.defaultRoute.replace("/dashboard", "/reports")}
-              className="platform-secondary-button"
-            >
-              {reportActionLabel}
-            </Link>
-            <Link
-              href={primaryDashboardAction.href}
-              className="platform-primary-button"
-              style={{ background: meta.color }}
-            >
-              <primaryDashboardAction.Icon size={15} />
-              {primaryDashboardAction.label}
-            </Link>
-          </>
-        }
-      />
-
-      <motion.div
-        className="platform-metric-grid"
-        initial="hidden"
-        animate="visible"
-      >
-        {dashboard.stats.map((stat, index) => (
-          <StatCard
-            key={stat.label}
-            label={stat.label}
-            value={stat.value}
-            change={stat.change}
-            tone={stat.tone}
-            delay={0.05 + index * 0.045}
-          />
-        ))}
-      </motion.div>
-
-      <motion.div
-        className="platform-dashboard-grid"
-        initial="hidden"
-        animate="visible"
-        custom={0.14}
-        variants={dashboardReveal}
-      >
-        <article className="platform-spotlight">
-          <div className="platform-card-title">
-            <div>
-              <span>Next priority</span>
-              <strong>{dashboard.spotlight.title}</strong>
-            </div>
-            <Clock size={18} style={{ color: meta.color }} />
-          </div>
-          <p>{dashboard.spotlight.description}</p>
-          <div className="platform-progress-row">
-            <div>
-              <strong>Completion</strong>
-              <span>{dashboard.spotlight.progress}%</span>
-            </div>
-            <div>
-              <span
-                style={{
-                  width: `${dashboard.spotlight.progress}%`,
-                  background: meta.color,
-                }}
-              />
-            </div>
-          </div>
-          <Link
-            href={spotlightHref}
-            className="platform-primary-button"
-            style={{ background: meta.color }}
-          >
-            {dashboard.spotlight.action}
-            <ArrowRight size={15} />
-          </Link>
-        </article>
-
-        <article className="platform-panel">
-          <div className="platform-card-title">
-            <div>
-              <span>Role tools</span>
-              <strong>Quick actions</strong>
-            </div>
-          </div>
-          <div className="platform-action-list">
-            {dashboard.actions.map(action => (
-              <Link
-                key={action}
-                href={quickActionRoutes[action] ?? meta.defaultRoute}
-              >
-                <CheckCircle2 size={15} style={{ color: meta.color }} />
-                {action}
-              </Link>
-            ))}
-          </div>
-        </article>
-
-        <DataTableCard title="Today" subtitle="Live data" className="wide">
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Status</th>
-                <th>Owner</th>
-                <th>Due</th>
-                <th>Metric</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dashboard.records.map(record => (
-                <tr key={record.id}>
-                  <td>
-                    <strong>{record.title}</strong>
-                    <small>{record.subtitle}</small>
-                  </td>
-                  <td>
-                    <StatusBadge tone={record.tone ?? "teal"}>
-                      {record.status}
-                    </StatusBadge>
-                  </td>
-                  <td>{record.owner}</td>
-                  <td>{record.due}</td>
-                  <td>{record.metric}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </DataTableCard>
-      </motion.div>
-    </PlatformShell>
-  );
+  return null;
 }
 
 function StudentLearningDashboard() {
@@ -477,6 +274,7 @@ function StudentLearningDashboard() {
     },
   ];
 
+  const hasLessonProgress = studentLessonProgress.length > 0;
   const studentStats: Stat[] = [
     {
       label: "Active courses",
@@ -487,7 +285,9 @@ function StudentLearningDashboard() {
     {
       label: "Course progress",
       value: `${progressPercent}%`,
-      change: `${completedLessons}/${Math.max(courseLessons.length, 1)} lessons`,
+      change: hasLessonProgress
+        ? `${completedLessons}/${Math.max(courseLessons.length, 1)} lessons`
+        : "Lesson detail pending",
       tone: "green",
     },
     {
@@ -503,13 +303,32 @@ function StudentLearningDashboard() {
       tone: "purple",
     },
   ];
+  const studentInsightPoints: InsightPoint[] = hasLessonProgress
+    ? courseLessons.slice(0, 6).map((lesson, index) => {
+        const lessonProgress = studentLessonProgress.find(
+          progress => progress.lessonId === lesson.id
+        );
+        const value =
+          lessonProgress?.status === "completed"
+            ? 100
+            : lessonProgress?.status === "in_progress"
+              ? 60
+              : 0;
+        return { label: `Lesson ${index + 1}`, value };
+      })
+    : [
+        {
+          label: course?.title ?? "Current course",
+          value: progressPercent,
+        },
+      ];
 
   return (
     <PlatformShell role="student" title="Dashboard">
       <PlatformPageHeader
         compact
         title="My Learning Dashboard"
-        description="Continue the next class, learning task, and feedback loop."
+        description="Your next class, one lesson, and the work due soon."
         context={
           <>
             <span>{course?.title ?? "Arabic Level 3"}</span>
@@ -695,6 +514,27 @@ function StudentLearningDashboard() {
           </div>
         </aside>
       </motion.div>
+
+      <PortalInsight
+        eyebrow="Learning pace"
+        title="Learning momentum"
+        value={
+          hasLessonProgress
+            ? courseLessons.length
+              ? `${completedLessons}/${courseLessons.length}`
+              : "No lessons"
+            : `${progressPercent}%`
+        }
+        valueLabel={hasLessonProgress ? "lessons completed" : "course progress"}
+        description={
+          hasLessonProgress
+            ? "Track how your current course is progressing lesson by lesson."
+            : "Your current course progress is ready; lesson detail appears as it is recorded."
+        }
+        points={studentInsightPoints}
+        tone="teal"
+        testId="student-dashboard-insight"
+      />
     </PlatformShell>
   );
 }
@@ -740,6 +580,10 @@ function RegistrarCommandDashboard() {
   const nextPlacement = pendingPlacements[0];
   const nextPlacementBranch = state.branches.find(
     item => item.id === nextPlacement?.branchId
+  );
+  const nextApplication = pendingApplications[0];
+  const nextApplicationLead = state.leads.find(
+    item => item.id === nextApplication?.leadId
   );
   const activeStudents = state.students.filter(
     student => student.status === "active"
@@ -827,7 +671,7 @@ function RegistrarCommandDashboard() {
       );
       return {
         id: workflow.id,
-        label: lead?.fullName ?? workflow.id,
+        label: lead?.fullName ?? "Enrollment handoff",
         detail: `${course?.title ?? workflow.targetCourseId} · ${workflow.nextStep}`,
         href: "/app/registrar/enrollments",
         meta: "enroll",
@@ -885,6 +729,15 @@ function RegistrarCommandDashboard() {
       Icon: CreditCard,
       tone: openInvoices.length ? ("amber" as const) : ("green" as const),
     },
+  ];
+  const admissionsInsightPoints: InsightPoint[] = [
+    {
+      label: "New leads",
+      value: state.leads.filter(lead => lead.status === "lead").length,
+    },
+    { label: "Applications", value: pendingApplications.length },
+    { label: "Placement", value: pendingPlacements.length },
+    { label: "Ready", value: readyWorkflows.length },
   ];
 
   return (
@@ -948,13 +801,13 @@ function RegistrarCommandDashboard() {
                 <span>Next admissions action</span>
                 <h2>
                   {nextPlacement?.fullName ??
-                    pendingApplications[0]?.id ??
+                    nextApplicationLead?.fullName ??
                     "Pipeline ready"}
                 </h2>
                 <p>
                   {nextPlacement
                     ? `${nextPlacement.subject} placement at ${nextPlacementBranch?.name ?? nextPlacement.branchId}.`
-                    : pendingApplications.length
+                    : nextApplication
                       ? "Review the next pending application file."
                       : "Admissions queue is clear."}
                 </p>
@@ -1049,6 +902,18 @@ function RegistrarCommandDashboard() {
           </div>
         </aside>
       </motion.div>
+
+      <PortalInsight
+        eyebrow="Admissions flow"
+        title="Pipeline at a glance"
+        value={activeStudents.length}
+        valueLabel="active learners"
+        description="See where current enquiries need their next admissions decision."
+        points={admissionsInsightPoints}
+        variant="bars"
+        tone="amber"
+        testId="registrar-dashboard-insight"
+      />
     </PlatformShell>
   );
 }
@@ -1233,6 +1098,22 @@ function TeacherCommandDashboard() {
       tone: unreadMessages.length ? ("teal" as const) : ("green" as const),
     },
   ];
+  const classMomentumPoints: InsightPoint[] = teacherClasses
+    .slice(0, 6)
+    .map(classGroup => {
+      const classEnrollments = state.enrollments.filter(
+        enrollment => enrollment.classGroupId === classGroup.id
+      );
+      const value = classEnrollments.length
+        ? Math.round(
+            classEnrollments.reduce(
+              (sum, enrollment) => sum + enrollment.progress,
+              0
+            ) / classEnrollments.length
+          )
+        : 0;
+      return { label: classGroup.name, value };
+    });
 
   return (
     <PlatformShell role="teacher" title="Dashboard">
@@ -1437,6 +1318,18 @@ function TeacherCommandDashboard() {
           </div>
         </aside>
       </motion.div>
+
+      <PortalInsight
+        eyebrow="Class progress"
+        title="Teaching momentum"
+        value={`${averageProgress}%`}
+        valueLabel="average learner progress"
+        description="Compare the learning pace across your assigned class groups."
+        points={classMomentumPoints}
+        variant="bars"
+        tone="teal"
+        testId="teacher-dashboard-insight"
+      />
     </PlatformShell>
   );
 }
@@ -1544,17 +1437,6 @@ function BranchAdminOperationsDashboard() {
     row => row.balance > 0 || row.invoice.status !== "paid"
   );
   const balanceDue = paymentRows.reduce((sum, row) => sum + row.balance, 0);
-  const branchAudits = state.auditLogs
-    .filter(
-      audit =>
-        branchClassIds.has(audit.entityId) ||
-        branchRooms.some(room => room.id === audit.entityId) ||
-        branchInvoices.some(invoice => invoice.id === audit.entityId) ||
-        /branch|room|calendar|attendance|payment|message/i.test(
-          `${audit.action} ${audit.summary}`
-        )
-    )
-    .slice(0, 4);
   const seatUsage = roomCapacity
     ? Math.round((assignedSeats / roomCapacity) * 100)
     : 0;
@@ -1607,15 +1489,6 @@ function BranchAdminOperationsDashboard() {
       tone: openPayments.length ? ("amber" as const) : ("green" as const),
     },
     {
-      label: "Branch evidence",
-      detail: branchAudits.length
-        ? `${branchAudits.length} recent audit row(s).`
-        : "Room, schedule, attendance, and payment actions will write evidence.",
-      href: "/app/branch/reports",
-      Icon: ShieldCheck,
-      tone: "teal" as const,
-    },
-    {
       label: "Schedule reviews",
       detail: pendingScheduleReviews.length
         ? `${pendingScheduleReviews.length} pending event(s).`
@@ -1627,13 +1500,21 @@ function BranchAdminOperationsDashboard() {
         : ("green" as const),
     },
   ];
+  const seatReadinessPoints: InsightPoint[] = branchClasses
+    .slice(0, 6)
+    .map(classGroup => ({
+      label: classGroup.name,
+      value: classGroup.capacity
+        ? Math.round((classGroup.studentIds.length / classGroup.capacity) * 100)
+        : 0,
+    }));
 
   return (
     <PlatformShell role="branchadmin" title="Dashboard">
       <PlatformPageHeader
         compact
-        title={`${branch?.name ?? "Branch"} operations`}
-        description={`${branch?.address ?? "Local branch"} · rooms, schedule, attendance, and payments.`}
+        title="Branch overview"
+        description="Today’s classes, rooms, attendance, and payments."
         actions={
           <>
             <Link
@@ -1643,19 +1524,19 @@ function BranchAdminOperationsDashboard() {
               Reports
             </Link>
             <Link
-              href="/app/branch/rooms"
+              href="/app/branch/schedule"
               className="platform-primary-button"
               style={{ background: meta.color }}
             >
-              <Building2 size={15} />
-              Manage rooms
+              <CalendarDays size={15} />
+              Open schedule
             </Link>
           </>
         }
       />
 
       <motion.div
-        className="platform-metric-grid"
+        className="platform-metric-grid branch-dashboard-metrics"
         initial="hidden"
         animate="visible"
       >
@@ -1672,7 +1553,7 @@ function BranchAdminOperationsDashboard() {
       </motion.div>
 
       <motion.div
-        className="platform-v2-role-main"
+        className="platform-v2-role-main branch-dashboard-v3"
         initial="hidden"
         animate="visible"
         custom={0.14}
@@ -1681,51 +1562,56 @@ function BranchAdminOperationsDashboard() {
         <div className="platform-v2-role-stack">
           <section className="platform-v2-panel platform-v2-work-summary">
             <PlatformWorkspaceHeader
-              title="Assigned branch"
-              description={`${branch?.name ?? "Branch"} · ${branch?.address ?? "Cairo branch"} · ${branch?.timezone ?? "Africa/Cairo"}`}
+              title="Today at your branch"
+              description={branch?.name ?? "Branch"}
             />
             <div className="platform-v2-summary-body">
               <div className="platform-v2-summary-copy">
                 <span>Today’s operations</span>
-                <h2>{branch?.name ?? "Branch"} operations</h2>
+                <h2>
+                  {todaySessions.length
+                    ? "Classes are ready for today"
+                    : "Review the next branch sessions"}
+                </h2>
                 <p>
-                  {branchStudents.length} students · {branchTeachers.length}{" "}
-                  teachers · {branchClasses.length} classes across{" "}
-                  {branchRuns.length} course run(s).
+                  {branchStudents.length} learners · {branchTeachers.length}{" "}
+                  teachers · {branchClasses.length} classes.
                 </p>
                 <div className="platform-v2-summary-actions">
                   <Link
-                    href="/app/branch/rooms"
+                    href="/app/branch/schedule"
                     className="platform-primary-button"
                     style={{ background: meta.color }}
                   >
-                    Manage rooms
+                    Open schedule
                   </Link>
                   <Link
-                    href="/app/branch/schedule"
+                    href="/app/branch/rooms"
                     className="platform-secondary-button"
                   >
-                    Open schedule
+                    Manage rooms
                   </Link>
                 </div>
               </div>
               <div className="platform-v2-summary-facts">
                 <article>
-                  <span>Room usage</span>
+                  <span>Room capacity</span>
                   <strong>
                     {assignedSeats}/{roomCapacity || 0}
                   </strong>
                   <small>{activeRooms} active rooms</small>
                 </article>
                 <article>
-                  <span>Schedule reviews</span>
-                  <strong>{pendingScheduleReviews.length}</strong>
-                  <small>pending event(s)</small>
+                  <span>Attendance to check</span>
+                  <strong>
+                    {attendanceExceptions.length + missingAttendance.length}
+                  </strong>
+                  <small>needs review</small>
                 </article>
                 <article>
-                  <span>Branch activity</span>
-                  <strong>{branchAudits.length}</strong>
-                  <small>recent audit row(s)</small>
+                  <span>Open payments</span>
+                  <strong>{openPayments.length}</strong>
+                  <small>follow-ups due</small>
                 </article>
               </div>
             </div>
@@ -1733,11 +1619,11 @@ function BranchAdminOperationsDashboard() {
 
           <section className="platform-v2-panel">
             <PlatformWorkspaceHeader
-              title="Schedule control"
+              title="Next work"
               description={
                 todaySessions.length
-                  ? "Today’s class sessions and attendance state."
-                  : "Next branch sessions and attendance state."
+                  ? "Start with today’s class sessions."
+                  : "Review the next scheduled work."
               }
             />
             <div className="platform-v2-dashboard-list">
@@ -1793,10 +1679,10 @@ function BranchAdminOperationsDashboard() {
                 style={{ "--item-color": toneColor.green } as CSSProperties}
               >
                 <div>
-                  <strong>Room usage</strong>
+                  <strong>Room readiness</strong>
                   <small>
                     {activeRooms}/{branchRooms.length} rooms active ·{" "}
-                    {seatUsage}% seat usage
+                    {seatUsage}% capacity in use
                   </small>
                 </div>
                 <span>rooms</span>
@@ -1808,7 +1694,7 @@ function BranchAdminOperationsDashboard() {
         <aside className="platform-v2-panel">
           <PlatformWorkspaceHeader
             title="Needs attention"
-            description="Attendance exceptions, payments, and branch evidence."
+            description="Items that need follow-up."
           />
           <div className="platform-v2-attention-list">
             {branchAttentionItems.map(item => (
@@ -1830,22 +1716,20 @@ function BranchAdminOperationsDashboard() {
               </Link>
             ))}
           </div>
-          <div className="platform-v2-side-actions">
-            <Link
-              href="/app/branch/payments"
-              className="platform-secondary-button compact"
-            >
-              Payment overview
-            </Link>
-            <Link
-              href="/app/branch/reports"
-              className="platform-secondary-button compact"
-            >
-              Branch reports
-            </Link>
-          </div>
         </aside>
       </motion.div>
+
+      <PortalInsight
+        eyebrow="Branch capacity"
+        title="Seat readiness"
+        value={`${seatUsage}%`}
+        valueLabel="room capacity in use"
+        description="Compare enrolled seats across the branch classes that are open now."
+        points={seatReadinessPoints}
+        variant="bars"
+        tone="green"
+        testId="branch-dashboard-insight"
+      />
     </PlatformShell>
   );
 }
@@ -1971,70 +1855,41 @@ function HeadOfDepartmentDashboard() {
       tone: "green" as const,
     },
     {
-      label: "At-risk learners",
+      label: "Learners to review",
       value: String(atRiskEnrollments.length),
-      change: `${pendingCertificates} certificates`,
+      change: pendingCertificates
+        ? `${pendingCertificates} approval(s)`
+        : "No approvals due",
       tone: atRiskEnrollments.length ? ("red" as const) : ("teal" as const),
     },
   ];
-  const courseHealth = state.courses
-    .filter(course => courseIds.has(course.id))
-    .map(course => {
-      const runs = courseRuns.filter(run => run.courseId === course.id);
-      const runIds = new Set(runs.map(run => run.id));
-      const courseEnrollments = enrollments.filter(enrollment =>
-        runIds.has(enrollment.courseRunId)
-      );
-      const averageProgress = courseEnrollments.length
-        ? Math.round(
-            courseEnrollments.reduce(
-              (total, enrollment) => total + enrollment.progress,
-              0
-            ) / courseEnrollments.length
-          )
-        : 0;
-      return { course, averageProgress, enrollments: courseEnrollments.length };
-    })
-    .sort((a, b) => a.averageProgress - b.averageProgress);
   const academicTaskItems = [
     {
-      label: "Curriculum coverage",
-      detail: `${modules.length} modules and ${lessons.length} lessons mapped.`,
+      label: "Curriculum plan",
+      detail: `${modules.length} modules mapped across ${courseIds.size} courses.`,
       href: "/app/hod/curriculum",
       meta: `${curriculumCoverage}%`,
       tone: curriculumCoverage >= 80 ? ("green" as const) : ("amber" as const),
     },
     {
-      label: "Teacher performance",
-      detail: `${teachers.length} teachers across ${classes.length} class group(s).`,
+      label: "Teaching teams",
+      detail: `${teachers.length} teachers supporting ${classes.length} classes.`,
       href: "/app/hod/teachers",
-      meta: "review",
+      meta: `${teachers.length} teachers`,
       tone: "teal" as const,
     },
     {
-      label: "Assessment quality",
-      detail: `${completedAssessmentRows}/${expectedAssessmentRows || 0} assessment rows complete.`,
+      label: "Assessment queue",
+      detail: `${completedAssessmentRows}/${expectedAssessmentRows || 0} learning records complete.`,
       href: "/app/hod/assessments",
       meta: `${assessmentCompletion}%`,
       tone:
         assessmentCompletion >= 75 ? ("green" as const) : ("amber" as const),
     },
-    {
-      label: courseHealth[0]?.course.title ?? "Course health",
-      detail: courseHealth[0]
-        ? `${courseHealth[0].enrollments} enrollments in the lowest progress course.`
-        : "No course risk rows.",
-      href: "/app/hod/courses",
-      meta: `${courseHealth[0]?.averageProgress ?? 0}%`,
-      tone:
-        courseHealth[0]?.averageProgress && courseHealth[0].averageProgress < 60
-          ? ("red" as const)
-          : ("green" as const),
-    },
   ];
   const hodAttentionItems = [
     {
-      label: "Certificate approvals",
+      label: "Certificate decisions",
       detail: pendingCertificates
         ? `${pendingCertificates} certificate(s) need approval.`
         : `${certificates.length} certificates tracked.`,
@@ -2043,7 +1898,7 @@ function HeadOfDepartmentDashboard() {
       tone: pendingCertificates ? ("red" as const) : ("green" as const),
     },
     {
-      label: "At-risk learners",
+      label: "Learners needing review",
       detail: atRiskEnrollments.length
         ? `${atRiskEnrollments.length} learner(s) need academic review.`
         : "No learner risk above threshold.",
@@ -2061,22 +1916,34 @@ function HeadOfDepartmentDashboard() {
       Icon: BookOpen,
       tone: curriculumCoverage >= 80 ? ("green" as const) : ("amber" as const),
     },
-    {
-      label: "Assessment completion",
-      detail: `${assessmentCompletion}% of expected submissions and quiz attempts completed.`,
-      href: "/app/hod/assessments",
-      Icon: ListChecks,
-      tone:
-        assessmentCompletion >= 75 ? ("green" as const) : ("amber" as const),
-    },
   ];
+  const curriculumInsightPoints: InsightPoint[] = state.courses
+    .filter(course => courseIds.has(course.id))
+    .slice(0, 6)
+    .map(course => {
+      const courseModules = modules.filter(
+        module => module.courseId === course.id
+      );
+      const courseLessonCount = lessons.filter(lesson =>
+        courseModules.some(module => module.id === lesson.moduleId)
+      ).length;
+      return {
+        label: course.title,
+        value: courseModules.length
+          ? Math.min(
+              100,
+              Math.round((courseLessonCount / (courseModules.length * 3)) * 100)
+            )
+          : 0,
+      };
+    });
 
   return (
     <PlatformShell role="headofdepartment" title="Dashboard">
       <PlatformPageHeader
         compact
-        title="Academic Dashboard"
-        description="Academic health, curriculum coverage, teacher load, and approvals."
+        title="Academic overview"
+        description="Review curriculum, teaching, and approvals for your department."
         actions={
           <>
             <Link href="/app/hod/reports" className="platform-secondary-button">
@@ -2088,14 +1955,14 @@ function HeadOfDepartmentDashboard() {
               style={{ background: meta.color }}
             >
               <Plus size={15} />
-              Course plan
+              Review curriculum
             </Link>
           </>
         }
       />
 
       <motion.div
-        className="platform-metric-grid"
+        className="platform-metric-grid hod-dashboard-metrics"
         initial="hidden"
         animate="visible"
       >
@@ -2112,7 +1979,7 @@ function HeadOfDepartmentDashboard() {
       </motion.div>
 
       <motion.div
-        className="platform-v2-role-main"
+        className="platform-v2-role-main hod-dashboard-v3"
         initial="hidden"
         animate="visible"
         custom={0.16}
@@ -2121,7 +1988,7 @@ function HeadOfDepartmentDashboard() {
         <div className="platform-v2-role-stack">
           <section className="platform-v2-panel platform-v2-work-summary">
             <PlatformWorkspaceHeader
-              title="Academic health"
+              title="Academic focus"
               description={
                 state.departments
                   .filter(department => departmentIds.has(department.id))
@@ -2132,10 +1999,10 @@ function HeadOfDepartmentDashboard() {
             <div className="platform-v2-summary-body">
               <div className="platform-v2-summary-copy">
                 <span>Department overview</span>
-                <h2>{curriculumCoverage}% curriculum coverage</h2>
+                <h2>{curriculumCoverage}% of the curriculum is mapped</h2>
                 <p>
-                  {activeCourses}/{courseIds.size} courses active ·{" "}
-                  {teachers.length} teachers · {classes.length} classes.
+                  {activeCourses} active courses · {teachers.length} teachers ·{" "}
+                  {classes.length} classes.
                 </p>
                 <div className="platform-v2-summary-actions">
                   <Link
@@ -2143,33 +2010,33 @@ function HeadOfDepartmentDashboard() {
                     className="platform-primary-button"
                     style={{ background: meta.color }}
                   >
-                    Review curriculum
+                    Open curriculum
                   </Link>
                   <Link
                     href="/app/hod/moodle-source"
                     className="platform-secondary-button"
                   >
-                    Moodle
+                    Course content
                   </Link>
                 </div>
               </div>
               <div className="platform-v2-summary-facts">
                 <article>
-                  <span>Seat usage</span>
+                  <span>Class capacity</span>
                   <strong>{seatUsage}%</strong>
                   <small>
                     {enrolledSeats}/{classCapacity || 0} seats
                   </small>
                 </article>
                 <article>
-                  <span>Assessment quality</span>
+                  <span>Assessment progress</span>
                   <strong>{assessmentCompletion}%</strong>
                   <small>completion</small>
                 </article>
                 <article>
-                  <span>Approvals</span>
+                  <span>Certificate decisions</span>
                   <strong>{pendingCertificates}</strong>
-                  <small>certificate queue</small>
+                  <small>awaiting action</small>
                 </article>
               </div>
             </div>
@@ -2177,8 +2044,8 @@ function HeadOfDepartmentDashboard() {
 
           <section className="platform-v2-panel">
             <PlatformWorkspaceHeader
-              title="Curriculum & performance"
-              description="Academic work that can be reviewed without opening every module."
+              title="Work to review"
+              description="Choose the next academic task."
             />
             <div className="platform-v2-dashboard-list">
               {academicTaskItems.map(item => (
@@ -2202,8 +2069,8 @@ function HeadOfDepartmentDashboard() {
 
         <aside className="platform-v2-panel">
           <PlatformWorkspaceHeader
-            title="Needs approval"
-            description="Academic risks, approvals, and coverage gaps."
+            title="Needs attention"
+            description="Items that need a decision or follow-up."
           />
           <div className="platform-v2-attention-list">
             {hodAttentionItems.map(item => (
@@ -2227,6 +2094,18 @@ function HeadOfDepartmentDashboard() {
           </div>
         </aside>
       </motion.div>
+
+      <PortalInsight
+        eyebrow="Curriculum health"
+        title="Coverage by course"
+        value={`${curriculumCoverage}%`}
+        valueLabel="department curriculum mapped"
+        description="Compare lesson coverage across the courses in your academic scope."
+        points={curriculumInsightPoints}
+        variant="bars"
+        tone="purple"
+        testId="hod-dashboard-insight"
+      />
     </PlatformShell>
   );
 }
@@ -2396,6 +2275,45 @@ function SuperAdminDashboard() {
     not_configured: "Setup needed",
     error: "Error",
   };
+  const accessInsightPoints: InsightPoint[] = [
+    {
+      label: "Students",
+      value: state.users.filter(
+        user => user.activeRole === "student" && user.status === "active"
+      ).length,
+    },
+    {
+      label: "Teachers",
+      value: state.users.filter(
+        user => user.activeRole === "teacher" && user.status === "active"
+      ).length,
+    },
+    {
+      label: "Registrars",
+      value: state.users.filter(
+        user => user.activeRole === "registrar" && user.status === "active"
+      ).length,
+    },
+    {
+      label: "HODs",
+      value: state.users.filter(
+        user =>
+          user.activeRole === "headofdepartment" && user.status === "active"
+      ).length,
+    },
+    {
+      label: "Branch",
+      value: state.users.filter(
+        user => user.activeRole === "branchadmin" && user.status === "active"
+      ).length,
+    },
+    {
+      label: "Admins",
+      value: state.users.filter(
+        user => user.activeRole === "superadmin" && user.status === "active"
+      ).length,
+    },
+  ];
 
   return (
     <PlatformShell role="superadmin" title="Command center">
@@ -2596,6 +2514,18 @@ function SuperAdminDashboard() {
           </div>
         </section>
       </motion.div>
+
+      <PortalInsight
+        eyebrow="Access overview"
+        title="Active access by role"
+        value={activeUsers}
+        valueLabel="active accounts"
+        description="See how active people are distributed across the platform roles."
+        points={accessInsightPoints}
+        variant="bars"
+        tone="slate"
+        testId="admin-dashboard-insight"
+      />
     </PlatformShell>
   );
 }
