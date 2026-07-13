@@ -635,6 +635,10 @@ class PlatformStore {
     this.applyAction({ type: "notification.read", notificationId });
   }
 
+  markMessageRead(messageId: string) {
+    this.applyAction({ type: "message.read", messageId });
+  }
+
   search(query: string) {
     const state = this.getState();
     const normalized = query.trim().toLowerCase();

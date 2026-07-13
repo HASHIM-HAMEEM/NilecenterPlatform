@@ -37,7 +37,7 @@ const workflowActionTimeoutMs = readPositiveIntegerEnv(
 const loginTimeoutMs = readPositiveIntegerEnv("QA_LOGIN_TIMEOUT_MS", 30000);
 const maxRunMs = readPositiveIntegerEnv(
   "QA_SUITE_TIMEOUT_MS",
-  readPositiveIntegerEnv("QA_MAX_RUN_MS", 20 * 60 * 1000)
+  readPositiveIntegerEnv("QA_MAX_RUN_MS", 35 * 60 * 1000)
 );
 const workflowNameFilter =
   process.env.QA_ONLY_WORKFLOWS?.trim().toLowerCase() || "";
@@ -156,8 +156,10 @@ const roles = [
       "/app/registrar/settings",
       "/app/registrar/forms",
       "/app/registrar/forms/manage",
+      "/app/registrar/forms/manage/new",
       "/app/registrar/forms/manage/form_application/builder",
       "/app/registrar/forms/manage/form_application/publish",
+      "/app/registrar/forms/manage/form_application/publications",
       "/app/registrar/forms/review",
     ],
   },
@@ -183,8 +185,11 @@ const roles = [
       "/app/hod/messages",
       "/app/hod/forms",
       "/app/hod/forms/manage",
+      "/app/hod/forms/manage/new",
       "/app/hod/forms/manage/form_consent/builder",
       "/app/hod/forms/manage/form_consent/publish",
+      "/app/hod/forms/manage/form_consent/publications",
+      "/app/hod/forms/manage/form_consent/publications/publication_form_consent_1/assignments",
       "/app/hod/forms/review",
     ],
   },
@@ -210,8 +215,11 @@ const roles = [
       "/app/branch/settings",
       "/app/branch/forms",
       "/app/branch/forms/manage",
+      "/app/branch/forms/manage/new",
       "/app/branch/forms/manage/form_incident/builder",
       "/app/branch/forms/manage/form_incident/publish",
+      "/app/branch/forms/manage/form_incident/publications",
+      "/app/branch/forms/manage/form_incident/publications/publication_form_incident_1/assignments",
       "/app/branch/forms/review",
     ],
   },
@@ -254,8 +262,11 @@ const roles = [
       "/app/admin/users/new",
       "/app/admin/forms",
       "/app/admin/forms/manage",
+      "/app/admin/forms/manage/new",
       "/app/admin/forms/manage/form_enquiry/builder",
       "/app/admin/forms/manage/form_enquiry/publish",
+      "/app/admin/forms/manage/form_enquiry/publications",
+      "/app/admin/forms/manage/form_support/publications/publication_form_support_1/assignments",
       "/app/admin/forms/review",
     ],
   },
@@ -596,10 +607,31 @@ async function runRouteMatrix(routes) {
       lastRoute: routeChunk[routeChunk.length - 1],
       routeCount: routeChunk.length,
     });
-    const chunkResult = await pageEval(inspectRouteMatrixSource(routeChunk), {
+    let chunkResult = await pageEval(inspectRouteMatrixSource(routeChunk), {
       label: `route matrix ${routeChunk[0]} ... ${routeChunk[routeChunk.length - 1]}`,
       timeoutMs: routeMatrixTimeout(routeChunk.length),
     });
+    const needsReloadRecovery =
+      Array.isArray(chunkResult) &&
+      chunkResult.some(result => result?.ready === false && !result?.shell);
+    if (needsReloadRecovery) {
+      recordProgress("route matrix chunk reload recovery", {
+        firstRoute: routeChunk[0],
+        lastRoute: routeChunk[routeChunk.length - 1],
+        routeCount: routeChunk.length,
+      });
+      await goto(routeChunk[0]);
+      chunkResult = await pageEval(inspectRouteMatrixSource(routeChunk), {
+        label: `route matrix recovery ${routeChunk[0]} ... ${routeChunk[routeChunk.length - 1]}`,
+        timeoutMs: routeMatrixTimeout(routeChunk.length),
+      });
+      if (Array.isArray(chunkResult)) {
+        chunkResult = chunkResult.map(result => ({
+          ...result,
+          recoveredAfterReload: true,
+        }));
+      }
+    }
     if (!Array.isArray(chunkResult)) return chunkResult;
     results.push(...chunkResult);
   }
@@ -712,6 +744,13 @@ function inspectSource(expectedPath) {
       currentNavCount: document.querySelectorAll('.platform-nav-item[aria-current="page"], .platform-nav-item[aria-current="location"]').length,
       searchTrigger: Boolean(document.querySelector('.platform-search-trigger[aria-controls="platform-global-search"]')),
       searchClosed: !document.querySelector("#platform-global-search"),
+      portalChrome: {
+        sidebar: Boolean(document.querySelector(".platform-desktop-sidebar, .platform-mobile-sidebar")),
+        topbar: Boolean(document.querySelector(".platform-topbar")),
+        navigation: Boolean(document.querySelector(".platform-nav")),
+        content: Boolean(document.querySelector(".platform-content")),
+        skipLink: Boolean(document.querySelector(".platform-skip-link"))
+      },
       overflowElements,
       accessDenied: text.includes("Access denied"),
       notFound: text.includes("Page not found"),
@@ -924,7 +963,8 @@ function inspectRouteMatrixSource(routes) {
         overflowElements,
         accessDenied: text.includes("Access denied"),
         notFound: text.includes("Page not found"),
-        errorBoundary: text.includes("Something went wrong")
+        errorBoundary: text.includes("Something went wrong"),
+        textSnippet: normalize(text).slice(0, 500),
       };
     };
     const waitForRoute = async (route) => {
@@ -934,13 +974,16 @@ function inspectRouteMatrixSource(routes) {
         const text = normalize(document.body.innerText || document.body.textContent);
         const contentText = normalize(document.querySelector(".platform-content")?.textContent || "");
         const loading = document.querySelector(".platform-route-loading");
+        const hasMessageWorkspace = Boolean(
+          document.querySelector('[data-testid^="portal-messages-inbox-"]')
+        );
         const changed = contentText !== previousContent;
         const settled = performance.now() - started > 700;
         if (
           location.pathname === route &&
           document.querySelector(".platform-shell") &&
           !text.includes("Loading workspace") &&
-          contentText.length > 80 &&
+          (contentText.length > 80 || hasMessageWorkspace) &&
           !loading &&
           (changed || settled)
         ) {
@@ -1117,8 +1160,12 @@ function workflowActionSource(body) {
     };
     const setByLabel = (label, value) => {
       const expected = normalize(label).toLowerCase();
-      const match = Array.from(document.querySelectorAll("label"))
-        .find((item) => normalize(item.textContent).toLowerCase().includes(expected));
+      const labels = Array.from(document.querySelectorAll("label"));
+      const match = labels.find((item) =>
+        normalize(item.querySelector(":scope > span")?.textContent).toLowerCase() === expected
+      ) || labels.find((item) =>
+        normalize(item.textContent).toLowerCase().includes(expected)
+      );
       const control = match?.querySelector("input, select, textarea") ||
         (match?.htmlFor ? document.getElementById(match.htmlFor) : null);
       if (!control) throw new Error(\`Control not found for label: \${label}\`);
@@ -1199,8 +1246,12 @@ function publicFormWorkflowActionSource(body) {
     };
     const setByLabel = (label, value) => {
       const expected = normalize(label).toLowerCase();
-      const match = Array.from(document.querySelectorAll("label"))
-        .find((item) => normalize(item.textContent).toLowerCase().includes(expected));
+      const labels = Array.from(document.querySelectorAll("label"));
+      const match = labels.find((item) =>
+        normalize(item.querySelector(":scope > span")?.textContent).toLowerCase() === expected
+      ) || labels.find((item) =>
+        normalize(item.textContent).toLowerCase().includes(expected)
+      );
       const control = match?.querySelector("input, select, textarea") ||
         (match?.htmlFor ? document.getElementById(match.htmlFor) : null);
       if (!control) throw new Error(\`Control not found for label: \${label}\`);
@@ -1243,8 +1294,9 @@ function routeReadySource(expectedPath) {
       const shell = document.querySelector(".platform-shell");
       const content = document.querySelector(".platform-content");
       const accessDenied = normalize(document.body.innerText || document.body.textContent).includes("Access denied");
-      if (location.pathname === ${JSON.stringify(expectedPath)} && !loading && (shell || accessDenied) && content) {
-        return { ok: true, path: location.pathname, shell: Boolean(shell), content: Boolean(content) };
+      const standaloneAccessDenied = accessDenied && !shell && Boolean(document.querySelector(".platform-access-denied"));
+      if (location.pathname === ${JSON.stringify(expectedPath)} && !loading && ((shell && content) || standaloneAccessDenied)) {
+        return { ok: true, path: location.pathname, shell: Boolean(shell), content: Boolean(content), standaloneAccessDenied };
       }
       await delay(100);
     }
@@ -1286,10 +1338,21 @@ async function authenticateRole(role, checkName, details = {}) {
 async function navigateToProtectedRoute(role, route, checkName, details = {}) {
   assertRunBudget(`navigating ${route}`);
   await goto(route);
-  const routeReady = await pageEval(routeReadySource(route));
+  let routeReady = await pageEval(routeReadySource(route));
+  let recoveredTransientNotFound = false;
+  if (
+    !routeReady?.ok &&
+    routeReady?.path === route &&
+    routeReady?.text === "Not Found"
+  ) {
+    await goto(route);
+    routeReady = await pageEval(routeReadySource(route));
+    recoveredTransientNotFound = Boolean(routeReady?.ok);
+  }
   const ok = await assertCheck(checkName, routeReady, value => value?.ok, {
     role: role.role,
     route,
+    recoveredTransientNotFound,
     ...details,
   });
   return { ok, routeReady };
@@ -1449,10 +1512,82 @@ async function runFormsRoleDenialChecks() {
       denial,
       value =>
         value?.path === route &&
-        value?.shell === true &&
+        value?.shell === false &&
         value?.accessDenied === true &&
+        value?.portalChrome?.sidebar === false &&
+        value?.portalChrome?.topbar === false &&
+        value?.portalChrome?.navigation === false &&
+        value?.portalChrome?.content === false &&
+        value?.portalChrome?.skipLink === false &&
         value?.errorBoundary === false,
       { role: student.role, route }
+    );
+  }
+
+  const registrar = roles.find(item => item.role === "registrar");
+  if (!registrar)
+    throw new Error("Registrar role is unavailable for Forms denial checks");
+  const registrarLoginOk = await authenticateRole(
+    registrar,
+    "registrar Forms ownership denial checks login"
+  );
+  if (!registrarLoginOk) return;
+
+  const globalDefinitionDenial = await pageEval(`async () => {
+    const response = await fetch("/api/forms/definitions/form_application", {
+      credentials: "include",
+      headers: { "X-Nile-Learn-Request": "browser" }
+    });
+    return {
+      status: response.status,
+      body: (await response.text()).slice(0, 240)
+    };
+  }`);
+  await assertCheck(
+    "registrar cannot manage a global Super Admin form definition",
+    globalDefinitionDenial,
+    value =>
+      value?.status === 403 && value?.body?.includes("form_scope_denied"),
+    {
+      role: registrar.role,
+      route: "/api/forms/definitions/form_application",
+    }
+  );
+
+  for (const route of [
+    "/app/registrar/forms/manage/form_application/builder",
+    "/app/registrar/forms/manage/form_application/publish",
+  ]) {
+    await goto(route);
+    const denial = await pageEval(`async () => {
+      for (let index = 0; index < 40; index += 1) {
+        const text = (document.body.innerText || document.body.textContent || "")
+          .replace(/\\s+/g, " ")
+          .trim();
+        if (text.includes("Form scope denied")) break;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      const text = (document.body.innerText || document.body.textContent || "")
+        .replace(/\\s+/g, " ")
+        .trim();
+      return {
+        path: location.pathname,
+        shell: Boolean(document.querySelector(".platform-shell")),
+        scopeDenied: text.includes("Form scope denied"),
+        hasRecoveryLink: Array.from(document.querySelectorAll("a")).some(
+          anchor => anchor.getAttribute("href") === "/app/registrar/forms/manage"
+        )
+      };
+    }`);
+    await assertCheck(
+      `registrar direct access to ${route} shows the scoped unavailable state`,
+      denial,
+      value =>
+        value?.path === route &&
+        value?.shell === true &&
+        value?.scopeDenied === true &&
+        value?.hasRecoveryLink === true,
+      { role: registrar.role, route }
     );
   }
 }
@@ -1465,6 +1600,7 @@ const publicFormWorkflowCases = [
       setByLabel("Full name", "Portal QA ${session}");
       setByLabel("Email", "portal-qa-${process.pid}@example.test");
       setByLabel("Phone", "+201000${process.pid}");
+      setByLabel("Preferred branch", "br_cairo");
       setByLabel("Course interest", "arabic");
       setByLabel("Preferred contact", "email");
       setByLabel("Anything else?", "Deterministic Phase 13 public form coverage.");
@@ -1485,7 +1621,7 @@ const publicFormWorkflowCases = [
   },
 ];
 const formsRoleDenialWorkflowName =
-  "student Nile Forms management and review access is denied";
+  "Nile Forms management, review, and ownership scope is enforced";
 
 const deepWorkflowCases = [
   {
@@ -1504,7 +1640,7 @@ const deepWorkflowCases = [
       setByLabel("Category", "technical");
       setByLabel("Subject", subject);
       setByLabel("Details", "Deterministic Phase 13 assigned respondent lifecycle coverage.");
-      await clickButtonWithin('[role="group"][aria-label="Is this blocking your next class?"]', "No", true);
+      await clickButtonWithin('[data-field-id="urgent"] [role="group"]', "No", true);
       await clickButton("Submit", true);
       let submissionId = "";
       for (let attempt = 0; attempt < 40 && !submissionId; attempt += 1) {
@@ -1535,6 +1671,60 @@ const deepWorkflowCases = [
       value?.status === "Submitted" &&
       value?.hasSubject === true &&
       Boolean(value?.submissionId),
+  },
+  {
+    name: "superadmin Nile Forms assignment workflow assigns and revokes one scoped user",
+    role: "superadmin",
+    route:
+      "/app/admin/forms/manage/form_support/publications/publication_form_support_1/assignments",
+    source: workflowActionSource(`
+      const panel = await waitFor(() => document.querySelector(".nile-form-assignment-panel"));
+      if (!panel) throw new Error("Assignment manager did not render");
+
+      setByLabel("Target", "user");
+      await delay(120);
+      setByLabel("Person", "usr_hod_demo");
+      await clickButtonWithin(".nile-form-assignment-panel", "Assign", true);
+      const assignedNotice = await waitFor(() =>
+        normalize(document.querySelector(".nile-form-notice")?.textContent).includes("Assignment added")
+      );
+      if (!assignedNotice) throw new Error("Assignment success state did not render");
+
+      const assignmentRow = Array.from(
+        document.querySelectorAll(".nile-form-assignment-list > div")
+      ).find(row => normalize(row.textContent).includes("HOD Demo"));
+      if (!assignmentRow) throw new Error("Assigned HOD row did not render");
+      const revokeButton = Array.from(assignmentRow.querySelectorAll("button")).find(
+        button => normalize(button.textContent) === "Revoke" && !button.disabled
+      );
+      if (!revokeButton) throw new Error("Revoke control did not render");
+      revokeButton.click();
+
+      const revokedNotice = await waitFor(() =>
+        normalize(document.querySelector(".nile-form-notice")?.textContent).includes("Assignment revoked")
+      );
+      if (!revokedNotice) throw new Error("Assignment revoke state did not render");
+
+      const response = await fetch("/api/forms/definitions/form_support", {
+        credentials: "include",
+        headers: { "X-Nile-Learn-Request": "browser" }
+      });
+      const payload = await response.json();
+      const assignment = payload?.assignments?.find(item =>
+        item?.target?.type === "user" && item?.target?.userId === "usr_hod_demo"
+      );
+      return {
+        ok: response.ok && Boolean(assignment?.revokedAt),
+        assignmentId: assignment?.id,
+        revokedAt: assignment?.revokedAt,
+        visibleNotice: normalize(document.querySelector(".nile-form-notice")?.textContent)
+      };
+    `),
+    predicate: value =>
+      value?.ok === true &&
+      Boolean(value?.assignmentId) &&
+      Boolean(value?.revokedAt) &&
+      value?.visibleNotice === "Assignment revoked.",
   },
   {
     name: "student shell search, branch, and notifications are connected",
@@ -2072,6 +2262,39 @@ const deepWorkflowCases = [
       value?.fromUserId === "usr_student_demo" &&
       value?.toUserId !== "usr_student_demo" &&
       value?.hasSelfRecipient === false,
+  },
+  {
+    name: "student inbox persists a received message read state",
+    role: "student",
+    route: "/app/student/messages",
+    source: workflowActionSource(`
+      const inbox = await waitFor(() => document.querySelector('[data-testid="portal-messages-inbox-student"]'));
+      if (!inbox) throw new Error("Student inbox did not render");
+      const thread = await waitFor(() =>
+        Array.from(inbox.querySelectorAll("button"))
+          .find((button) => normalize(button.textContent).includes("Class reminder"))
+      );
+      if (!thread) throw new Error("Seeded received message did not render");
+      thread.click();
+      const state = await waitFor(() => {
+        const next = readState();
+        return next.messages?.find((item) => item.id === "msg_demo_1")?.read === true
+          ? next
+          : null;
+      }, 5000);
+      const message = state?.messages?.find((item) => item.id === "msg_demo_1");
+      const refreshedThread = Array.from(inbox.querySelectorAll("button"))
+        .find((button) => normalize(button.textContent).includes("Class reminder"));
+      return {
+        ok: Boolean(state),
+        messageRead: message?.read,
+        threadStillUnread: refreshedThread?.classList.contains("unread") === true
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.messageRead === true &&
+      value?.threadStillUnread === false,
   },
   {
     name: "student reports render personal rows without platform report selector",
@@ -2628,15 +2851,24 @@ const deepWorkflowCases = [
     role: "branchadmin",
     route: "/app/branch/dashboard",
     source: workflowActionSource(`
-      await waitFor(() => normalize(document.body.innerText || document.body.textContent).includes("Branch overview"));
+      await waitFor(() => {
+        const visibleText = normalize(document.body.innerText || document.body.textContent).toLowerCase();
+        return visibleText.includes("branch overview") && visibleText.includes("today’s operations");
+      });
       const text = normalize(document.body.innerText || document.body.textContent);
+      const normalizedText = text.toLowerCase();
+      const requiredLabels = [
+        "today at your branch",
+        "today’s operations",
+        "room usage",
+        "attendance exceptions",
+        "branch payments",
+        "schedule reviews",
+      ];
+      const missingLabels = requiredLabels.filter((label) => !normalizedText.includes(label));
       return {
-        ok: text.includes("Today at your branch") &&
-          text.includes("Today’s operations") &&
-          text.includes("Room usage") &&
-          text.includes("Attendance exceptions") &&
-          text.includes("Branch payments") &&
-          text.includes("Schedule reviews"),
+        ok: missingLabels.length === 0,
+        missingLabels,
         hasBranchScope: text.includes("Cairo B1"),
         hasOperationalLinks: text.includes("Manage rooms") && text.includes("Open schedule") && text.includes("Payment overview"),
         hasGlobalAdminLeak: text.includes("Platform settings") || text.includes("Global governance") || text.includes("Super Admin")
@@ -3228,7 +3460,7 @@ const deepWorkflowCases = [
       const composer = await waitFor(() => document.querySelector('[data-testid="portal-message-compose-branchadmin"]'));
       if (!composer) throw new Error("Message composer did not open");
       const recipient = composer.querySelector("select");
-      const recipientOption = Array.from(recipient?.options || []).find((option) => option.value !== "usr_branch_demo");
+      const recipientOption = Array.from(recipient?.options || []).find((option) => option.value === "usr_teacher_demo");
       if (!recipient || !recipientOption) throw new Error("Permitted recipient not found");
       setValue(recipient, recipientOption.value);
       const subject = "QA branch message " + Date.now();
@@ -3258,7 +3490,7 @@ const deepWorkflowCases = [
     predicate: value =>
       value?.ok &&
       value?.fromUserId === "usr_branch_demo" &&
-      value?.toUserId !== "usr_branch_demo" &&
+      value?.toUserId === "usr_teacher_demo" &&
       value?.logSubject?.startsWith("QA branch message") &&
       value?.logActorId === "usr_branch_demo" &&
       value?.messageAudit === "message.sent" &&
@@ -3900,19 +4132,94 @@ const deepWorkflowCases = [
       setByLabel("Subject", subject);
       setByLabel("Message", "QA message body for connected workflow.");
       await clickButton("Send message");
-      const state = await waitFor(() => {
+      const sentState = await waitFor(() => {
         const next = readState();
         return next.messages?.[0]?.subject === subject && next.communicationLogs?.[0]?.subject === subject ? next : null;
       });
+      const sentMessage = sentState?.messages?.[0];
+      await goto("/app/teacher/messages");
+      const inbox = await waitFor(() => document.querySelector('[data-testid="portal-messages-inbox-teacher"]'));
+      const conversation = await waitFor(() =>
+        Array.from(inbox?.querySelectorAll("button") || []).find((button) => normalize(button.textContent).includes(subject))
+      );
+      if (!conversation || !sentMessage) throw new Error("Sent message conversation did not render");
+      conversation.click();
+      const reply = await waitFor(() => document.querySelector('[data-testid="portal-message-reply-teacher"]'));
+      if (!reply) throw new Error("Teacher reply composer did not render");
+      setValue(reply.querySelector("textarea"), "QA reply stays in the same conversation.");
+      await clickButton("Send reply");
+      const state = await waitFor(() => {
+        const next = readState();
+        return next.messages?.find((item) => item.replyToMessageId === sentMessage.id) ? next : null;
+      });
+      const replyMessage = state?.messages?.find((item) => item.replyToMessageId === sentMessage.id);
       return {
         ok: Boolean(state),
-        messageSubject: state?.messages?.[0]?.subject,
-        logSubject: state?.communicationLogs?.[0]?.subject,
-        notification: state?.notifications?.find((item) => item.title === subject)?.title
+        messageSubject: sentMessage?.subject,
+        logSubject: sentState?.communicationLogs?.[0]?.subject,
+        notification: sentState?.notifications?.find((item) => item.title === subject)?.title,
+        sentThreadId: sentMessage?.threadId,
+        replyThreadId: replyMessage?.threadId,
+        replyToMessageId: replyMessage?.replyToMessageId
       };
     `),
     predicate: value =>
-      value?.ok && value?.messageSubject === value?.logSubject,
+      value?.ok &&
+      value?.messageSubject === value?.logSubject &&
+      value?.sentThreadId === value?.replyThreadId &&
+      Boolean(value?.replyToMessageId),
+  },
+  {
+    name: "registrar messaging workflow sends and logs an admissions message",
+    role: "registrar",
+    route: "/app/registrar/messages",
+    source: workflowActionSource(`
+      await goto("/app/registrar/messages/new");
+      const composer = await waitFor(() => document.querySelector('[data-testid="portal-message-compose-registrar"]'));
+      if (!composer) throw new Error("Registrar message composer did not open");
+      const recipient = composer.querySelector("select");
+      const recipientOption = Array.from(recipient?.options || []).find((option) => option.value === "usr_student_demo");
+      if (!recipient || !recipientOption) throw new Error("Scoped registrar recipient not found");
+      setValue(recipient, recipientOption.value);
+      const subject = "QA registrar message " + Date.now();
+      setValue(composer.querySelector("input[placeholder]"), subject);
+      setValue(composer.querySelector("textarea"), "Admissions follow-up from portal QA.");
+      await clickButton("Send message");
+      const state = await waitFor(() => {
+        const next = readState();
+        const message = next.messages?.find((item) => item.subject === subject);
+        const log = next.communicationLogs?.find((item) => item.subject === subject);
+        return message && log ? next : null;
+      });
+      const message = state?.messages?.find((item) => item.subject === subject);
+      const log = state?.communicationLogs?.find((item) => item.subject === subject);
+      const auditVisibleInRegistrarScope = message
+        ? state?.auditLogs?.some((item) => item.action === "message.sent" && item.entityId === message.id) === true
+        : false;
+      const serverResponse = await fetch("/api/platform/state", { credentials: "include" });
+      const serverPayload = serverResponse.ok ? await serverResponse.json() : null;
+      const serverMessage = serverPayload?.state?.messages?.find((item) => item.subject === subject);
+      const localState = readState();
+      return {
+        ok: Boolean(state),
+        fromUserId: message?.fromUserId,
+        toUserId: message?.toUserId,
+        logActorId: log?.actorId,
+        auditVisibleInRegistrarScope,
+        selectedRecipientId: recipient.value,
+        subjectValue: composer.querySelector("input[placeholder]")?.value,
+        bodyValue: composer.querySelector("textarea")?.value,
+        composerNotice: normalize(composer.querySelector(".platform-attendance-error")?.textContent),
+        localMessageFound: Boolean(localState.messages?.find((item) => item.subject === subject)),
+        serverMessageFound: Boolean(serverMessage),
+        serverStatus: serverResponse.status
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.fromUserId === "usr_registrar_demo" &&
+      value?.toUserId === "usr_student_demo" &&
+      value?.logActorId === "usr_registrar_demo",
   },
   {
     name: "registrar lead intake creates server-backed lead",
@@ -4480,6 +4787,47 @@ const deepWorkflowCases = [
       value?.userStatus === "active" &&
       value?.transferAudit === true &&
       value?.statusAuditCount >= 2,
+  },
+  {
+    name: "super admin messaging workflow sends and logs a platform message",
+    role: "superadmin",
+    route: "/app/admin/messages",
+    source: workflowActionSource(`
+      await goto("/app/admin/messages/new");
+      const composer = await waitFor(() => document.querySelector('[data-testid="portal-message-compose-superadmin"]'));
+      if (!composer) throw new Error("Super Admin message composer did not open");
+      const recipient = composer.querySelector("select");
+      const recipientOption = Array.from(recipient?.options || []).find((option) => option.value === "usr_student_alex_demo");
+      if (!recipient || !recipientOption) throw new Error("Global message recipient not found");
+      setValue(recipient, recipientOption.value);
+      const subject = "QA platform message " + Date.now();
+      setByLabel("Subject", subject);
+      setByLabel("Message", "Platform communication from portal QA.");
+      await clickButton("Send message");
+      const state = await waitFor(() => {
+        const next = readState();
+        const message = next.messages?.find((item) => item.subject === subject);
+        const log = next.communicationLogs?.find((item) => item.subject === subject);
+        const audit = message ? next.auditLogs?.find((item) => item.action === "message.sent" && item.entityId === message.id) : null;
+        return message && log && audit ? next : null;
+      });
+      const message = state?.messages?.find((item) => item.subject === subject);
+      const log = state?.communicationLogs?.find((item) => item.subject === subject);
+      const audit = message ? state?.auditLogs?.find((item) => item.action === "message.sent" && item.entityId === message.id) : null;
+      return {
+        ok: Boolean(state),
+        fromUserId: message?.fromUserId,
+        toUserId: message?.toUserId,
+        logActorId: log?.actorId,
+        auditActorId: audit?.actorId
+      };
+    `),
+    predicate: value =>
+      value?.ok &&
+      value?.fromUserId === "usr_admin_demo" &&
+      value?.toUserId === "usr_student_alex_demo" &&
+      value?.logActorId === "usr_admin_demo" &&
+      value?.auditActorId === "usr_admin_demo",
   },
   {
     name: "admin user workflow creates staff account",

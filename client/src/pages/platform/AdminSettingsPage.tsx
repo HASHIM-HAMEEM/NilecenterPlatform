@@ -18,12 +18,14 @@ export default function AdminSettingsPage() {
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [savedAt, setSavedAt] = useState("");
 
   const saveSettings = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
     setSaving(true);
     setError("");
+    setSavedAt("");
     const response = await runPlatformWorkflowActionRequest({
       type: "settings.save",
       organization: settingsDraft.organization,
@@ -42,6 +44,9 @@ export default function AdminSettingsPage() {
 
     platformStore.setState(response.data.state);
     setVersion(value => value + 1);
+    setSavedAt(
+      new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    );
     toast.success("Platform settings saved");
   };
 
@@ -50,7 +55,7 @@ export default function AdminSettingsPage() {
       <SettingsLayout
         className="admin-settings-page"
         title="Settings"
-        description="Manage global platform configuration only."
+        description="Set the school-wide defaults used across Nile Learn."
         context="Admin"
         actions={
           <button
@@ -65,8 +70,9 @@ export default function AdminSettingsPage() {
         }
         main={
           <DataTableCard
-            title="Organization settings"
-            subtitle="These changes apply across Nile Learn."
+            title="School setup"
+            subtitle="Changes apply across Nile Learn."
+            className="admin-settings-card"
           >
             <form
               id="admin-platform-settings-form"
@@ -74,68 +80,94 @@ export default function AdminSettingsPage() {
               data-testid="admin-settings-form"
               onSubmit={saveSettings}
             >
-              <label>
-                Organization
-                <input
-                  value={settingsDraft.organization}
-                  onChange={event =>
-                    setSettingsDraft(value => ({
-                      ...value,
-                      organization: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Default language
-                <select
-                  value={settingsDraft.defaultLanguage}
-                  onChange={event =>
-                    setSettingsDraft(value => ({
-                      ...value,
-                      defaultLanguage: event.target.value,
-                    }))
-                  }
-                >
-                  <option>English</option>
-                  <option>Arabic</option>
-                  <option>Turkish</option>
-                  <option>Russian</option>
-                </select>
-              </label>
-              <label>
-                Academic term
-                <input
-                  value={settingsDraft.academicTerm}
-                  onChange={event =>
-                    setSettingsDraft(value => ({
-                      ...value,
-                      academicTerm: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Activity retention days
-                <input
-                  type="number"
-                  min="30"
-                  value={settingsDraft.retentionDays}
-                  onChange={event =>
-                    setSettingsDraft(value => ({
-                      ...value,
-                      retentionDays: event.target.value,
-                    }))
-                  }
-                />
-              </label>
+              <section className="admin-settings-section">
+                <div>
+                  <span>School profile</span>
+                  <h2>Identity and language</h2>
+                  <p>Use clear defaults for every school workspace.</p>
+                </div>
+                <div className="admin-settings-field-grid">
+                  <label>
+                    Organization
+                    <input
+                      value={settingsDraft.organization}
+                      onChange={event =>
+                        setSettingsDraft(value => ({
+                          ...value,
+                          organization: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Default language
+                    <select
+                      value={settingsDraft.defaultLanguage}
+                      onChange={event =>
+                        setSettingsDraft(value => ({
+                          ...value,
+                          defaultLanguage: event.target.value,
+                        }))
+                      }
+                    >
+                      <option>English</option>
+                      <option>Arabic</option>
+                      <option>Turkish</option>
+                      <option>Russian</option>
+                    </select>
+                  </label>
+                </div>
+              </section>
+              <section className="admin-settings-section">
+                <div>
+                  <span>Academic defaults</span>
+                  <h2>Learning cycle</h2>
+                  <p>
+                    Keep academic context and activity retention consistent.
+                  </p>
+                </div>
+                <div className="admin-settings-field-grid">
+                  <label>
+                    Academic term
+                    <input
+                      value={settingsDraft.academicTerm}
+                      onChange={event =>
+                        setSettingsDraft(value => ({
+                          ...value,
+                          academicTerm: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Activity retention days
+                    <input
+                      type="number"
+                      min="30"
+                      value={settingsDraft.retentionDays}
+                      onChange={event =>
+                        setSettingsDraft(value => ({
+                          ...value,
+                          retentionDays: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+              </section>
               <p className="admin-settings-helper">
-                Connections and activity are managed on their own pages.
+                Connections and activity have their own System pages.
               </p>
               {error ? (
-                <div className="platform-empty-state error">
+                <div className="admin-system-result error" role="alert">
                   <strong>Settings were not saved</strong>
                   <span>{error}</span>
+                </div>
+              ) : null}
+              {savedAt ? (
+                <div className="admin-system-result success" role="status">
+                  <strong>Settings saved</strong>
+                  <span>Saved at {savedAt}.</span>
                 </div>
               ) : null}
             </form>

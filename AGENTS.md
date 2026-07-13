@@ -64,7 +64,7 @@ Do not duplicate or infer that status in companion files.
 
 Current QA baseline:
 
-- Portal QA: 1,501 checks, 0 failures.
+- Portal QA: 1,598 checks, 0 failures.
 - This baseline must not be broken.
 
 Current priority:
@@ -203,10 +203,21 @@ Use the commands that exist in `package.json`:
   linked or shared project.
 - `npm run check:phase2-session-schema` for the static Phase 2B RPC, privilege,
   evidence, and rollback contract.
+- `npm run check:phase2-session-schema:runtime` for two portable Phase 2B SQL
+  applications, exact parameter-bound replay/conflict behavior, live authority
+  refresh, injected transaction rollback, direct database-role denial, and one
+  rollback/reapply lifecycle in PGlite. It never contacts PostgREST or a
+  Supabase project.
 - `npm run check:phase2-session:supabase` for the guarded disposable-local
-  PostgREST session adapter gate. It verifies durable create, hashed-token
-  storage, atomic resolve, expiry, live scope refresh, revocation, and browser
-  role denial. It must never target a linked or shared project.
+  PostgREST session adapter gate. It resets only the recognized local Supabase
+  project from migration history, then verifies the exact fake fixture, durable
+  create, hashed-token storage, resolve, expiry, live scope refresh, revocation,
+  and browser role denial. It must never target a linked or shared project.
+- `npm run check:phase2-session:postgrest` for an already-running isolated local
+  PostgREST endpoint when Docker operation is not approved. It requires an
+  explicit local-only acknowledgement, rejects non-local URLs, requires the
+  exact fresh fake fixture marker, and never applies SQL or changes the runtime
+  default.
 - `npm test -- --run` for Vitest in this local workspace.
 - `npm run build` for production build.
 - `scripts/verify.sh` runs a non-mutating Prettier check for `CLAUDE.md`, `AGENTS.md`, `.codex/hooks.json`, and `.codex/prompts/*.md` by default.
@@ -216,18 +227,22 @@ Use the commands that exist in `package.json`:
 
 `scripts/verify.sh` keeps the Docker-backed Phase 1 Supabase gate opt-in. Set
 `RUN_SUPABASE_LOCAL_CHECK=1` only when the disposable local stack is running.
-Run the Phase 2 adapter gate separately when its current slice requires it.
+It runs the Phase 2B static and portable PGlite gates by default. Run the real
+Phase 2 PostgREST adapter gate separately only against the approved isolated
+endpoint when its current slice requires it.
 
 `npm run lint` and `npm run typecheck` are not currently defined. Do not report them as run unless scripts are added.
 
 ## Browser Policy
 
-For browser/manual QA, use Aside by default:
+For browser/manual QA, use the Codex in-app Browser:
 
-- Use `aside repl` for deterministic route checks, snapshots, screenshots, responsive checks, and smoke tests.
-- Use `aside exec` for broader browser-agent tasks.
-- Use `aside mcp` when the Aside MCP server is connected in the current Codex session.
-- Fall back to another browser surface only when Aside is unavailable, blocked, or the task explicitly requires it.
+- Reuse the Codex in-app Browser tab for route checks, DOM inspection,
+  screenshots, responsive checks, and smoke tests.
+- Do not launch Chrome, a browser extension, standalone Playwright, Selenium,
+  or another browser window for manual QA.
+- If the Codex in-app Browser is unavailable, stop browser work and report the
+  blocker instead of silently switching browser surfaces.
 
 Repository validation commands such as `npm run qa:portals` may still use their built-in automation.
 

@@ -74,8 +74,8 @@
 }
 
 .registrar-admissions-toolbar-v3 .portal-simple-tabs a.active {
-  background: var(--foreground);
-  color: var(--background);
+  background: var(--role-color);
+  color: white;
 }
 
 .registrar-admissions-toolbar-v3 .platform-search-field {
@@ -195,9 +195,9 @@
 .registrar-admissions-page .registrar-placement-booking-form button {
   min-height: 42px;
   align-self: end;
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: transparent;
+  background: var(--role-color);
+  color: white;
 }
 
 .registrar-admissions-page .registrar-admissions-card > header,
@@ -267,9 +267,14 @@
 
 .registrar-admissions-page .registrar-lead-list button:not(:disabled),
 .registrar-admissions-page .registrar-application-list button:not(:disabled) {
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: transparent;
+  background: var(--role-color);
+  color: white;
+}
+
+.registrar-admissions-page .registrar-lead-list button:not(:disabled):hover,
+.registrar-admissions-page .registrar-application-list button:not(:disabled):hover {
+  background: color-mix(in srgb, var(--role-color) 88%, white);
 }
 
 .registrar-admissions-page .registrar-row-link {
@@ -430,9 +435,9 @@
 
 .registrar-schedule-create-page .branch-room-form.stacked button {
   min-height: 42px;
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: transparent;
+  background: var(--role-color);
+  color: white;
 }
 
 .registrar-schedule-list .registrar-operations-list {
@@ -617,9 +622,9 @@
 
 .registrar-create-stepper li.active > span,
 .registrar-create-stepper li.complete > span {
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: transparent;
+  background: var(--role-color);
+  color: white;
 }
 
 .registrar-student-create-page .registrar-student-create-form label {
@@ -668,9 +673,9 @@
   gap: 7px;
   padding-inline: 14px;
   border-radius: 7px;
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: transparent;
+  background: var(--role-color);
+  color: white;
   font: inherit;
   font-size: 13px;
   font-weight: 750;
@@ -697,9 +702,9 @@
 .registrar-student-create-page .registrar-student-create-form > button {
   min-height: 42px;
   align-self: end;
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: transparent;
+  background: var(--role-color);
+  color: white;
 }
 
 .registrar-students-list-page .registrar-students-table > header,
@@ -1019,9 +1024,9 @@
 
 .registrar-payment-composer-form button {
   min-height: 42px;
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: transparent;
+  background: var(--role-color);
+  color: white;
 }
 
 .registrar-payments-page .registrar-payment-table {
@@ -1074,9 +1079,9 @@
   min-height: 34px;
   padding-inline: 10px;
   border-radius: 7px;
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: transparent;
+  background: var(--role-color);
+  color: white;
   font-size: 12px;
 }
 
@@ -1361,9 +1366,9 @@
 
 .registrar-enrollments-page .registrar-workflow-list > article > button {
   min-height: 38px;
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: transparent;
+  background: var(--role-color);
+  color: white;
   border-radius: 7px;
 }
 

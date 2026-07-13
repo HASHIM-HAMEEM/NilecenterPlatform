@@ -9,6 +9,7 @@ import type {
   ClassSession,
   Certificate,
   CommunicationLog,
+  Document,
   EntityStatus,
   Grade,
   IntegrationConfig,
@@ -35,6 +36,7 @@ import type {
   StaffRole,
   SupportTicket,
   StudentEntrySource,
+  StudentIntakeDocumentType,
   StudentStatus,
   UserNotificationPreferences,
   QuestionBankItem,
@@ -50,6 +52,10 @@ import {
   type Permission,
   type Role,
 } from "../platformData.js";
+import {
+  messageConversationId,
+  replyMessageSubject,
+} from "./messageThreads.js";
 
 export type PlatformLearningAction =
   | {
@@ -89,6 +95,7 @@ export type CreateLeadActionInput = Pick<
 > & {
   country?: string;
   source?: Lead["source"];
+  sourceKey?: string;
 };
 
 export type CreateApplicationActionInput = Pick<
@@ -101,6 +108,7 @@ export type CreateApplicationActionInput = Pick<
   country?: string;
   notes?: string;
   source?: Lead["source"];
+  sourceKey?: string;
 };
 
 export type CreatePlacementActionInput = Pick<
@@ -109,6 +117,7 @@ export type CreatePlacementActionInput = Pick<
 > & {
   branchId?: string;
   leadId?: string;
+  sourceKey?: string;
 };
 
 export type CreateSupportTicketCommand = {
@@ -118,6 +127,7 @@ export type CreateSupportTicketCommand = {
   category: string;
   priority: SupportTicket["priority"];
   actorId: string;
+  sourceKey?: string;
 };
 
 export type CreateCurriculumModuleActionInput = Pick<
@@ -163,6 +173,7 @@ export type SubmitAttendanceExceptionActionInput = {
   attendanceRecordId: string;
   reason: string;
   studentId?: string;
+  sourceKey?: string;
 };
 
 export type ReviewAttendanceExceptionActionInput = {
@@ -232,6 +243,7 @@ export type SendMessageActionInput = {
   fromUserId?: string;
   toUserId: string;
   recipientUserIds?: string[];
+  replyToMessageId?: string;
   subject: string;
   body: string;
   channel?: CommunicationLog["channel"];
@@ -501,6 +513,13 @@ export type UpdateStudentStatusActionInput = {
   actorId?: string;
 };
 
+export type AddStudentDocumentActionInput = {
+  studentId: string;
+  documentType: StudentIntakeDocumentType;
+  attachment: PendingMediaAttachment;
+  actorId?: string;
+};
+
 export type UpdateProfileActionInput = {
   userId?: string;
   name?: string;
@@ -527,6 +546,7 @@ export type PlatformWorkflowAction =
   | ({ type: "staff.user.create" } & CreateStaffUserActionInput)
   | ({ type: "student.create" } & CreateStudentActionInput)
   | ({ type: "student.status.update" } & UpdateStudentStatusActionInput)
+  | ({ type: "student.document.add" } & AddStudentDocumentActionInput)
   | ({ type: "profile.update" } & UpdateProfileActionInput)
   | ({ type: "user.update" } & UpdateUserActionInput)
   | ({ type: "permission.update" } & UpdatePermissionActionInput)
@@ -625,7 +645,10 @@ export type PlatformWorkflowAction =
       type: "attendance.exception.review";
       actorId?: string;
     } & ReviewAttendanceExceptionActionInput)
-  | ({ type: "assignment.update"; actorId?: string } & UpdateAssignmentActionInput)
+  | ({
+      type: "assignment.update";
+      actorId?: string;
+    } & UpdateAssignmentActionInput)
   | ({
       type: "assignment.status.update";
       actorId?: string;
@@ -698,6 +721,7 @@ export type PlatformWorkflowAction =
       type: "recitation.submit";
       actorId?: string;
     } & SubmitRecitationActionInput)
+  | { type: "message.read"; messageId: string; actorId?: string }
   | { type: "notification.read"; notificationId: string; actorId?: string };
 
 export type PlatformLearningActionResult =
@@ -755,7 +779,8 @@ function appendAudit(
   entityType: string,
   entityId: string,
   summary: string,
-  actorId = "usr_student_demo"
+  actorId = "usr_student_demo",
+  sourceKey?: string
 ) {
   const audit: AuditLog = {
     id: ctx.createId("audit"),
@@ -764,6 +789,7 @@ function appendAudit(
     entityType,
     entityId,
     summary,
+    sourceKey,
     createdAt: ctx.now(),
   };
   state.auditLogs = [audit, ...state.auditLogs].slice(0, 160);
@@ -1435,6 +1461,7 @@ function appendInternalCommunicationLog(
     subject: string;
     body: string;
     relatedUserId?: string;
+    sourceKey?: string;
   }
 ) {
   const log: CommunicationLog = {
@@ -1444,6 +1471,7 @@ function appendInternalCommunicationLog(
     subject: input.subject,
     body: input.body,
     relatedUserId: input.relatedUserId,
+    sourceKey: input.sourceKey,
     status: "completed",
     createdAt: ctx.now(),
   };
@@ -1456,6 +1484,11 @@ function applyCreateLead(
   input: CreateLeadActionInput & { actorId?: string },
   ctx: MutationContext
 ) {
+  const replayLead = input.sourceKey
+    ? state.leads.find(lead => lead.sourceKey === input.sourceKey)
+    : undefined;
+  if (replayLead) return replayLead;
+
   const lead: Lead = {
     id: ctx.createId("lead"),
     fullName: input.fullName,
@@ -1466,6 +1499,7 @@ function applyCreateLead(
     source: input.source ?? "trial_form",
     status: "lead",
     notes: input.notes,
+    sourceKey: input.sourceKey,
     createdAt: ctx.now(),
   };
   state.leads = [lead, ...state.leads];
@@ -1476,7 +1510,8 @@ function applyCreateLead(
     "Lead",
     lead.id,
     `Created lead for ${lead.fullName} from ${lead.source}.`,
-    input.actorId ?? "usr_registrar_demo"
+    input.actorId ?? "usr_registrar_demo",
+    input.sourceKey
   );
   return lead;
 }
@@ -1486,6 +1521,26 @@ function applyCreateApplication(
   input: CreateApplicationActionInput & { actorId?: string },
   ctx: MutationContext
 ) {
+  const replayApplication = input.sourceKey
+    ? state.applications.find(item => item.sourceKey === input.sourceKey)
+    : undefined;
+  const replayLead = replayApplication
+    ? state.leads.find(item => item.id === replayApplication.leadId)
+    : undefined;
+  const replayCommunication = replayApplication
+    ? state.communicationLogs.find(item => item.sourceKey === input.sourceKey)
+    : undefined;
+  if (replayApplication) {
+    if (!replayLead || !replayCommunication) {
+      throw new Error("Application replay evidence is incomplete.");
+    }
+    return {
+      lead: replayLead,
+      application: replayApplication,
+      communicationLog: replayCommunication,
+    };
+  }
+
   const fullName = input.fullName.trim();
   const email = input.email.trim().toLowerCase();
   const phone = input.phone.trim();
@@ -1534,6 +1589,7 @@ function applyCreateApplication(
     source: input.source ?? "manual",
     status: "ready_to_enroll",
     notes: input.notes?.trim() || undefined,
+    sourceKey: input.sourceKey,
     createdAt: ctx.now(),
   };
   const application: Application = {
@@ -1542,12 +1598,14 @@ function applyCreateApplication(
     branchId: branch.id,
     courseInterest,
     schedulePreference,
+    sourceKey: input.sourceKey,
     status: "pending",
   };
   const communicationLog = appendInternalCommunicationLog(state, ctx, {
     actorId,
     subject: "Application intake",
     body: `Internal follow-up logged for ${fullName}; no external message was sent.`,
+    sourceKey: input.sourceKey,
   });
 
   state.leads = [lead, ...state.leads];
@@ -1559,7 +1617,8 @@ function applyCreateApplication(
     "Application",
     application.id,
     `Created application for ${fullName} in ${branch.name}.`,
-    actorId
+    actorId,
+    input.sourceKey
   );
   return { lead, application, communicationLog };
 }
@@ -1569,6 +1628,11 @@ function applyCreatePlacementBooking(
   input: CreatePlacementActionInput & { actorId?: string },
   ctx: MutationContext
 ) {
+  const replayBooking = input.sourceKey
+    ? state.placementTests.find(item => item.sourceKey === input.sourceKey)
+    : undefined;
+  if (replayBooking) return replayBooking;
+
   const linkedLead = input.leadId
     ? state.leads.find(item => item.id === input.leadId)
     : undefined;
@@ -1599,6 +1663,7 @@ function applyCreatePlacementBooking(
       linkedApplication?.courseInterest ?? linkedLead?.subject ?? input.subject,
     preferredDate: input.preferredDate,
     currentLevel: input.currentLevel,
+    sourceKey: input.sourceKey,
     status: "pending",
   };
   state.placementTests = [booking, ...state.placementTests];
@@ -1609,7 +1674,8 @@ function applyCreatePlacementBooking(
     "PlacementTestBooking",
     booking.id,
     `Booked placement test for ${booking.fullName}.`,
-    input.actorId ?? "usr_registrar_demo"
+    input.actorId ?? "usr_registrar_demo",
+    input.sourceKey
   );
   return booking;
 }
@@ -1620,6 +1686,11 @@ export function applyCreateSupportTicket(
   ctxInput?: Partial<MutationContext>
 ) {
   const ctx = context(ctxInput);
+  const replayTicket = input.sourceKey
+    ? state.supportTickets.find(item => item.sourceKey === input.sourceKey)
+    : undefined;
+  if (replayTicket) return replayTicket;
+
   const requester = state.users.find(
     user => user.id === input.requesterId && user.status === "active"
   );
@@ -1641,6 +1712,7 @@ export function applyCreateSupportTicket(
     category,
     priority: input.priority,
     status: "pending",
+    sourceKey: input.sourceKey,
     lastUpdatedAt: ctx.now(),
   };
   state.supportTickets = [ticket, ...state.supportTickets];
@@ -1651,7 +1723,8 @@ export function applyCreateSupportTicket(
     "SupportTicket",
     ticket.id,
     `Created support ticket: ${ticket.subject}.`,
-    input.actorId
+    input.actorId,
+    input.sourceKey
   );
   return ticket;
 }
@@ -1933,7 +2006,8 @@ function assignmentLifecycleContext(
   const assignment = state.assignments.find(item => item.id === assignmentId);
   if (!assignment) throw new Error(`Assignment ${assignmentId} was not found.`);
   const run = state.courseRuns.find(item => item.id === assignment.courseRunId);
-  if (!run) throw new Error(`Course run ${assignment.courseRunId} was not found.`);
+  if (!run)
+    throw new Error(`Course run ${assignment.courseRunId} was not found.`);
   assertTeacherCanUseCourseRun(
     state,
     actorId,
@@ -1957,14 +2031,17 @@ function applyUpdateAssignment(
     throw new Error("Only a draft assignment can be edited.");
   }
   if (
-    state.assignmentSubmissions.some(item => item.assignmentId === assignment.id)
+    state.assignmentSubmissions.some(
+      item => item.assignmentId === assignment.id
+    )
   ) {
     throw new Error("An assignment with submissions cannot be edited.");
   }
   const title = input.title.trim();
   const dueTime = new Date(input.dueAt).getTime();
   if (!title) throw new Error("Assignment title is required.");
-  if (!Number.isFinite(dueTime)) throw new Error("Assignment requires a valid due date.");
+  if (!Number.isFinite(dueTime))
+    throw new Error("Assignment requires a valid due date.");
   if (
     input.dueAt.slice(0, 10) < run.startsOn ||
     input.dueAt.slice(0, 10) > run.endsOn
@@ -2012,13 +2089,17 @@ function applyUpdateAssignmentStatus(
     }
     assertCourseRunReadyForDelivery(state, run, "Assignment publication");
     if (new Date(assignment.dueAt).getTime() <= new Date(ctx.now()).getTime()) {
-      throw new Error("Assignment due date must be in the future when published.");
+      throw new Error(
+        "Assignment due date must be in the future when published."
+      );
     }
     const activeGroups = state.classGroups.filter(
       item => item.courseRunId === run.id && item.status === "active"
     );
     if (!activeGroups.length) {
-      throw new Error("Publish the assignment only after an active class exists.");
+      throw new Error(
+        "Publish the assignment only after an active class exists."
+      );
     }
     assignment.status = "active";
     notifyActiveLearnersForAssignment(state, ctx, assignment, {
@@ -2029,7 +2110,9 @@ function applyUpdateAssignmentStatus(
   } else if (input.status === "cancelled") {
     const wasPublished = assignment.status === "active";
     if (reason.length < 5) {
-      throw new Error("Assignment cancellation reason must be at least 5 characters.");
+      throw new Error(
+        "Assignment cancellation reason must be at least 5 characters."
+      );
     }
     if (submissions.length) {
       throw new Error("An assignment with submissions cannot be cancelled.");
@@ -2049,9 +2132,7 @@ function applyUpdateAssignmentStatus(
     const duePassed =
       new Date(assignment.dueAt).getTime() <= new Date(ctx.now()).getTime();
     const activeLearnerIds = new Set(
-      activeLearnersForAssignment(state, assignment).map(
-        item => item.studentId
-      )
+      activeLearnersForAssignment(state, assignment).map(item => item.studentId)
     );
     const completedLearnerIds = new Set(
       submissions
@@ -2118,10 +2199,7 @@ function normalizeQuizLimits(durationMinutes: number, attemptsAllowed: number) {
   };
 }
 
-function quizQuestionTypes(
-  state: PlatformState,
-  questionIds: string[]
-) {
+function quizQuestionTypes(state: PlatformState, questionIds: string[]) {
   return Array.from(
     new Set(
       questionIds
@@ -2286,7 +2364,11 @@ function applyUpdateQuiz(
   input: UpdateQuizActionInput & { actorId?: string },
   ctx: MutationContext
 ) {
-  const { quiz, run } = quizLifecycleContext(state, input.quizId, input.actorId);
+  const { quiz, run } = quizLifecycleContext(
+    state,
+    input.quizId,
+    input.actorId
+  );
   if (quiz.status !== "draft") {
     throw new Error("Only a draft quiz can be edited.");
   }
@@ -2321,7 +2403,11 @@ function applyUpdateQuizStatus(
   input: UpdateQuizStatusActionInput & { actorId?: string },
   ctx: MutationContext
 ) {
-  const { quiz, run } = quizLifecycleContext(state, input.quizId, input.actorId);
+  const { quiz, run } = quizLifecycleContext(
+    state,
+    input.quizId,
+    input.actorId
+  );
   const reason = input.reason?.trim() ?? "";
   if (quiz.status === "completed" || quiz.status === "cancelled") {
     throw new Error("A terminal quiz cannot change status.");
@@ -2359,7 +2445,9 @@ function applyUpdateQuizStatus(
   } else if (input.status === "cancelled") {
     const wasPublished = quiz.status === "active";
     if (reason.length < 5) {
-      throw new Error("Quiz cancellation reason must be at least 5 characters.");
+      throw new Error(
+        "Quiz cancellation reason must be at least 5 characters."
+      );
     }
     if (attempts.length) {
       throw new Error("A quiz with attempts cannot be cancelled.");
@@ -2376,7 +2464,8 @@ function applyUpdateQuizStatus(
     if (quiz.status !== "active") {
       throw new Error("Only a published quiz can be closed.");
     }
-    const duePassed = new Date(quiz.dueAt).getTime() <= new Date(ctx.now()).getTime();
+    const duePassed =
+      new Date(quiz.dueAt).getTime() <= new Date(ctx.now()).getTime();
     const activeLearnerIds = new Set(
       activeLearnersForQuiz(state, quiz).map(item => item.studentId)
     );
@@ -2931,6 +3020,13 @@ export function applySubmitAttendanceException(
   input: SubmitAttendanceExceptionActionInput & { actorId?: string },
   ctx: MutationContext
 ) {
+  const replayRequest = input.sourceKey
+    ? state.attendanceExceptions.find(
+        item => item.sourceKey === input.sourceKey
+      )
+    : undefined;
+  if (replayRequest) return replayRequest;
+
   const reason = input.reason.trim();
   if (reason.length < 10) {
     throw new Error(
@@ -2991,6 +3087,7 @@ export function applySubmitAttendanceException(
     reason,
     status: "pending" as const,
     submittedAt: ctx.now(),
+    sourceKey: input.sourceKey,
   };
   state.attendanceExceptions = [request, ...state.attendanceExceptions];
   const run = state.courseRuns.find(item => item.id === classGroup.courseRunId);
@@ -3009,7 +3106,8 @@ export function applySubmitAttendanceException(
     "AttendanceExceptionRequest",
     request.id,
     `Attendance exception submitted for ${classSession.title}.`,
-    input.actorId ?? "usr_student_demo"
+    input.actorId ?? "usr_student_demo",
+    input.sourceKey
   );
   return request;
 }
@@ -3507,12 +3605,44 @@ function applySendMessage(
   const recipientUserIds = Array.from(
     new Set([input.toUserId, ...(input.recipientUserIds ?? [])])
   ).filter(Boolean);
+  const replyToMessage = input.replyToMessageId
+    ? state.messages.find(message => message.id === input.replyToMessageId)
+    : undefined;
+
+  if (input.replyToMessageId && !replyToMessage) {
+    throw new Error("The selected message is no longer available.");
+  }
+
+  if (replyToMessage) {
+    const counterpartUserId =
+      replyToMessage.fromUserId === fromUserId
+        ? replyToMessage.toUserId
+        : replyToMessage.fromUserId;
+    const continuesSelectedConversation =
+      (replyToMessage.fromUserId === fromUserId ||
+        replyToMessage.toUserId === fromUserId) &&
+      recipientUserIds.length === 1 &&
+      recipientUserIds[0] === counterpartUserId;
+
+    if (!continuesSelectedConversation) {
+      throw new Error("The reply must stay in the selected conversation.");
+    }
+  }
+
+  const messageSubject = replyToMessage
+    ? replyMessageSubject(replyToMessage.subject)
+    : input.subject;
+
   const messages = recipientUserIds.map(toUserId => {
     const message: Message = {
       id: ctx.createId("msg"),
       fromUserId,
       toUserId,
-      subject: input.subject,
+      threadId: replyToMessage
+        ? messageConversationId(replyToMessage)
+        : ctx.createId("thread"),
+      replyToMessageId: replyToMessage?.id,
+      subject: messageSubject,
       body: input.body,
       attachments: input.attachments?.length ? input.attachments : undefined,
       read: false,
@@ -3522,7 +3652,7 @@ function applySendMessage(
       id: ctx.createId("comm"),
       actorId: fromUserId,
       channel: input.channel ?? "in_app",
-      subject: input.subject,
+      subject: messageSubject,
       body: input.body,
       attachments: input.attachments?.length ? input.attachments : undefined,
       relatedUserId: toUserId,
@@ -3531,12 +3661,15 @@ function applySendMessage(
     };
     const recipient = state.users.find(user => user.id === toUserId);
     state.communicationLogs = [log, ...state.communicationLogs];
-    notify(state, ctx, {
-      userId: toUserId,
-      title: input.subject,
-      body: input.body,
-      href: messageRouteForUser(recipient),
-    });
+    if (recipient?.notificationPreferences?.messages !== false) {
+      notify(state, ctx, {
+        userId: toUserId,
+        title: messageSubject,
+        body: input.body,
+        href: messageRouteForUser(recipient),
+        relatedMessageId: message.id,
+      });
+    }
     appendAudit(
       state,
       ctx,
@@ -4055,6 +4188,99 @@ function applyCreateStudentLifecycleAccount(
     input.actorId ?? "usr_registrar_demo"
   );
   return result;
+}
+
+const studentIntakeDocumentTypes = new Set<StudentIntakeDocumentType>([
+  "profile_photo",
+  "passport",
+  "national_id",
+  "birth_certificate",
+  "guardian_id",
+  "consent",
+]);
+const studentIdentityMimeTypes = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const maxStudentIdentityDocumentSize = 10 * 1024 * 1024;
+
+function applyAddStudentDocument(
+  state: PlatformState,
+  input: AddStudentDocumentActionInput,
+  ctx: MutationContext
+) {
+  const student = state.students.find(item => item.id === input.studentId);
+  if (!student) throw new Error("Student record was not found.");
+  if (!studentIntakeDocumentTypes.has(input.documentType)) {
+    throw new Error("Choose a valid student identity document type.");
+  }
+
+  const attachment = cleanPendingMedia([input.attachment])[0];
+  if (!attachment) throw new Error("Choose one student identity document.");
+  if (!studentIdentityMimeTypes.has(attachment.type.toLowerCase())) {
+    throw new Error(
+      "Student identity documents must be PDF, JPEG, PNG, or WebP."
+    );
+  }
+  if (attachment.size > maxStudentIdentityDocumentSize) {
+    throw new Error("Student identity documents must be 10 MB or smaller.");
+  }
+  if (input.documentType === "profile_photo" && attachment.kind !== "image") {
+    throw new Error("Student profile photos must be image files.");
+  }
+  if (
+    input.documentType !== "profile_photo" &&
+    attachment.kind !== "document" &&
+    attachment.kind !== "image"
+  ) {
+    throw new Error(
+      "Student identity records accept document or image files only."
+    );
+  }
+  if (
+    state.documents.some(
+      item =>
+        item.ownerId === student.id &&
+        item.ownerType === "student" &&
+        item.type === input.documentType &&
+        item.status !== "cancelled" &&
+        item.status !== "rejected"
+    )
+  ) {
+    throw new Error(
+      "This student already has a pending or active document of that type."
+    );
+  }
+
+  const document: Document = {
+    id: ctx.createId("doc_student"),
+    ownerId: student.id,
+    ownerType: "student",
+    title: input.documentType.replaceAll("_", " "),
+    type: input.documentType,
+    url: "",
+    status: "pending",
+    sensitivity: "restricted_identity",
+    fileName: attachment.name,
+    mimeType: attachment.type,
+    size: attachment.size,
+    storageStatus: "pending_storage",
+    createdAt: ctx.now(),
+    createdBy: input.actorId,
+  };
+  state.documents = [document, ...state.documents];
+  appendAudit(
+    state,
+    ctx,
+    "student.document_metadata_added",
+    "Document",
+    document.id,
+    `Added pending ${input.documentType.replaceAll("_", " ")} metadata for student ${student.id}; no file was stored.`,
+    input.actorId ?? "usr_registrar_demo"
+  );
+  return document;
 }
 
 function applyUpdateStudentStatus(
@@ -7033,6 +7259,24 @@ function applyMarkNotificationRead(
   );
 }
 
+function applyMarkMessageRead(
+  state: PlatformState,
+  input: { messageId: string }
+) {
+  const message = state.messages.find(item => item.id === input.messageId);
+  if (!message) return undefined;
+  state.messages = state.messages.map(message =>
+    message.id === input.messageId ? { ...message, read: true } : message
+  );
+  state.notifications = state.notifications.map(notification =>
+    notification.userId === message.toUserId &&
+    notification.relatedMessageId === message.id
+      ? { ...notification, read: true }
+      : notification
+  );
+  return state.messages.find(item => item.id === input.messageId);
+}
+
 function applySaveReportPreset(
   state: PlatformState,
   input: Extract<PlatformWorkflowAction, { type: "report.preset.save" }>,
@@ -7168,6 +7412,16 @@ export function applyPlatformWorkflowAction(
         entityType: "StudentProfile",
         entityId: result.student.id,
         summary: `Created student ${result.user.name} and assigned ${result.classGroup.name}.`,
+        result,
+      };
+    }
+    case "student.document.add": {
+      const result = applyAddStudentDocument(state, action, ctx);
+      return {
+        action: "student.document_metadata_added",
+        entityType: "Document",
+        entityId: result.id,
+        summary: `Added pending ${result.type.replaceAll("_", " ")} metadata; no file was stored.`,
         result,
       };
     }
@@ -7750,6 +8004,16 @@ export function applyPlatformWorkflowAction(
         entityType: "Notification",
         entityId: action.notificationId,
         summary: "Marked notification as read.",
+        result,
+      };
+    }
+    case "message.read": {
+      const result = applyMarkMessageRead(state, action);
+      return {
+        action: "message.read",
+        entityType: "Message",
+        entityId: action.messageId,
+        summary: "Marked message as read.",
         result,
       };
     }

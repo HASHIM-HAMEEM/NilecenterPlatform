@@ -680,8 +680,7 @@
 
 .admin-record-list > article:hover {
   background: color-mix(in srgb, var(--muted) 52%, var(--card));
-  box-shadow: inset 3px 0 0
-    color-mix(in srgb, var(--foreground) 52%, transparent);
+  box-shadow: none;
 }
 
 .admin-directory-record-list > article,

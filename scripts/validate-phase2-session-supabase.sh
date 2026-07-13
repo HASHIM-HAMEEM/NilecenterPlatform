@@ -39,6 +39,10 @@ if [[ "$CONTAINER_PROJECT_ID" != "$PROJECT_ID" ]] \
   exit 1
 fi
 
+npm run check:phase2-session-schema
+printf '\n==> Reset recognized disposable local Supabase from migration history\n'
+supabase db reset --local
+
 STATUS_OUTPUT="$(supabase status -o env 2>/dev/null)"
 status_value() {
   local value
@@ -63,11 +67,10 @@ if [[ -z "$ANON_KEY" || -z "$SERVICE_ROLE_KEY" || -z "$JWT_SECRET" ]]; then
   exit 1
 fi
 
-npm run check:phase2-session-schema
-
 SUPABASE_URL="$API_URL" \
 SUPABASE_SECRET_KEY="$SERVICE_ROLE_KEY" \
 NILE_LOCAL_SUPABASE_ANON_KEY="$ANON_KEY" \
 NILE_LOCAL_SUPABASE_JWT_SECRET="$JWT_SECRET" \
+NILE_PHASE2_SESSION_DISPOSABLE_LOCAL="1" \
 NILE_SESSION_REPOSITORY="supabase" \
   node --import tsx scripts/validate-phase2-session-supabase.ts

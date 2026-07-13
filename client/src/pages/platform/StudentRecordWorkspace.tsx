@@ -9,7 +9,7 @@ import {
   Headphones,
   Send,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
 import PendingMediaField, {
   PendingMediaSummary,
@@ -24,6 +24,7 @@ import {
 } from "@/lib/backend/api";
 import { getStoredAuthSession } from "@/lib/auth/session";
 import { platformStore } from "@/lib/domain/store";
+import { nileFormsCutoverEnabled } from "@/lib/forms/cutover";
 import type {
   AttendanceStatus,
   PendingMediaAttachment,
@@ -311,6 +312,7 @@ function StudentAttendanceWorkspace({
   state: PlatformState;
   refresh: () => void;
 }) {
+  const [, navigate] = useLocation();
   const scope = getStudentScope(state);
   const [requestingId, setRequestingId] = useState("");
   const [draftRecordId, setDraftRecordId] = useState("");
@@ -459,6 +461,12 @@ function StudentAttendanceWorkspace({
                       type="button"
                       disabled={requestingId === item.record.id}
                       onClick={() => {
+                        if (nileFormsCutoverEnabled) {
+                          navigate(
+                            `/app/student/forms/publication_form_attendance_exception_1?attendanceRecord=${encodeURIComponent(item.record.id)}`
+                          );
+                          return;
+                        }
                         setDraftRecordId(item.record.id);
                         setReason("");
                         setError("");
@@ -724,7 +732,7 @@ function StudentReportsWorkspace({ state }: { state: PlatformState }) {
         description="Compare the learning pace in each course before opening its detail."
         points={reportInsightPoints}
         variant="bars"
-        tone="teal"
+        tone="navy"
         testId="student-reports-insight"
       />
 

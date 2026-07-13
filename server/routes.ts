@@ -36,6 +36,7 @@ import {
 import { getMessageRecipientScope } from "../client/src/lib/domain/messageScope.js";
 import { seedPlatformState } from "../client/src/lib/domain/seed.js";
 import { registerNileFormsRoutes } from "./nileFormsRoutes.js";
+import { registerMoodleRoutes } from "./moodleRoutes.js";
 
 const certificateVerifyAttempts = new Map<
   string,
@@ -203,6 +204,7 @@ export function registerApiRoutes(app: ApiApp) {
   });
 
   registerNileFormsRoutes(app);
+  registerMoodleRoutes(app);
 
   app.get("/api/integrations/supabase/status", async (req, res) => {
     const session = await getApiRequestSession(req, res);
@@ -1104,6 +1106,23 @@ function directoryUsersForSession(
     });
 }
 
+function academicStudentProfiles(
+  students: PlatformStatePayload["students"]
+): PlatformStatePayload["students"] {
+  return students.map(student => {
+    const {
+      legalName: _legalName,
+      dateOfBirth: _dateOfBirth,
+      guardianId: _guardianId,
+      guardianName: _guardianName,
+      guardianPhone: _guardianPhone,
+      notes: _notes,
+      ...academicProfile
+    } = student;
+    return academicProfile;
+  });
+}
+
 function communicationLogsForScope(
   state: PlatformStatePayload,
   sessionUserId: string,
@@ -1801,7 +1820,9 @@ export function scopePlatformStateForSession(
       resources: catalog.resources,
       courseRuns: assignedRuns,
       classGroups: classGroupsForScope(state, classGroupIds, studentIds),
-      students: state.students.filter(item => studentIds.has(item.id)),
+      students: academicStudentProfiles(
+        state.students.filter(item => studentIds.has(item.id))
+      ),
       teachers: teacherProfilesForRuns(
         state,
         new Set([session.userId]),
@@ -1999,7 +2020,9 @@ export function scopePlatformStateForSession(
         classGroupIds,
         academicStudentIds
       ),
-      students: state.students.filter(item => studentIds.has(item.id)),
+      students: academicStudentProfiles(
+        state.students.filter(item => studentIds.has(item.id))
+      ),
       teachers: teacherProfilesForRuns(
         state,
         teacherUserIds,
@@ -2248,7 +2271,7 @@ export function scopePlatformStateForSession(
         ["admissions", "finance"].includes(item.category)
       ),
       documents: state.documents.filter(
-        item => item.ownerId === session.userId
+        item => item.ownerId === session.userId || studentIds.has(item.ownerId)
       ),
       notifications: state.notifications.filter(
         item => item.userId === session.userId
@@ -2400,7 +2423,9 @@ export function scopePlatformStateForSession(
       resources: state.resources.filter(item => lessonIds.has(item.lessonId)),
       courseRuns: assignedRuns,
       classGroups: classGroupsForScope(state, classGroupIds, studentIds),
-      students: state.students.filter(item => studentIds.has(item.id)),
+      students: academicStudentProfiles(
+        state.students.filter(item => studentIds.has(item.id))
+      ),
       teachers: teacherProfilesForRuns(
         state,
         teacherUserIds,

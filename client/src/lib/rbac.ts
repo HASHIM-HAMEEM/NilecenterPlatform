@@ -9,19 +9,25 @@ import {
   type Role,
 } from "./platformData";
 
-export function hasRole(user: Pick<DemoUser, "roles"> | null | undefined, role: Role): boolean {
+export function hasRole(
+  user: Pick<DemoUser, "roles"> | null | undefined,
+  role: Role
+): boolean {
   return Boolean(user?.roles.includes(role));
 }
 
 export function hasPermission(
   user: Pick<DemoUser, "roles"> | null | undefined,
-  permission: Permission,
+  permission: Permission
 ): boolean {
   if (!user) return false;
-  return user.roles.some((role) => rolePermissions[role].includes(permission));
+  return user.roles.some(role => rolePermissions[role].includes(permission));
 }
 
-export function requireRole(user: DemoUser | null | undefined, role: Role): DemoUser {
+export function requireRole(
+  user: DemoUser | null | undefined,
+  role: Role
+): DemoUser {
   if (!user || !hasRole(user, role)) {
     throw new Error(`Access denied: ${role} role required`);
   }
@@ -30,7 +36,7 @@ export function requireRole(user: DemoUser | null | undefined, role: Role): Demo
 
 export function requirePermission(
   user: DemoUser | null | undefined,
-  permission: Permission,
+  permission: Permission
 ): DemoUser {
   if (!user || !hasPermission(user, permission)) {
     throw new Error(`Access denied: ${permission} permission required`);
@@ -43,15 +49,17 @@ export function getDefaultRouteForRole(role: Role): string {
 }
 
 export function getSidebarForRole(role: Role): NavItem[] {
-  return sidebarByRole[role].filter((item) => {
+  return sidebarByRole[role].filter(item => {
     const pageId = getPageIdFromPath(role, item.href);
-    const permission = pageId ? getRequiredPermissionForPage(role, pageId) : "dashboard:read";
+    const permission = pageId
+      ? getRequiredPermissionForPage(role, pageId)
+      : "dashboard:read";
     return roleHasPermission(role, permission);
   });
 }
 
 export function getUserForRole(role: Role): DemoUser {
-  return demoUsers.find((user) => user.activeRole === role) ?? demoUsers[0];
+  return demoUsers.find(user => user.activeRole === role) ?? demoUsers[0];
 }
 
 export function canOpenRoute(role: Role, pathname: string): boolean {
@@ -64,31 +72,93 @@ export function roleHasPermission(role: Role, permission: Permission): boolean {
   return rolePermissions[role].includes(permission);
 }
 
-export function getRequiredPermissionForPage(role: Role, pageId: string): Permission {
+export function getRequiredPermissionForPage(
+  role: Role,
+  pageId: string
+): Permission {
   if (pageId === "dashboard") return "dashboard:read";
   if (pageId === "reports") return "reports:read";
   if (pageId === "messages" || pageId === "support") return "messages:write";
   if (pageId === "forms") return "forms:read";
-  if (pageId === "forms-manage" || pageId === "form-builder") return "forms:write";
+  if (pageId === "forms-manage" || pageId === "form-builder")
+    return "forms:write";
   if (pageId === "form-publish") return "forms:publish";
-  if (pageId === "forms-review" || pageId === "form-submission") return "form_submissions:read";
+  if (pageId === "form-assignments") return "forms:assign";
+  if (pageId === "forms-review" || pageId === "form-submission")
+    return "form_submissions:read";
   if (pageId === "profile") return "dashboard:read";
-  if (pageId === "settings" || pageId === "integrations" || pageId === "system-health") return "settings:write";
-  if (pageId === "audit-logs" || pageId === "platform-blueprint") return "audit:read";
+  if (
+    pageId === "settings" ||
+    pageId === "integrations" ||
+    pageId === "system-health"
+  )
+    return "settings:write";
+  if (pageId === "audit-logs" || pageId === "platform-blueprint")
+    return "audit:read";
   if (pageId === "payments") return "payments:read";
   if (pageId === "attendance") return "attendance:read";
-  if (pageId === "certificates") return role === "headofdepartment" ? "certificates:approve" : "certificates:read";
-  if (pageId === "assignments" || pageId === "assignment-detail" || pageId === "quizzes" || pageId === "quiz-detail" || pageId === "question-bank" || pageId === "grading" || pageId === "assessments" || pageId === "quran-review") {
+  if (pageId === "certificates")
+    return role === "headofdepartment"
+      ? "certificates:approve"
+      : "certificates:read";
+  if (
+    pageId === "assignments" ||
+    pageId === "assignment-detail" ||
+    pageId === "quizzes" ||
+    pageId === "quiz-detail" ||
+    pageId === "question-bank" ||
+    pageId === "grading" ||
+    pageId === "assessments" ||
+    pageId === "quran-review"
+  ) {
     return "assessments:read";
   }
-  if (pageId === "schedule" || pageId === "calendar" || pageId === "sessions" || pageId === "live") return "schedule:read";
+  if (
+    pageId === "schedule" ||
+    pageId === "calendar" ||
+    pageId === "sessions" ||
+    pageId === "live"
+  )
+    return "schedule:read";
   if (pageId === "rooms") return "rooms:read";
   if (pageId === "teachers") return "teachers:read";
-  if (pageId === "users" || pageId === "user-detail" || pageId === "roles" || pageId === "permissions") return "settings:write";
-  if (pageId === "students" || pageId === "student-detail") return "students:read";
-  if (pageId === "classes" || pageId === "class-detail" || pageId === "materials") return "classes:read";
-  if (pageId === "leads" || pageId === "lead-detail" || pageId === "applications" || pageId === "placement-tests" || pageId === "placement-detail" || pageId === "enrollments") return "students:read";
-  if (pageId === "branches" || pageId === "departments" || pageId === "programs" || pageId === "courses" || pageId === "course-detail" || pageId === "lesson" || pageId === "moodle-source" || pageId === "levels" || pageId === "curriculum" || pageId === "quran-progress") return "courses:read";
+  if (
+    pageId === "users" ||
+    pageId === "user-detail" ||
+    pageId === "roles" ||
+    pageId === "permissions"
+  )
+    return "settings:write";
+  if (pageId === "students" || pageId === "student-detail")
+    return "students:read";
+  if (
+    pageId === "classes" ||
+    pageId === "class-detail" ||
+    pageId === "materials"
+  )
+    return "classes:read";
+  if (
+    pageId === "leads" ||
+    pageId === "lead-detail" ||
+    pageId === "applications" ||
+    pageId === "placement-tests" ||
+    pageId === "placement-detail" ||
+    pageId === "enrollments"
+  )
+    return "students:read";
+  if (
+    pageId === "branches" ||
+    pageId === "departments" ||
+    pageId === "programs" ||
+    pageId === "courses" ||
+    pageId === "course-detail" ||
+    pageId === "lesson" ||
+    pageId === "moodle-source" ||
+    pageId === "levels" ||
+    pageId === "curriculum" ||
+    pageId === "quran-progress"
+  )
+    return "courses:read";
   return "dashboard:read";
 }
 

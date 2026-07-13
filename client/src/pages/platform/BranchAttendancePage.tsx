@@ -272,7 +272,7 @@ export default function BranchAttendancePage() {
                 {sessions.length ? (
                   sessions.map(session => (
                     <option key={session.id} value={session.id}>
-                      {session.title} · {formatSession(session.startsAt)}
+                      {session.title}
                     </option>
                   ))
                 ) : (

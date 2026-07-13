@@ -214,6 +214,13 @@ export function registerNileFormsRoutes(
     })
   );
 
+  app.get(
+    "/api/forms/management-options",
+    handler(async (req, res) => {
+      res.json(await service.getManagementOptions(await readSession(req)));
+    })
+  );
+
   app.post(
     "/api/forms/definitions",
     handler(async (req, res) => {

@@ -332,7 +332,7 @@ export default function BranchReportsPage() {
             valueLabel="visible records"
             description="Use the current branch status mix to decide the next local follow-up."
             points={reportInsightPoints}
-            variant="bars"
+            variant="distribution"
             tone="green"
             testId="branch-reports-insight"
           />

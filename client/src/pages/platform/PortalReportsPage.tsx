@@ -250,6 +250,7 @@ export default function PortalReportsPage({
       : view === "payments"
         ? "Payment status"
         : "Admissions status";
+  const reportInsightVariant = isGradeReport ? "bars" : "distribution";
 
   return (
     <PlatformShell role={role} title="Reports">
@@ -357,7 +358,7 @@ export default function PortalReportsPage({
                 : "Use the current status mix to choose the next review queue."
             }
             points={reportInsightPoints}
-            variant="bars"
+            variant={reportInsightVariant}
             tone={role === "teacher" ? "teal" : "amber"}
             testId={`${role}-reports-insight`}
           />

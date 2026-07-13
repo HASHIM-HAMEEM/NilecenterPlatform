@@ -3,6 +3,8 @@ import {
   BookOpen,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Headphones,
   Plus,
   Search,
@@ -25,6 +27,7 @@ import { getActiveUser } from "@/lib/auth/session";
 import { platformStore } from "@/lib/domain/store";
 import type {
   AssignmentSubmission,
+  CalendarEvent,
   CalendarEventType,
   EntityStatus,
   QuizAttempt,
@@ -124,6 +127,67 @@ function truncate(value: string, maxLength = 70) {
   return `${value.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
+function startOfDay(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function isSameDay(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+function monthLabel(value: Date) {
+  return new Intl.DateTimeFormat("en", {
+    month: "long",
+    year: "numeric",
+  }).format(value);
+}
+
+function weekdayLabels() {
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+}
+
+function buildMonthCells(month: Date) {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const startOffset = first.getDay();
+  const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const cells: Array<{ date: Date; inMonth: boolean }> = [];
+
+  for (let index = 0; index < startOffset; index += 1) {
+    cells.push({
+      date: new Date(month.getFullYear(), month.getMonth(), 1 - startOffset + index),
+      inMonth: false,
+    });
+  }
+
+  for (let day = 1; day <= days; day += 1) {
+    cells.push({
+      date: new Date(month.getFullYear(), month.getMonth(), day),
+      inMonth: true,
+    });
+  }
+
+  while (cells.length % 7 !== 0) {
+    const last = cells[cells.length - 1]?.date ?? first;
+    cells.push({
+      date: new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1),
+      inMonth: false,
+    });
+  }
+
+  return cells;
+}
+
+function eventsOnDay(events: CalendarEvent[], day: Date) {
+  return events.filter(event => {
+    const starts = new Date(event.startsAt);
+    return !Number.isNaN(starts.getTime()) && isSameDay(starts, day);
+  });
+}
+
 export default function TeacherWorkPage({
   view,
   assignmentId,
@@ -172,6 +236,13 @@ export default function TeacherWorkPage({
   });
   const [selectedRecitationId, setSelectedRecitationId] = useState("");
   const [calendarResult, setCalendarResult] = useState("");
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState(() =>
+    startOfDay(new Date())
+  );
   const [memorizedPercent, setMemorizedPercent] = useState(0);
   const [tajweedScore, setTajweedScore] = useState(0);
   const [recitationFeedback, setRecitationFeedback] = useState(
@@ -1723,6 +1794,16 @@ export default function TeacherWorkPage({
   }
 
   if (view === "calendar") {
+    const today = startOfDay(new Date());
+    const monthCells = buildMonthCells(calendarMonth);
+    const selectedDayEvents = eventsOnDay(visibleEvents, selectedCalendarDay);
+    const upcomingEvents = visibleEvents
+      .filter(event => {
+        const starts = new Date(event.startsAt);
+        return !Number.isNaN(starts.getTime()) && starts >= today;
+      })
+      .slice(0, 6);
+
     return (
       <PlatformShell role="teacher" title="Calendar">
         <WorkspaceLayout
@@ -1744,47 +1825,213 @@ export default function TeacherWorkPage({
               {actionError ? (
                 <p className="platform-form-error">{actionError}</p>
               ) : null}
-              <DataTableCard
-                title="Scheduled events"
-                subtitle={`${visibleEvents.length} visible`}
-                className="teacher-work-record-card"
+              <section
+                className="teacher-calendar-board"
+                aria-label="Teaching calendar"
               >
-                {visibleEvents.length ? (
-                  <div className="teacher-work-record-list">
-                    {visibleEvents.map(event => (
-                      <article key={event.id}>
-                        <div className="teacher-work-record-copy">
-                          <span>{event.type.replaceAll("_", " ")}</span>
-                          <strong>{event.title}</strong>
-                          <p>
-                            {teacherClassGroups.find(
-                              group => group.id === event.classGroupId
-                            )?.name ?? "General"}
-                          </p>
-                        </div>
-                        <dl className="teacher-work-record-facts">
+                <div className="teacher-calendar-board-main">
+                  <header className="teacher-calendar-board-head">
+                    <div>
+                      <span>Scheduled events</span>
+                      <strong>{monthLabel(calendarMonth)}</strong>
+                      <p>{visibleEvents.length} visible on your calendar</p>
+                    </div>
+                    <div className="teacher-calendar-board-nav">
+                      <button
+                        type="button"
+                        className="platform-icon-button"
+                        aria-label="Previous month"
+                        onClick={() =>
+                          setCalendarMonth(
+                            new Date(
+                              calendarMonth.getFullYear(),
+                              calendarMonth.getMonth() - 1,
+                              1
+                            )
+                          )
+                        }
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="platform-secondary-button"
+                        onClick={() => {
+                          const now = startOfDay(new Date());
+                          setCalendarMonth(
+                            new Date(now.getFullYear(), now.getMonth(), 1)
+                          );
+                          setSelectedCalendarDay(now);
+                        }}
+                      >
+                        Today
+                      </button>
+                      <button
+                        type="button"
+                        className="platform-icon-button"
+                        aria-label="Next month"
+                        onClick={() =>
+                          setCalendarMonth(
+                            new Date(
+                              calendarMonth.getFullYear(),
+                              calendarMonth.getMonth() + 1,
+                              1
+                            )
+                          )
+                        }
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </header>
+
+                  <div className="teacher-calendar-weekdays" aria-hidden="true">
+                    {weekdayLabels().map(label => (
+                      <span key={label}>{label}</span>
+                    ))}
+                  </div>
+
+                  <div className="teacher-calendar-month-grid" role="grid">
+                    {monthCells.map(cell => {
+                      const dayEvents = eventsOnDay(visibleEvents, cell.date);
+                      const selected = isSameDay(
+                        cell.date,
+                        selectedCalendarDay
+                      );
+                      const isToday = isSameDay(cell.date, today);
+                      return (
+                        <button
+                          key={cell.date.toISOString()}
+                          type="button"
+                          role="gridcell"
+                          className={[
+                            "teacher-calendar-day",
+                            cell.inMonth ? "" : "is-outside",
+                            selected ? "is-selected" : "",
+                            isToday ? "is-today" : "",
+                            dayEvents.length ? "has-events" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          aria-label={`${formatDate(cell.date.toISOString())}${dayEvents.length ? `, ${dayEvents.length} events` : ""}`}
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setSelectedCalendarDay(startOfDay(cell.date))
+                          }
+                        >
+                          <span className="teacher-calendar-day-number">
+                            {cell.date.getDate()}
+                          </span>
+                          <span className="teacher-calendar-day-events">
+                            {dayEvents.slice(0, 3).map(event => (
+                              <em key={event.id} title={event.title}>
+                                {event.title}
+                              </em>
+                            ))}
+                            {dayEvents.length > 3 ? (
+                              <small>+{dayEvents.length - 3} more</small>
+                            ) : null}
+                          </span>
+                          {dayEvents.length ? (
+                            <span
+                              className="teacher-calendar-day-dots"
+                              aria-hidden="true"
+                            >
+                              {dayEvents.slice(0, 3).map(event => (
+                                <i key={event.id} />
+                              ))}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <aside className="teacher-calendar-agenda">
+                  <header>
+                    <span>Day plan</span>
+                    <strong>
+                      {new Intl.DateTimeFormat("en", {
+                        weekday: "long",
+                        month: "short",
+                        day: "numeric",
+                      }).format(selectedCalendarDay)}
+                    </strong>
+                    <p>
+                      {selectedDayEvents.length
+                        ? `${selectedDayEvents.length} event${selectedDayEvents.length === 1 ? "" : "s"}`
+                        : "No events this day"}
+                    </p>
+                  </header>
+
+                  <div className="teacher-calendar-agenda-list">
+                    {selectedDayEvents.length ? (
+                      selectedDayEvents.map(event => (
+                        <article key={event.id}>
                           <div>
-                            <dt>When</dt>
-                            <dd>{formatDateTime(event.startsAt)}</dd>
+                            <span>{event.type.replaceAll("_", " ")}</span>
+                            <strong>{event.title}</strong>
+                            <p>
+                              {teacherClassGroups.find(
+                                group => group.id === event.classGroupId
+                              )?.name ?? "General"}{" "}
+                              · {formatDateTime(event.startsAt)}
+                            </p>
                           </div>
-                        </dl>
-                        <div className="teacher-work-record-actions">
                           <StatusBadge tone={statusTone(event.status)}>
                             {event.status}
                           </StatusBadge>
-                        </div>
-                      </article>
-                    ))}
+                        </article>
+                      ))
+                    ) : (
+                      <div className="teacher-calendar-agenda-empty">
+                        <CalendarDays size={18} aria-hidden="true" />
+                        <strong>Free day</strong>
+                        <span>Create an event for this date when needed.</span>
+                        <Link
+                          className="platform-secondary-button"
+                          href="/app/teacher/calendar/new"
+                        >
+                          Create event
+                        </Link>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="platform-empty-state">
-                    <strong>No events scheduled</strong>
-                    <span>
-                      Events for your assigned classes will appear here.
-                    </span>
+
+                  <div className="teacher-calendar-upcoming">
+                    <strong>Coming up</strong>
+                    {upcomingEvents.length ? (
+                      <ul>
+                        {upcomingEvents.map(event => (
+                          <li key={event.id}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const starts = new Date(event.startsAt);
+                                if (Number.isNaN(starts.getTime())) return;
+                                setSelectedCalendarDay(startOfDay(starts));
+                                setCalendarMonth(
+                                  new Date(
+                                    starts.getFullYear(),
+                                    starts.getMonth(),
+                                    1
+                                  )
+                                );
+                              }}
+                            >
+                              <span>{formatDateTime(event.startsAt)}</span>
+                              <em>{event.title}</em>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>No upcoming events yet.</p>
+                    )}
                   </div>
-                )}
-              </DataTableCard>
+                </aside>
+              </section>
             </>
           }
         />

@@ -46,6 +46,7 @@ const questions = [
   { qid: "3", text: "Phone", type: "control_phone", order: "3" },
   { qid: "4", text: "Course", type: "control_dropdown", order: "4" },
   { qid: "5", text: "Contact", type: "control_radio", order: "5" },
+  { qid: "6", text: "Branch", type: "control_dropdown", order: "6" },
 ];
 
 function answer(answer: unknown) {
@@ -54,7 +55,7 @@ function answer(answer: unknown) {
 
 function sourceSubmission(
   id: string,
-  values: [unknown, unknown, unknown, unknown, unknown]
+  values: [unknown, unknown, unknown, unknown, unknown, unknown]
 ): JotformSubmission {
   return {
     id,
@@ -66,6 +67,7 @@ function sourceSubmission(
       "3": answer(values[2]),
       "4": answer(values[3]),
       "5": answer(values[4]),
+      "6": answer(values[5]),
     },
   };
 }
@@ -112,6 +114,7 @@ const mapping = [
   { sourceQuestionId: "3", targetFieldId: "phone" },
   { sourceQuestionId: "4", targetFieldId: "course_interest" },
   { sourceQuestionId: "5", targetFieldId: "preferred_contact" },
+  { sourceQuestionId: "6", targetFieldId: "preferred_branch" },
 ];
 
 beforeEach(() => {
@@ -139,8 +142,16 @@ describe("Nile Forms finite Jotform migration", () => {
         "+20 100 111 2222",
         "Arabic",
         "Email",
+        "br_cairo",
       ]),
-      sourceSubmission("90002", ["A", "not-an-email", "", "Unknown", "Email"]),
+      sourceSubmission("90002", [
+        "A",
+        "not-an-email",
+        "",
+        "Unknown",
+        "Email",
+        "",
+      ]),
     ];
     const service = createNileFormsMigrationService({
       repository: testRepository,
@@ -217,6 +228,7 @@ describe("Nile Forms finite Jotform migration", () => {
         "+20 100 111 2222",
         "Arabic",
         "Email",
+        "br_cairo",
       ]),
     ];
     const service = createNileFormsMigrationService({
@@ -257,6 +269,7 @@ describe("Nile Forms finite Jotform migration", () => {
         "+20 100 111 2222",
         "Arabic",
         "Email",
+        "br_cairo",
       ]),
     ];
     const service = createNileFormsMigrationService({

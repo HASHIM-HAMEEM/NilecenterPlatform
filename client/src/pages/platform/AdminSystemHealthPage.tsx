@@ -7,13 +7,19 @@ import {
   DataTableCard,
   StatusBadge,
 } from "@/components/platform/PlatformPrimitives";
+import {
+  PortalInsight,
+  type InsightPoint,
+} from "@/components/platform/PortalInsights";
 import { runPlatformWorkflowActionRequest } from "@/lib/backend/api";
 import { platformStore } from "@/lib/domain/store";
 import type { IntegrationStatus } from "@/lib/domain/types";
 
 function formatConnectionStatus(status: IntegrationStatus) {
   if (status === "connected") return "Ready";
-  return status === "mock_mode" ? "Test mode" : status.replace("_", " ");
+  if (status === "mock_mode") return "Test mode";
+  if (status === "error") return "Needs review";
+  return "Needs setup";
 }
 
 function integrationTone(
@@ -31,13 +37,6 @@ export default function AdminSystemHealthPage() {
   const [error, setError] = useState("");
   const state = useMemo(() => platformStore.getState(), [version]);
   const integrations = state.integrations;
-  const platformEntityTotal =
-    state.users.length +
-    state.courses.length +
-    state.classGroups.length +
-    state.enrollments.length +
-    state.events.length +
-    state.auditLogs.length;
 
   const healthChecks: Array<{
     id: string;
@@ -48,44 +47,41 @@ export default function AdminSystemHealthPage() {
   }> = [
     {
       id: "app",
-      label: "Application shell",
-      detail:
-        "Role routing, responsive platform shell, and local state are available.",
+      label: "Nile Learn workspace",
+      detail: "Sign-in, school workspaces, and core navigation are available.",
       status: "connected",
       metric: "Ready",
     },
     {
       id: "data",
-      label: "System data",
-      detail: `${platformEntityTotal} records across users, courses, classes, enrollments, events, and activity logs.`,
+      label: "School records",
+      detail: "People, classes, learning records, and activity are available.",
       status: "connected",
-      metric: `${platformEntityTotal} records`,
+      metric: "Available",
     },
     {
       id: "supabase",
-      label: "Supabase boundary",
-      detail:
-        "Browser code uses publishable credentials only; privileged keys stay protected.",
+      label: "Data connection",
+      detail: "Protected setup stays outside the browser workspace.",
       status:
         integrations.find(integration => integration.id === "supabase")
           ?.status ?? "not_configured",
-      metric: "Auth boundary",
+      metric: "Protected",
     },
     {
       id: "moodle",
       label: "Moodle",
-      detail:
-        "Course mapping and activity inspection remain in test/import mode.",
+      detail: "Course content is available only through the approved setup.",
       status:
         integrations.find(integration => integration.id === "moodle")?.status ??
         "not_configured",
-      metric: `${state.courses.length} courses`,
+      metric: "Course source",
     },
     {
       id: "communications",
-      label: "Communications",
+      label: "Message delivery",
       detail:
-        "Email and WhatsApp remain log-first until delivery providers are connected.",
+        "External delivery remains unavailable until a provider is approved.",
       status: integrations.some(
         integration =>
           ["email", "whatsapp"].includes(integration.id) &&
@@ -93,7 +89,7 @@ export default function AdminSystemHealthPage() {
       )
         ? "connected"
         : "mock_mode",
-      metric: `${state.communicationLogs.length} logs`,
+      metric: "Internal only",
     },
   ];
   const healthScore = Math.round(
@@ -103,6 +99,26 @@ export default function AdminSystemHealthPage() {
       healthChecks.length) *
       100
   );
+  const insightPoints: InsightPoint[] = [
+    {
+      label: "Ready",
+      value: healthChecks.filter(check => check.status === "connected").length,
+    },
+    {
+      label: "Test mode",
+      value: healthChecks.filter(check => check.status === "mock_mode").length,
+    },
+    {
+      label: "Needs review",
+      value: healthChecks.filter(
+        check => check.status === "error" || check.status === "not_configured"
+      ).length,
+    },
+  ];
+  const availableChecks = healthChecks.filter(
+    check => check.status === "connected" || check.status === "mock_mode"
+  ).length;
+  const attentionChecks = healthChecks.length - availableChecks;
   const runHealthChecks = async () => {
     if (saving) return;
     setSaving(true);
@@ -130,7 +146,7 @@ export default function AdminSystemHealthPage() {
       <ReportLayout
         className="admin-system-health-page"
         title="Health"
-        description="Review application and connection readiness."
+        description="Review the services that need attention."
         context="Admin"
         actions={
           <button
@@ -144,39 +160,64 @@ export default function AdminSystemHealthPage() {
           </button>
         }
         main={
-          <DataTableCard title="Readiness" subtitle={`${healthScore}% ready`}>
-            {error ? (
-              <div className="platform-empty-state error">
-                <strong>Health check was not saved</strong>
-                <span>{error}</span>
-              </div>
-            ) : null}
-            <div
-              className="admin-record-list admin-health-record-list"
-              data-testid="admin-health-list"
+          <div className="admin-health-workspace">
+            <PortalInsight
+              eyebrow="Health overview"
+              title="Service readiness"
+              value={`${availableChecks}/${healthChecks.length}`}
+              valueLabel="checks available"
+              description={
+                attentionChecks
+                  ? `${attentionChecks} check${attentionChecks === 1 ? " needs" : "s need"} review.`
+                  : "All current checks are available."
+              }
+              points={insightPoints}
+              variant="distribution"
+              tone={attentionChecks ? "amber" : "green"}
+              testId="admin-health-insight"
+              className="admin-health-insight"
+            />
+            <DataTableCard
+              title="Health checks"
+              subtitle={
+                attentionChecks
+                  ? `${attentionChecks} need attention`
+                  : "All checks available"
+              }
+              className="admin-health-checks-card"
             >
-              {healthChecks.map(check => (
-                <article key={check.id}>
-                  <div className="admin-record-list-copy">
-                    <span>Readiness check</span>
-                    <strong>{check.label}</strong>
-                    <p>{check.detail}</p>
-                  </div>
-                  <dl className="admin-record-list-facts">
-                    <div>
-                      <dt>Summary</dt>
-                      <dd>{check.metric}</dd>
+              {error ? (
+                <div className="admin-system-result error" role="alert">
+                  <strong>Health check was not saved</strong>
+                  <span>{error}</span>
+                </div>
+              ) : null}
+              <div
+                className="admin-record-list admin-health-record-list"
+                data-testid="admin-health-list"
+              >
+                {healthChecks.map(check => (
+                  <article key={check.id}>
+                    <div className="admin-record-list-copy">
+                      <strong>{check.label}</strong>
+                      <p>{check.detail}</p>
                     </div>
-                  </dl>
-                  <div className="admin-record-list-meta">
-                    <StatusBadge tone={integrationTone(check.status)}>
-                      {formatConnectionStatus(check.status)}
-                    </StatusBadge>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </DataTableCard>
+                    <dl className="admin-record-list-facts">
+                      <div>
+                        <dt>Summary</dt>
+                        <dd>{check.metric}</dd>
+                      </div>
+                    </dl>
+                    <div className="admin-record-list-meta">
+                      <StatusBadge tone={integrationTone(check.status)}>
+                        {formatConnectionStatus(check.status)}
+                      </StatusBadge>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </DataTableCard>
+          </div>
         }
       />
     </PlatformShell>

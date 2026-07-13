@@ -287,7 +287,7 @@ function StudentLearningDashboard() {
       value: `${progressPercent}%`,
       change: hasLessonProgress
         ? `${completedLessons}/${Math.max(courseLessons.length, 1)} lessons`
-        : "Lesson detail pending",
+        : "Start your first lesson",
       tone: "green",
     },
     {
@@ -532,7 +532,7 @@ function StudentLearningDashboard() {
             : "Your current course progress is ready; lesson detail appears as it is recorded."
         }
         points={studentInsightPoints}
-        tone="teal"
+        tone="navy"
         testId="student-dashboard-insight"
       />
     </PlatformShell>
@@ -1327,7 +1327,7 @@ function TeacherCommandDashboard() {
         description="Compare the learning pace across your assigned class groups."
         points={classMomentumPoints}
         variant="bars"
-        tone="teal"
+        tone="navy"
         testId="teacher-dashboard-insight"
       />
     </PlatformShell>

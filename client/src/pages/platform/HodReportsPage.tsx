@@ -393,7 +393,7 @@ export default function HodReportsPage() {
             valueLabel="visible records"
             description="Use the current status mix to decide where academic review is needed."
             points={reportInsightPoints}
-            variant="bars"
+            variant="distribution"
             tone="purple"
             testId="hod-reports-insight"
           />

@@ -290,3 +290,31 @@ Before considering a UI page complete, verify:
 - Page handles long names, emails, IDs, certificate codes, and Arabic text without overflow.
 - Page preserves RBAC and never trusts client-provided identity or scope fields for authorization.
 - Page does not introduce unrelated design styles, colors, spacing, or new component patterns.
+
+## 22. Route Modernization And Responsive Integrity
+
+- Modernize one named route family at a time. Do not replace several unrelated
+  pages with one generic template just to make them look consistent.
+- Before changing a legacy page, identify its page type and primary job in
+  `docs/UI_INFORMATION_ARCHITECTURE.md`. Keep existing routes and workflow
+  authority unless a separately approved information-architecture slice changes
+  them.
+- A list page may use a compact toolbar, one primary data surface, and an
+  optional small inspector. A detail page may use tabs. A settings page may use
+  grouped form sections. Do not combine those patterns into a control-center
+  layout.
+- Treat 390px, 768px, 1280px, and 1920px as required visual review points.
+  Use fluid grid tracks, `minmax()`, container queries, and logical properties
+  instead of viewport-dependent font scaling or fixed desktop widths.
+- Collapse a main-plus-inspector layout to a clear single-column sequence before
+  controls become cramped. Do not preserve a desktop multi-column layout on
+  mobile by shrinking text or tap targets.
+- Large screens may widen the main work surface, but they must not turn a
+  focused page into a sparse card wall. Keep readable line lengths and group
+  operational rows into one calm surface.
+- Charts and motion are decision aids, not decoration. Use them only when they
+  answer a visible question, include an accessible text equivalent, and respect
+  `prefers-reduced-motion`.
+- Test long names, identifiers, Arabic text, selected filters, empty states,
+  errors, and disabled actions at every route-family boundary. No control,
+  badge, chip, or action may overflow or depend on color alone.

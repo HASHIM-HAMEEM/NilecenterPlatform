@@ -9,8 +9,14 @@ const localUrl = process.env.SUPABASE_URL ?? "";
 const anonKey = process.env.NILE_LOCAL_SUPABASE_ANON_KEY ?? "";
 const jwtSecret = process.env.NILE_LOCAL_SUPABASE_JWT_SECRET ?? "";
 const localHost = new URL(localUrl).hostname;
+const localHosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+assert.equal(
+  process.env.NILE_PHASE2_SESSION_DISPOSABLE_LOCAL,
+  "1",
+  "Phase 2 session validation requires explicit disposable-local acknowledgement."
+);
 assert.ok(
-  localHost === "127.0.0.1" || localHost === "localhost",
+  localHosts.has(localHost),
   "Phase 2 session validation is local-only."
 );
 assert.ok(process.env.SUPABASE_SECRET_KEY, "Local service key is required.");
@@ -21,6 +27,7 @@ const appUserId = "40000000-0000-4000-8000-000000000002";
 const roleGrantId = "50000000-0000-4000-8000-000000000002";
 const branchId = "20000000-0000-4000-8000-000000000001";
 const departmentId = "30000000-0000-4000-8000-000000000001";
+const disposableFixtureId = "a0000000-0000-4000-8000-000000000001";
 
 const repository = createSupabaseSessionRepository({ env: process.env });
 
@@ -65,6 +72,15 @@ async function expectBrowserDenial(
     response.status === 401 || response.status === 403,
     `${label} should be denied, received ${response.status}.`
   );
+  const payload = (await response.json()) as {
+    code?: unknown;
+    message?: unknown;
+  };
+  assert.equal(
+    payload.code,
+    "42501",
+    `${label} did not reach the expected PostgreSQL permission boundary: ${JSON.stringify(payload)}`
+  );
 }
 
 async function adminRequest(path: string, init: RequestInit = {}) {
@@ -74,6 +90,51 @@ async function adminRequest(path: string, init: RequestInit = {}) {
     `Admin request failed: ${init.method ?? "GET"} ${path} (${response.status}).`
   );
   return response;
+}
+
+async function assertDisposableFixture() {
+  const markerResponse = await adminRequest(
+    `integration_connections?id=eq.${disposableFixtureId}&select=id,provider,label,environment,mode,status,capabilities`
+  );
+  assert.deepEqual(await markerResponse.json(), [
+    {
+      id: disposableFixtureId,
+      provider: "nile_phase2_test_fixture",
+      label: "phase2b-disposable-local-v1",
+      environment: "local",
+      mode: "disabled",
+      status: "disabled",
+      capabilities: ["session_acceptance"],
+    },
+  ]);
+
+  const usersResponse = await adminRequest(
+    "app_users?select=id,email&order=id.asc"
+  );
+  const users = (await usersResponse.json()) as Array<{
+    id: string;
+    email: string;
+  }>;
+  assert.deepEqual(
+    users.map(user => user.id),
+    [1, 2, 3, 4, 5, 6].map(
+      suffix => `40000000-0000-4000-8000-${String(suffix).padStart(12, "0")}`
+    ),
+    "Phase 2 session validation requires the exact fake-only user fixture."
+  );
+  assert.ok(
+    users.every(user => user.email.endsWith("@nilelearn.local")),
+    "Phase 2 session validation refuses non-fixture user data."
+  );
+
+  const sessionsResponse = await adminRequest(
+    "auth_sessions?select=id&limit=1"
+  );
+  assert.deepEqual(
+    await sessionsResponse.json(),
+    [],
+    "Phase 2 session validation requires a freshly reset disposable fixture."
+  );
 }
 
 function tokenHash(token: string) {
@@ -117,6 +178,8 @@ assert.deepEqual(identity, {
   branchIds: [branchId],
   departmentIds: [departmentId],
 });
+
+await assertDisposableFixture();
 
 await expectBrowserDenial("anon base table", anonKey, "app_users?select=id");
 await expectBrowserDenial(
@@ -225,6 +288,10 @@ assert.equal(createCommands.length, 1);
 assert.equal(createCommands[0].status, "succeeded");
 assert.equal(createCommands[0].idempotency_key, `session.create:${hash}`);
 assert.match(createCommands[0].request_hash, /^\\x[0-9a-f]{64}$/i);
+const persistedCreateRequestHash = createCommands[0].request_hash.replace(
+  /^\\x/i,
+  ""
+);
 
 const createAuditResponse = await adminRequest(
   `audit_logs?session_id=eq.${sessionId}&action=eq.session.created&select=command_id,action,entity_type,entity_id,after_state,metadata`
@@ -261,6 +328,24 @@ const conflictResponse = await supabaseAdminRestFetch(
   process.env
 );
 assert.equal(conflictResponse.status, 409);
+
+const parameterConflictResponse = await supabaseAdminRestFetch(
+  "rpc/create_auth_session_with_evidence",
+  {
+    method: "POST",
+    body: JSON.stringify({
+      p_token_hash: hash,
+      p_user_id: appUserId,
+      p_auth_user_id: "10000000-0000-4000-8000-000000000003",
+      p_active_role_grant_id: roleGrantId,
+      p_ttl_seconds: 43200,
+      p_idempotency_key: `session.create:${hash}`,
+      p_request_hash: persistedCreateRequestHash,
+    }),
+  },
+  process.env
+);
+assert.equal(parameterConflictResponse.status, 409);
 
 const deniedToken = crypto.randomBytes(32).toString("base64url");
 const deniedHash = tokenHash(deniedToken);
@@ -328,13 +413,19 @@ try {
 assert.ok(await repository.get(activeToken));
 
 const expiredToken = crypto.randomBytes(32).toString("base64url");
-await repository.create(
-  session(
-    expiredToken,
-    new Date(now.getTime() - 2 * 60 * 60_000),
-    new Date(now.getTime() - 60 * 60_000)
-  )
-);
+const expiredHash = tokenHash(expiredToken);
+await adminRequest("auth_sessions", {
+  method: "POST",
+  headers: { Prefer: "return=minimal" },
+  body: JSON.stringify({
+    token_hash: `\\x${expiredHash}`,
+    user_id: appUserId,
+    active_role_grant_id: roleGrantId,
+    provider: "supabase",
+    created_at: new Date(now.getTime() - 2 * 60 * 60_000).toISOString(),
+    expires_at: new Date(now.getTime() - 60 * 60_000).toISOString(),
+  }),
+});
 assert.equal(await repository.get(expiredToken), null);
 await repository.delete(expiredToken);
 
@@ -353,17 +444,36 @@ assert.ok(revokedRows[0].revoked_at);
 assert.equal(revokedRows[0].revoked_by, appUserId);
 
 const lifecycleCommandsResponse = await adminRequest(
-  `command_executions?session_id=eq.${sessionId}&select=command_type,status`
+  `command_executions?session_id=eq.${sessionId}&select=command_type,status,idempotency_key,request_hash`
 );
 const lifecycleCommands = (await lifecycleCommandsResponse.json()) as Array<{
   command_type: string;
   status: string;
+  idempotency_key: string;
+  request_hash: string;
 }>;
 assert.deepEqual(lifecycleCommands.map(item => item.command_type).sort(), [
   "session.create",
   "session.revoke",
 ]);
 assert.ok(lifecycleCommands.every(item => item.status === "succeeded"));
+const revokeCommand = lifecycleCommands.find(
+  item => item.command_type === "session.revoke"
+);
+assert.ok(revokeCommand);
+const revokeParameterConflictResponse = await supabaseAdminRestFetch(
+  "rpc/revoke_auth_session_with_evidence",
+  {
+    method: "POST",
+    body: JSON.stringify({
+      p_token_hash: "0".repeat(64),
+      p_idempotency_key: revokeCommand.idempotency_key,
+      p_request_hash: revokeCommand.request_hash.replace(/^\\x/i, ""),
+    }),
+  },
+  process.env
+);
+assert.equal(revokeParameterConflictResponse.status, 409);
 
 const lifecycleAuditsResponse = await adminRequest(
   `audit_logs?session_id=eq.${sessionId}&select=action,entity_id,after_state`
@@ -392,7 +502,7 @@ console.log(
       "atomic-command-audit",
       "idempotent-replay",
       "idempotency-conflict",
-      "denied-rollback",
+      "authority-denial-no-write",
       "resolve",
       "expiry",
       "branch-status-refresh",

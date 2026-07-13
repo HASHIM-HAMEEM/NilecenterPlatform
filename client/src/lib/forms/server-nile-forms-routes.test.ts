@@ -178,22 +178,32 @@ describe("Nile Forms API routes", () => {
     });
   });
 
-  it("returns only registrar-scoped definitions", async () => {
+  it("keeps global admissions definitions under Super Admin ownership", async () => {
     const { getRoutes } = captureRoutes(async () => registrar);
     const { response, result } = responseRecorder();
 
     await getRoutes.get("/api/forms/definitions")?.(request("GET"), response);
 
     expect(result.status).toBe(200);
-    expect(result.body).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ key: "application_intake" }),
-        expect.objectContaining({ key: "placement_request" }),
-      ])
+    expect(result.body).toEqual([]);
+  });
+
+  it("returns server-scoped management options", async () => {
+    const { getRoutes } = captureRoutes(async () => registrar);
+    const { response, result } = responseRecorder();
+
+    await getRoutes.get("/api/forms/management-options")?.(
+      request("GET"),
+      response
     );
-    expect(result.body).not.toEqual(
+
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({
+      branches: [{ id: "br_cairo", label: "Cairo B1" }],
+    });
+    expect(result.body.users).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ key: "branch_incident" }),
+        expect.objectContaining({ id: "usr_student_alex_demo" }),
       ])
     );
   });
@@ -206,6 +216,7 @@ describe("Nile Forms API routes", () => {
         full_name: "Route Applicant",
         email: "route@example.test",
         phone: "+20 122 222 2222",
+        preferred_branch: "br_cairo",
         course_interest: "arabic",
         preferred_contact: "email",
       },

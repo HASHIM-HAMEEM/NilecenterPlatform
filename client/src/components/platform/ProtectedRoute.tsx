@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import { LockKeyhole, ShieldAlert } from "lucide-react";
-import PlatformShell from "./PlatformShell";
 import { canAccessRole, getStoredRole, refreshServerSession } from "@/lib/auth/session";
 import { fetchPlatformStateRequest } from "@/lib/backend/api";
 import { platformStore } from "@/lib/domain/store";
@@ -134,8 +133,8 @@ export default function ProtectedRoute({ role, pageId = "dashboard", children }:
   }
 
   return (
-    <PlatformShell role={activeRole ?? role} title="Access">
-      <section className="platform-access-denied">
+    <main className="auth-flow-page">
+      <section className="platform-access-denied" aria-live="polite">
         <span>
           <ShieldAlert size={26} />
         </span>
@@ -165,6 +164,6 @@ export default function ProtectedRoute({ role, pageId = "dashboard", children }:
           </Link>
         </div>
       </section>
-    </PlatformShell>
+    </main>
   );
 }

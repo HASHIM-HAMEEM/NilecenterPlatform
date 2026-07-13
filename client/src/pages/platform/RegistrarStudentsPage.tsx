@@ -4,6 +4,7 @@ import {
   BookOpen,
   CheckCircle2,
   ClipboardCheck,
+  FileText,
   Search,
   ShieldCheck,
   SlidersHorizontal,
@@ -13,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { Link } from "wouter";
 import PlatformShell from "@/components/platform/PlatformShell";
+import PendingMediaField from "@/components/platform/PendingMediaField";
 import {
   DetailLayout,
   FormFlowLayout,
@@ -24,7 +26,11 @@ import {
 } from "@/components/platform/PlatformPrimitives";
 import { runPlatformWorkflowActionRequest } from "@/lib/backend/api";
 import { platformStore } from "@/lib/domain/store";
-import type { StudentStatus } from "@/lib/domain/types";
+import type {
+  PendingMediaAttachment,
+  StudentIntakeDocumentType,
+  StudentStatus,
+} from "@/lib/domain/types";
 import { getDemoUser } from "@/lib/platformData";
 
 type RegistrarStudentsPageProps = {
@@ -84,6 +90,11 @@ export default function RegistrarStudentsPage({
     message: string;
   } | null>(null);
   const [pendingAction, setPendingAction] = useState("");
+  const [studentDocumentType, setStudentDocumentType] =
+    useState<StudentIntakeDocumentType>("profile_photo");
+  const [studentDocumentFiles, setStudentDocumentFiles] = useState<
+    PendingMediaAttachment[]
+  >([]);
   const [studentStatusDrafts, setStudentStatusDrafts] = useState<
     Record<string, StudentStatus>
   >({});
@@ -256,6 +267,9 @@ export default function RegistrarStudentsPage({
         audit.summary.includes(selectedStudentUser?.name ?? "__no_student__")
     )
     .slice(0, 5);
+  const selectedStudentDocuments = state.documents.filter(
+    document => document.ownerId === selectedStudent?.id
+  );
 
   const runRegistrarAction = async (
     actionKey: string,
@@ -416,6 +430,27 @@ export default function RegistrarStudentsPage({
       },
       "Student status updated"
     );
+  };
+
+  const addStudentDocument = async () => {
+    const attachment = studentDocumentFiles[0];
+    if (!selectedStudent || !attachment) {
+      toast.error("Choose one student document first");
+      return;
+    }
+    const result = await runRegistrarAction(
+      `student.document.add:${selectedStudent.id}`,
+      {
+        type: "student.document.add",
+        studentId: selectedStudent.id,
+        documentType: studentDocumentType,
+        attachment,
+        actorId,
+      },
+      "Document metadata recorded",
+      "The file is marked as pending storage. No file bytes were uploaded."
+    );
+    if (result) setStudentDocumentFiles([]);
   };
 
   const createForm = (
@@ -1071,6 +1106,86 @@ export default function RegistrarStudentsPage({
             )}
           </div>
         </section>
+        <section className="wide" data-testid="registrar-student-documents">
+          <div className="registrar-panel-head compact">
+            <div>
+              <span>Private identity records</span>
+              <strong>Student documents</strong>
+            </div>
+            <FileText size={16} />
+          </div>
+          <div className="registrar-student-status-control">
+            <label>
+              Document type
+              <select
+                value={studentDocumentType}
+                disabled={isAnyActionPending}
+                onChange={event => {
+                  setStudentDocumentType(
+                    event.target.value as StudentIntakeDocumentType
+                  );
+                  setStudentDocumentFiles([]);
+                }}
+              >
+                <option value="profile_photo">Profile photo</option>
+                <option value="passport">Passport</option>
+                <option value="national_id">National ID</option>
+                <option value="birth_certificate">Birth certificate</option>
+                <option value="guardian_id">Guardian ID</option>
+                <option value="consent">Consent record</option>
+              </select>
+            </label>
+            <PendingMediaField
+              value={studentDocumentFiles}
+              onChange={setStudentDocumentFiles}
+              kind={
+                studentDocumentType === "profile_photo" ? "image" : "document"
+              }
+              accept=".pdf,application/pdf,image/jpeg,image/png,image/webp"
+              label="Choose one file"
+              description="PDF, JPEG, PNG, or WebP up to 10 MB. This alpha records metadata only; private storage is not connected."
+            />
+            <button
+              type="button"
+              disabled={isAnyActionPending || studentDocumentFiles.length !== 1}
+              onClick={() => void addStudentDocument()}
+            >
+              {pendingAction === `student.document.add:${selectedStudent.id}`
+                ? "Recording..."
+                : "Record pending document"}
+            </button>
+          </div>
+          <div className="registrar-student-enrollment-list">
+            {selectedStudentDocuments.length ? (
+              selectedStudentDocuments.map(document => (
+                <article key={document.id}>
+                  <div>
+                    <strong>{humanize(document.type)}</strong>
+                    <small>
+                      {document.storageStatus === "pending_storage"
+                        ? "Storage pending"
+                        : humanize(document.status)}
+                      {document.size
+                        ? ` · ${Math.ceil(document.size / 1024)} KB`
+                        : ""}
+                    </small>
+                  </div>
+                  <span>{humanize(document.status)}</span>
+                </article>
+              ))
+            ) : (
+              <article className="registrar-empty-row">
+                <div>
+                  <strong>No private documents recorded</strong>
+                  <small>
+                    Add metadata now; file storage and verification stay
+                    disabled until the private-storage phase is approved.
+                  </small>
+                </div>
+              </article>
+            )}
+          </div>
+        </section>
         <section className="wide">
           <div className="registrar-panel-head compact">
             <div>
@@ -1134,35 +1249,39 @@ export default function RegistrarStudentsPage({
           }
           main={detailMain}
           side={
-            <section className="registrar-panel">
-              <div className="registrar-panel-head compact">
-                <div>
-                  <span>Identity</span>
-                  <strong>{selectedStudentUser?.email ?? "No account"}</strong>
+            selectedStudent ? (
+              <section className="registrar-panel">
+                <div className="registrar-panel-head compact">
+                  <div>
+                    <span>Identity</span>
+                    <strong>
+                      {selectedStudentUser?.email ?? "No account"}
+                    </strong>
+                  </div>
+                  <Users size={16} />
                 </div>
-                <Users size={16} />
-              </div>
-              <div className="registrar-student-fact-list">
-                <article>
-                  <span>Status</span>
-                  <strong>{humanize(selectedStudent?.status)}</strong>
-                  <small>
-                    {selectedStudent?.currentLevel ?? "Level pending"}
-                  </small>
-                </article>
-                <article>
-                  <span>Guardian</span>
-                  <strong>
-                    {selectedStudent?.guardianName ?? "Not required"}
-                  </strong>
-                  <small>
-                    {selectedStudent?.guardianPhone ??
-                      selectedStudentUser?.phone ??
-                      "No guardian phone"}
-                  </small>
-                </article>
-              </div>
-            </section>
+                <div className="registrar-student-fact-list">
+                  <article>
+                    <span>Status</span>
+                    <strong>{humanize(selectedStudent.status)}</strong>
+                    <small>
+                      {selectedStudent.currentLevel ?? "Level pending"}
+                    </small>
+                  </article>
+                  <article>
+                    <span>Guardian</span>
+                    <strong>
+                      {selectedStudent.guardianName ?? "Not required"}
+                    </strong>
+                    <small>
+                      {selectedStudent.guardianPhone ??
+                        selectedStudentUser?.phone ??
+                        "No guardian phone"}
+                    </small>
+                  </article>
+                </div>
+              </section>
+            ) : undefined
           }
         />
       </PlatformShell>

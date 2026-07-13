@@ -347,12 +347,17 @@ describe("server academic workflow authority", () => {
         expect(repository.recordEvent).toHaveBeenCalledWith(
           expect.objectContaining({
             payload: expect.objectContaining({
-              request: expect.objectContaining({
-                fromUserId: session.userId,
-              }),
+              redacted: true,
+              request: {
+                type: "message.send",
+                actorId: session.userId,
+              },
             }),
           })
         );
+        expect(
+          JSON.stringify(vi.mocked(repository.recordEvent).mock.calls)
+        ).not.toContain(action.body);
       }
       if (action.type === "calendar.create") {
         expect(repository.recordEvent).toHaveBeenCalledWith(

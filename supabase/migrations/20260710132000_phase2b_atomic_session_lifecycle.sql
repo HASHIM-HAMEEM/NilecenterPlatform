@@ -34,6 +34,8 @@ declare
   v_token_hash bytea;
   v_request_hash bytea;
   v_existing_command public.command_executions%rowtype;
+  v_existing_audit public.audit_logs%rowtype;
+  v_existing_session public.auth_sessions%rowtype;
   v_session_id uuid;
   v_command_id uuid;
   v_created_at timestamptz;
@@ -72,32 +74,71 @@ begin
   where command.idempotency_key = p_idempotency_key;
 
   if found then
-    if v_existing_command.command_type <> 'session.create'
-      or v_existing_command.actor_user_id <> p_user_id
-      or v_existing_command.actor_role_grant_id <> p_active_role_grant_id
-      or v_existing_command.request_hash <> v_request_hash
-      or v_existing_command.target_type <> 'auth_session'
-      or v_existing_command.target_id <> v_existing_command.session_id::text then
+    if v_existing_command.command_type is distinct from 'session.create'
+      or v_existing_command.actor_user_id is distinct from p_user_id
+      or v_existing_command.actor_role_grant_id is distinct from p_active_role_grant_id
+      or v_existing_command.request_hash is distinct from v_request_hash
+      or v_existing_command.target_type is distinct from 'auth_session'
+      or v_existing_command.target_id is distinct from v_existing_command.session_id::text then
       raise exception 'Session create idempotency key conflicts with existing evidence'
         using errcode = '23505';
     end if;
-    if v_existing_command.status <> 'succeeded'
-      or not exists (
-        select 1
-        from public.audit_logs as audit
-        where audit.command_id = v_existing_command.id
-          and audit.action = 'session.created'
-          and audit.entity_type = 'auth_session'
-          and audit.entity_id = v_existing_command.session_id::text
-      ) then
+    if v_existing_command.status <> 'succeeded' then
       raise exception 'Session create evidence is incomplete'
         using errcode = '55000';
     end if;
 
-    select session.created_at, session.expires_at
-    into strict v_created_at, v_expires_at
+    select session.*
+    into v_existing_session
     from public.auth_sessions as session
     where session.id = v_existing_command.session_id;
+
+    if not found then
+      raise exception 'Session create evidence is incomplete'
+        using errcode = '55000';
+    end if;
+    if v_existing_session.token_hash is distinct from v_token_hash
+      or v_existing_session.user_id is distinct from p_user_id
+      or v_existing_session.active_role_grant_id is distinct from p_active_role_grant_id then
+      raise exception 'Session create idempotency key conflicts with existing session parameters'
+        using errcode = '23505';
+    end if;
+
+    select audit.*
+    into v_existing_audit
+    from public.audit_logs as audit
+    where audit.command_id = v_existing_command.id
+      and audit.action = 'session.created'
+      and audit.entity_type = 'auth_session'
+      and audit.entity_id = v_existing_command.session_id::text;
+
+    if not found then
+      raise exception 'Session create evidence is incomplete'
+        using errcode = '55000';
+    end if;
+    if v_existing_audit.after_state -> 'status'
+        is distinct from pg_catalog.to_jsonb('active'::text)
+      or v_existing_audit.after_state -> 'provider'
+        is distinct from pg_catalog.to_jsonb(v_existing_session.provider)
+      or v_existing_audit.after_state -> 'created_at'
+        is distinct from pg_catalog.to_jsonb(v_existing_session.created_at)
+      or v_existing_audit.after_state -> 'expires_at'
+        is distinct from pg_catalog.to_jsonb(v_existing_session.expires_at)
+      or v_existing_audit.metadata -> 'session_model'
+        is distinct from pg_catalog.to_jsonb('normalized'::text) then
+      raise exception 'Session create evidence is incomplete'
+        using errcode = '55000';
+    end if;
+    if v_existing_audit.metadata -> 'auth_user_id'
+        is distinct from pg_catalog.to_jsonb(p_auth_user_id)
+      or v_existing_audit.metadata -> 'requested_ttl_seconds'
+        is distinct from pg_catalog.to_jsonb(p_ttl_seconds) then
+      raise exception 'Session create idempotency key conflicts with existing request parameters'
+        using errcode = '23505';
+    end if;
+
+    v_created_at := v_existing_session.created_at;
+    v_expires_at := v_existing_session.expires_at;
 
     return query
     select
@@ -205,7 +246,11 @@ begin
       'created_at', v_created_at,
       'expires_at', v_expires_at
     ),
-    pg_catalog.jsonb_build_object('session_model', 'normalized')
+    pg_catalog.jsonb_build_object(
+      'session_model', 'normalized',
+      'auth_user_id', p_auth_user_id,
+      'requested_ttl_seconds', p_ttl_seconds
+    )
   );
 
   update public.command_executions
@@ -237,6 +282,7 @@ declare
   v_token_hash bytea;
   v_request_hash bytea;
   v_existing_command public.command_executions%rowtype;
+  v_existing_audit public.audit_logs%rowtype;
   v_session public.auth_sessions%rowtype;
   v_command_id uuid;
   v_revoked_at timestamptz;
@@ -269,30 +315,61 @@ begin
   where command.idempotency_key = p_idempotency_key;
 
   if found then
-    if v_existing_command.command_type <> 'session.revoke'
-      or v_existing_command.request_hash <> v_request_hash
-      or v_existing_command.target_type <> 'auth_session'
-      or v_existing_command.target_id <> v_existing_command.session_id::text then
+    if v_existing_command.command_type is distinct from 'session.revoke'
+      or v_existing_command.request_hash is distinct from v_request_hash
+      or v_existing_command.target_type is distinct from 'auth_session'
+      or v_existing_command.target_id is distinct from v_existing_command.session_id::text then
       raise exception 'Session revoke idempotency key conflicts with existing evidence'
         using errcode = '23505';
     end if;
-    if v_existing_command.status <> 'succeeded'
-      or not exists (
-        select 1
-        from public.audit_logs as audit
-        where audit.command_id = v_existing_command.id
-          and audit.action = 'session.revoked'
-          and audit.entity_type = 'auth_session'
-          and audit.entity_id = v_existing_command.session_id::text
-      ) then
+    if v_existing_command.status <> 'succeeded' then
       raise exception 'Session revoke evidence is incomplete'
         using errcode = '55000';
     end if;
 
-    select session.revoked_at
-    into strict v_revoked_at
+    select session.*
+    into v_session
     from public.auth_sessions as session
     where session.id = v_existing_command.session_id;
+
+    if not found or v_session.revoked_at is null then
+      raise exception 'Session revoke evidence is incomplete'
+        using errcode = '55000';
+    end if;
+    if v_session.token_hash is distinct from v_token_hash then
+      raise exception 'Session revoke idempotency key conflicts with existing session parameters'
+        using errcode = '23505';
+    end if;
+
+    select audit.*
+    into v_existing_audit
+    from public.audit_logs as audit
+    where audit.command_id = v_existing_command.id
+      and audit.action = 'session.revoked'
+      and audit.entity_type = 'auth_session'
+      and audit.entity_id = v_existing_command.session_id::text;
+
+    if not found then
+      raise exception 'Session revoke evidence is incomplete'
+        using errcode = '55000';
+    end if;
+    if v_existing_audit.before_state -> 'status'
+        is distinct from pg_catalog.to_jsonb('active'::text)
+      or v_existing_audit.before_state -> 'expires_at'
+        is distinct from pg_catalog.to_jsonb(v_session.expires_at)
+      or v_existing_audit.after_state -> 'status'
+        is distinct from pg_catalog.to_jsonb('revoked'::text)
+      or v_existing_audit.after_state -> 'revoked_at'
+        is distinct from pg_catalog.to_jsonb(v_session.revoked_at)
+      or v_existing_audit.after_state -> 'revoked_by'
+        is distinct from pg_catalog.to_jsonb(v_session.user_id)
+      or v_existing_audit.metadata -> 'session_model'
+        is distinct from pg_catalog.to_jsonb('normalized'::text) then
+      raise exception 'Session revoke evidence is incomplete'
+        using errcode = '55000';
+    end if;
+
+    v_revoked_at := v_session.revoked_at;
 
     return query
     select

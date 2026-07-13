@@ -2920,5 +2920,6 @@ export const seedPlatformState: PlatformState = {
       notes: "Future import adapter for legacy forms.",
     },
   ],
+  permissionCatalogVersion: 1,
   permissions: rolePermissions,
 };

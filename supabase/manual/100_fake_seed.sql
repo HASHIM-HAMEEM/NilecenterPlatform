@@ -149,6 +149,38 @@ set
   email = excluded.email,
   status = excluded.status;
 
+insert into public.integration_connections (
+  id,
+  provider,
+  label,
+  environment,
+  mode,
+  status,
+  capabilities,
+  created_by,
+  updated_by
+)
+values (
+  'a0000000-0000-4000-8000-000000000001',
+  'nile_phase2_test_fixture',
+  'phase2b-disposable-local-v1',
+  'local',
+  'disabled',
+  'disabled',
+  '["session_acceptance"]'::jsonb,
+  '40000000-0000-4000-8000-000000000006',
+  '40000000-0000-4000-8000-000000000006'
+)
+on conflict (id) do update
+set
+  provider = excluded.provider,
+  label = excluded.label,
+  environment = excluded.environment,
+  mode = excluded.mode,
+  status = excluded.status,
+  capabilities = excluded.capabilities,
+  updated_by = excluded.updated_by;
+
 insert into public.permissions (code, category, description, sensitive)
 values
   ('dashboard.read', 'workspace', 'Read the assigned role dashboard', false),

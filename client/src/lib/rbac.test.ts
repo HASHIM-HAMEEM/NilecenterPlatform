@@ -1,16 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { canOpenPage, getRequiredPermissionForPage, getSidebarForRole } from "./rbac";
+import {
+  canOpenPage,
+  getRequiredPermissionForPage,
+  getSidebarForRole,
+} from "./rbac";
 
 describe("RBAC page permission mapping", () => {
   it("maps protected pages to concrete permissions", () => {
-    expect(getRequiredPermissionForPage("student", "attendance")).toBe("attendance:read");
-    expect(getRequiredPermissionForPage("teacher", "grading")).toBe("assessments:read");
-    expect(getRequiredPermissionForPage("branchadmin", "rooms")).toBe("rooms:read");
-    expect(getRequiredPermissionForPage("headofdepartment", "certificates")).toBe("certificates:approve");
-    expect(getRequiredPermissionForPage("superadmin", "audit-logs")).toBe("audit:read");
-    expect(getRequiredPermissionForPage("superadmin", "users")).toBe("settings:write");
-    expect(getRequiredPermissionForPage("registrar", "forms-manage")).toBe("forms:write");
-    expect(getRequiredPermissionForPage("superadmin", "forms-review")).toBe("form_submissions:read");
+    expect(getRequiredPermissionForPage("student", "attendance")).toBe(
+      "attendance:read"
+    );
+    expect(getRequiredPermissionForPage("teacher", "grading")).toBe(
+      "assessments:read"
+    );
+    expect(getRequiredPermissionForPage("branchadmin", "rooms")).toBe(
+      "rooms:read"
+    );
+    expect(
+      getRequiredPermissionForPage("headofdepartment", "certificates")
+    ).toBe("certificates:approve");
+    expect(getRequiredPermissionForPage("superadmin", "audit-logs")).toBe(
+      "audit:read"
+    );
+    expect(getRequiredPermissionForPage("superadmin", "users")).toBe(
+      "settings:write"
+    );
+    expect(getRequiredPermissionForPage("registrar", "forms-manage")).toBe(
+      "forms:write"
+    );
+    expect(getRequiredPermissionForPage("registrar", "form-assignments")).toBe(
+      "forms:assign"
+    );
+    expect(getRequiredPermissionForPage("superadmin", "forms-review")).toBe(
+      "form_submissions:read"
+    );
   });
 
   it("denies role pages when the role lacks the mapped capability", () => {
@@ -32,8 +55,10 @@ describe("RBAC page permission mapping", () => {
   });
 
   it("filters sidebar entries using the same permission map", () => {
-    const studentSidebar = getSidebarForRole("student").map((item) => item.href);
-    const superAdminSidebar = getSidebarForRole("superadmin").map((item) => item.href);
+    const studentSidebar = getSidebarForRole("student").map(item => item.href);
+    const superAdminSidebar = getSidebarForRole("superadmin").map(
+      item => item.href
+    );
 
     expect(studentSidebar).toContain("/app/student/attendance");
     expect(studentSidebar).toContain("/app/student/profile");

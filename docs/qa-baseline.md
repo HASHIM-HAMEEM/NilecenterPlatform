@@ -2,10 +2,11 @@
 
 Nile Learn is currently in internal alpha stabilization. The protected portal QA baseline is:
 
-- Portal QA: 1,501 checks, 0 failures.
-- Checked at: `2026-07-11T21:22:31+03:00`.
-- Validation command: `scripts/verify.sh`.
-- QA summary artifact: `output/playwright/portal-qa-summary.json`.
+- Portal QA: 1,598 checks, 0 failures.
+- Checked at: `2026-07-13T13:19:02.018Z`.
+- Validation command: `QA_BASE_URL=http://127.0.0.1:3061 QA_OUTPUT_DIR=output/playwright/forms-program-final-matrix-c-20260713 QA_SESSION=forms-program-final-matrix-c-20260713 npm run qa:portals`.
+- QA summary artifact:
+  `output/playwright/forms-program-final-matrix-c-20260713/portal-qa-summary.json`.
 
 `docs/NILE_LEARN_MASTER_PLAN.md` defines the next architecture phases, and
 `docs/MODERNIZATION_EXECUTION_CONTRACT.md` defines how this baseline is
@@ -13,18 +14,53 @@ protected during each slice.
 
 ## Latest Preservation Evidence
 
-The accepted count is expanded after Nile Forms online, registered promotion,
+The accepted count was intentionally expanded after dedicated Forms creation,
+publication-history, and assignment routes were added to the role matrices and
+the complete route, workflow, denial, accessibility, responsive, and console
+checks passed:
+
+- Checked at: `2026-07-13T13:19:02.018Z`.
+- QA summary artifact:
+  `output/playwright/forms-program-final-matrix-c-20260713/portal-qa-summary.json`.
+- Result: 1,598 checks, 0 failures in 1,294,206 ms.
+- Supporting validation: all static and portable PostgreSQL gates passed, 528
+  unit tests passed across 47 files, TypeScript passed, and the production build
+  passed through `SKIP_PORTAL_QA=1 scripts/verify.sh`.
+- Sequential data, security, UI/accessibility, and workflow reviews closed with
+  no remaining high or medium finding.
+
+This is the current protected baseline. The previous 1,509/0 evidence remains
+below as historical acceptance for the earlier route matrix.
+
+## Previous 1,509 Preservation Evidence
+
+The previous accepted count was expanded after Nile Forms online, registered promotion,
 offline, and finite-migration routes were verified with the existing academic,
 delivery, attendance, linked-admissions, and assignment-publication regression
 suite:
 
-- Checked at: `2026-07-11T21:22:31+03:00`.
-- Validation command: `scripts/verify.sh`.
-- QA summary artifact: `output/playwright/portal-qa-summary.json`.
-- Result: 1,501 checks, 0 failures.
-- Supporting validation: TypeScript passed, 447 unit tests passed, and the
+- Checked at: `2026-07-12T11:58:47Z`.
+- Validation command:
+  `QA_OUTPUT_DIR=output/playwright/moodle-read-foundation-20260712 QA_PORT=3052 QA_SESSION=moodle-read-foundation-20260712 scripts/verify.sh`.
+- QA summary artifact:
+  `output/playwright/moodle-read-foundation-20260712/portal-qa-summary.json`.
+- Result: 1,509 checks, 0 failures.
+- Supporting validation: TypeScript passed, 478 unit tests passed across 40
+  files, and the
   production build passed. The repository verification gate is recorded
   separately after this evidence update.
+
+The previously accepted frozen run recorded an identical source fingerprint
+before and after its complete browser matrix. The HOD certificate workflow also
+passed its focused `6/6` rerun before that matrix completed, so the prior
+same-route transient `Not Found` miss is not recorded as a product failure.
+
+The expanded checks verify that Student management/review access is denied,
+Registrar cannot manage a global Super Admin form, denied builder/publish URLs
+render an actionable scoped state, and Super Admin can assign then revoke one
+authorized publication recipient through the browser UI. A route-matrix chunk
+may retry once after a missing-shell crash; the retry repeats every assertion,
+retains diagnostics, and does not convert a persistent failure into a pass.
 
 This evidence proves regression preservation for exact enrollment assignment,
 active delivery gates, registrar branch scope, attendance session state,
@@ -60,15 +96,17 @@ outside this baseline until a separate authority model is approved.
 
 - The accepted route matrix and portal workflows completed without a recorded
   failure in the controlled alpha fixture.
-- Current TypeScript, unit, build, server, browser, and accessibility checks in
-  `scripts/verify.sh` agreed for that run.
+- The current portal run completed at 1,598/0. TypeScript, 528 unit tests, and
+  the production build passed as separate supporting gates.
+- The previous frozen portal run completed at 1,509/0 and remains historical
+  evidence for its earlier source fingerprint.
 - The tested role routes, actions, labels, and responsive assertions matched the
   current product contract.
 
 ## What This Baseline Does Not Prove
 
 - Production-scale correctness or real legacy EMS parity.
-- A working live Moodle connector or correct provider reconciliation.
+- A live Moodle data projection, provider reconciliation, or production token.
 - A completed legacy EMS migration, cutover, or balance reconciliation.
 - Durable sessions across instances and deployments.
 - Normalized Postgres authority, RLS coverage, concurrent-write safety, or

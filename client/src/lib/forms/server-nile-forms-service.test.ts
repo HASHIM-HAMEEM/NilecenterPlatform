@@ -79,6 +79,7 @@ async function submitPublicEnquiry(service: ReturnType<typeof createService>) {
       full_name: "Public Applicant",
       email: "public@example.test",
       phone: "+20 100 000 0000",
+      preferred_branch: "br_cairo",
       course_interest: "arabic",
       preferred_contact: "email",
     },
@@ -103,13 +104,14 @@ describe("Nile Forms server authority", () => {
   it("scopes definition management by owner role and branch", async () => {
     const service = createService();
 
-    await expect(service.listDefinitions(registrar)).resolves.toEqual(
+    await expect(service.listDefinitions(registrar)).resolves.toEqual([]);
+    await expect(service.listDefinitions(superAdmin)).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "form_application",
-          branchId: "br_cairo",
+          branchId: undefined,
         }),
-        expect.objectContaining({ id: "form_placement", branchId: "br_cairo" }),
+        expect.objectContaining({ id: "form_placement", branchId: undefined }),
       ])
     );
     await expect(
@@ -129,10 +131,112 @@ describe("Nile Forms server authority", () => {
     ).rejects.toMatchObject({ statusCode: 403, code: "branch_scope_denied" });
   });
 
+  it("returns only server-authorized management and assignment targets", async () => {
+    const service = createService();
+    const registrarOptions = await service.getManagementOptions(registrar);
+
+    expect(registrarOptions.branches.map(item => item.id)).toEqual([
+      "br_cairo",
+    ]);
+    expect(registrarOptions.users).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "usr_student_alex_demo" }),
+      ])
+    );
+
+    const incident = await service.getDefinition(superAdmin, "form_incident");
+    expect(incident.assignmentOptions.branches.map(item => item.id)).toEqual([
+      "br_cairo",
+    ]);
+    expect(incident.assignmentOptions.users.length).toBeGreaterThan(0);
+    expect(incident.assignmentOptions.courses.length).toBeGreaterThan(0);
+    expect(incident.assignmentOptions.classes.length).toBeGreaterThan(0);
+
+    const publication = incident.publications[0];
+    const userTarget = incident.assignmentOptions.users[0];
+    const assignment = await service.assignPublication(
+      superAdmin,
+      publication.id,
+      { type: "user", userId: userTarget.id },
+      "2026-07-12T12:00:00.000Z"
+    );
+    expect(assignment).toMatchObject({
+      target: { type: "user", userId: userTarget.id },
+      expiresAt: "2026-07-12T12:00:00.000Z",
+    });
+
+    await testRepository.transaction(state => {
+      const stored = state.assignments.find(item => item.id === assignment.id);
+      if (!stored) throw new Error("Expected stored assignment");
+      stored.expiresAt = "2026-07-10T12:00:00.000Z";
+    });
+    const replacement = await service.assignPublication(
+      superAdmin,
+      publication.id,
+      { type: "user", userId: userTarget.id },
+      "2026-07-13T12:00:00.000Z"
+    );
+    expect(replacement.id).not.toBe(assignment.id);
+
+    const revoked = await service.revokeAssignment(superAdmin, replacement.id);
+    expect(revoked.revokedAt).toBe(fixedNow.toISOString());
+    await expect(
+      service.assignPublication(superAdmin, publication.id, {
+        type: "branch",
+        branchId: "br_alex",
+      })
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      code: "assignment_scope_denied",
+    });
+  });
+
+  it("rejects new assignments for retired or expired publications without evidence writes", async () => {
+    const service = createService();
+    const incident = await service.getDefinition(superAdmin, "form_incident");
+    const incidentPublication = incident.publications[0];
+    await service.retirePublication(superAdmin, incidentPublication.id);
+    const afterRetirement = await testRepository.read();
+
+    await expect(
+      service.assignPublication(superAdmin, incidentPublication.id, {
+        type: "role",
+        role: "teacher",
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: "publication_unavailable",
+    });
+    expect(await testRepository.read()).toEqual(afterRetirement);
+
+    const support = await service.getDefinition(superAdmin, "form_support");
+    const supportPublication = support.publications[0];
+    const userTarget = support.assignmentOptions.users[0];
+    await testRepository.transaction(state => {
+      const publication = state.publications.find(
+        item => item.id === supportPublication.id
+      );
+      if (!publication) throw new Error("Expected support publication");
+      publication.closesAt = "2026-07-11T14:59:59.000Z";
+    });
+    const afterExpiry = await testRepository.read();
+
+    await expect(
+      service.assignPublication(superAdmin, supportPublication.id, {
+        type: "user",
+        userId: userTarget.id,
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: "publication_unavailable",
+    });
+    expect(await testRepository.read()).toEqual(afterExpiry);
+  });
+
   it("creates a new draft when a published version is edited and keeps the original immutable", async () => {
     const service = createService();
     const draft = await service.createDraftVersion(
-      registrar,
+      superAdmin,
       "form_application"
     );
     expect(draft.versionNumber).toBe(2);
@@ -143,34 +247,100 @@ describe("Nile Forms server authority", () => {
       title: { en: "Updated application", ar: "طلب محدّث" },
     };
     const saved = await service.updateDraftVersion(
-      registrar,
+      superAdmin,
       "form_application",
       draft.id,
       { expectedRevision: 1, content }
     );
     expect(saved.revision).toBe(2);
 
+    await expect(
+      service.publishVersion(superAdmin, "form_application", draft.id, {
+        slug: "course-application",
+        audience: "public",
+        opensAt: "2026-07-12T15:00:00.000Z",
+        allowDrafts: true,
+      })
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: "replacement_schedule_invalid",
+    });
+    expect((await service.getPublicForm("course-application")).version.id).toBe(
+      "version_form_application_1"
+    );
+
+    await expect(
+      service.publishVersion(superAdmin, "form_application", draft.id, {
+        slug: "course-application-v2",
+        audience: "public",
+        closesAt: "2026-07-11T14:59:59.000Z",
+        allowDrafts: true,
+      })
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      code: "publication_invalid",
+    });
+
     const published = await service.publishVersion(
-      registrar,
+      superAdmin,
       "form_application",
       draft.id,
       {
-        slug: "course-application-v2",
+        slug: "course-application",
         audience: "public",
         allowDrafts: true,
       }
     );
     expect(published.version.status).toBe("published");
+    const publicBundle = await service.getPublicForm("course-application");
+    expect(publicBundle.version.id).toBe(draft.id);
 
     await expect(
-      service.updateDraftVersion(registrar, "form_application", draft.id, {
+      service.updateDraftVersion(superAdmin, "form_application", draft.id, {
         expectedRevision: 2,
         content,
       })
     ).rejects.toMatchObject({ statusCode: 409, code: "version_immutable" });
-    const bundle = await service.getDefinition(registrar, "form_application");
+    const bundle = await service.getDefinition(superAdmin, "form_application");
     expect(bundle.versions.find(item => item.versionNumber === 1)?.status).toBe(
       "published"
+    );
+    expect(
+      bundle.publications.find(
+        item => item.id === "publication_form_application_1"
+      )?.status
+    ).toBe("retired");
+    expect(
+      bundle.publications.filter(
+        item => item.slug === "course-application" && item.status !== "retired"
+      )
+    ).toHaveLength(1);
+  });
+
+  it("carries active assignments when an assigned publication keeps its slug", async () => {
+    const service = createService();
+    const draft = await service.createDraftVersion(superAdmin, "form_support");
+    const result = await service.publishVersion(
+      superAdmin,
+      "form_support",
+      draft.id,
+      {
+        slug: "student-support-request",
+        audience: "assigned",
+        allowDrafts: true,
+      }
+    );
+    const bundle = await service.getDefinition(superAdmin, "form_support");
+
+    expect(
+      bundle.publications.find(item => item.id === "publication_form_support_1")
+        ?.status
+    ).toBe("retired");
+    expect(bundle.assignments).toContainEqual(
+      expect.objectContaining({
+        publicationId: result.publication.id,
+        target: { type: "role", role: "student" },
+      })
     );
   });
 
@@ -201,14 +371,14 @@ describe("Nile Forms server authority", () => {
     ).resolves.toMatchObject({ answers: { full_name: "Draft Applicant" } });
   });
 
-  it("returns only assigned forms whose definition scope also matches the session", async () => {
+  it("returns global assignments while preserving scoped form boundaries", async () => {
     const service = createService();
     const assigned = await service.listAssigned(student);
     const keys = assigned.map(item => item.definition.key);
 
     expect(keys).toContain("student_support");
     expect(keys).toContain("learning_consent");
-    expect(keys).not.toContain("attendance_exception");
+    expect(keys).toContain("attendance_exception");
     expect(keys).not.toContain("branch_incident");
   });
 
@@ -310,6 +480,7 @@ describe("Nile Forms server authority", () => {
         full_name: "Applicant",
         email: "applicant@example.test",
         phone: "+20 111 111 1111",
+        preferred_branch: "br_cairo",
         course_interest: "quran",
         preferred_contact: "phone",
         actorId: "usr_admin_demo",
@@ -322,6 +493,7 @@ describe("Nile Forms server authority", () => {
         full_name: "Applicant",
         email: "applicant@example.test",
         phone: "+20 111 111 1111",
+        preferred_branch: "br_cairo",
         course_interest: "quran",
         preferred_contact: "phone",
       },
@@ -353,6 +525,7 @@ describe("Nile Forms server authority", () => {
           full_name: "Different Applicant",
           email: "different@example.test",
           phone: "+20 199 999 9999",
+          preferred_branch: "br_cairo",
           course_interest: "english",
           preferred_contact: "email",
         },
@@ -405,6 +578,40 @@ describe("Nile Forms server authority", () => {
     ).rejects.toMatchObject({
       statusCode: 403,
       code: "submission_scope_denied",
+    });
+  });
+
+  it("routes student support review to the respondent branch admin", async () => {
+    const service = createService();
+    const cairoStudent = session("student", "usr_student_cairo_demo", {
+      branchIds: ["br_cairo"],
+      departmentIds: ["dep_arabic"],
+    });
+    await expect(
+      service.getAssignedForm(
+        cairoStudent,
+        "publication_form_attendance_exception_1"
+      )
+    ).resolves.toMatchObject({ publication: { allowMultiple: true } });
+    const { submission } = await service.submit({
+      publicationId: "publication_form_support_1",
+      session: cairoStudent,
+      clientSubmissionId: "support-review-0001",
+      answers: {
+        category: "technical",
+        subject: "Cannot open lesson",
+        details: "The lesson page stays unavailable after signing in again.",
+        urgent: false,
+      },
+    });
+
+    const review = await service.reviewSubmission(branchAdmin, submission.id, {
+      decision: "under_review",
+      expectedRevision: 1,
+    });
+    expect(review.submission).toMatchObject({
+      branchId: "br_cairo",
+      status: "under_review",
     });
   });
 
@@ -472,6 +679,75 @@ describe("Nile Forms server authority", () => {
       statusCode: 503,
       code: "normalized_persistence_inactive",
     });
+  });
+
+  it("fails closed when session scope no longer overlaps the staff profile", async () => {
+    const service = createService();
+    const { submission } = await submitPublicEnquiry(service);
+    const mismatchedScope = {
+      ...registrar,
+      branchIds: ["br_alex"],
+    };
+    const before = await testRepository.read();
+    const operations = [
+      () => service.listSubmissions(mismatchedScope),
+      () => service.getSubmission(mismatchedScope, submission.id),
+      () => service.exportSubmissions(mismatchedScope),
+      () =>
+        service.reviewSubmission(mismatchedScope, submission.id, {
+          decision: "under_review",
+          expectedRevision: 1,
+        }),
+      () =>
+        service.promoteSubmission(mismatchedScope, submission.id, {
+          expectedRevision: 1,
+          idempotencyKey: "scope-must-not-promote-0001",
+        }),
+      () =>
+        service.createDefinition(mismatchedScope, {
+          key: "scope_must_not_create",
+          titleEn: "Denied",
+          titleAr: "مرفوض",
+          category: "admissions",
+          branchId: "br_alex",
+        }),
+    ];
+
+    for (const operation of operations) {
+      await expect(operation()).rejects.toMatchObject({
+        statusCode: 403,
+        code: "session_scope_denied",
+      });
+    }
+    expect(await testRepository.read()).toEqual(before);
+  });
+
+  it("never invokes compatibility promotion for a normalized session", async () => {
+    vi.stubEnv("NILE_FORMS_NORMALIZED_PERSISTENCE_ENABLED", "1");
+    const executePromotion = vi.fn(async () => ({
+      commandId: "command_must_not_run",
+      entityType: "Lead",
+      entityId: "lead_must_not_exist",
+    }));
+    const service = createService({ executePromotion });
+    const normalized = {
+      ...registrar,
+      authorizationModel: "normalized" as const,
+    };
+    const before = await testRepository.read();
+
+    await expect(
+      service.promoteSubmission(normalized, "submission_unknown", {
+        expectedRevision: 1,
+        idempotencyKey: "promotion-must-not-run-0001",
+      })
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      code: "normalized_persistence_inactive",
+    });
+
+    expect(executePromotion).not.toHaveBeenCalled();
+    expect(await testRepository.read()).toEqual(before);
   });
 
   it("keeps restricted fields out of offline publication settings", async () => {
@@ -692,14 +968,15 @@ describe("Nile Forms server authority", () => {
 
   it("binds submission idempotency to the authenticated respondent", async () => {
     const service = createService();
-    const cairoStudent = session("student", "usr_student_cairo_demo", {
-      branchIds: ["br_cairo"],
-      departmentIds: ["dep_arabic"],
+    const otherStudent = session("student", "usr_student_alex_demo", {
+      branchIds: ["br_alex"],
+      departmentIds: ["dep_foundations"],
     });
     const answers = {
       full_name: "Student Applicant",
       email: "student@example.test",
       phone: "+20 100 000 0000",
+      preferred_branch: "br_online",
       course_interest: "arabic",
       preferred_contact: "email",
     };
@@ -713,12 +990,34 @@ describe("Nile Forms server authority", () => {
     await expect(
       service.submit({
         publicationId: "publication_form_enquiry_1",
-        session: cairoStudent,
+        session: otherStudent,
         clientSubmissionId: "respondent-bound-0001",
-        answers,
+        answers: { ...answers, preferred_branch: "br_alex" },
       })
     ).rejects.toMatchObject({ statusCode: 409, code: "idempotency_conflict" });
     expect(first.submission.respondentUserId).toBe(student.userId);
+  });
+
+  it("keeps public branch choices independent from a signed-in user's scope", async () => {
+    const service = createService();
+    const result = await service.submit({
+      publicationId: "publication_form_enquiry_1",
+      session: student,
+      clientSubmissionId: "public-cross-branch-0001",
+      answers: {
+        full_name: "Cross Branch Applicant",
+        email: "cross-branch@example.test",
+        phone: "+20 100 000 0001",
+        preferred_branch: "br_cairo",
+        course_interest: "arabic",
+        preferred_contact: "email",
+      },
+    });
+
+    expect(result.submission).toMatchObject({
+      respondentUserId: student.userId,
+      branchId: "br_cairo",
+    });
   });
 
   it("opens a scheduled publication when its opening time arrives", async () => {
@@ -753,7 +1052,7 @@ describe("Nile Forms server authority", () => {
           email: "applicant@example.test",
           phone: "+20 111 111 1111",
           date_of_birth: "1998-04-12",
-          preferred_branch: "br_alex",
+          preferred_branch: "br_missing",
           course_interest: "arabic",
           schedule_preference: "Weekday evenings",
           current_level: "beginner",
@@ -850,5 +1149,67 @@ describe("Nile Forms server authority", () => {
     expect(first).toMatchObject({ status: "succeeded" });
     expect(replay).toEqual(first);
     expect(executePromotion).toHaveBeenCalledTimes(1);
+  });
+
+  it("replays a failed promotion attempt and retries only with a new command key", async () => {
+    const executePromotion = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Temporary adapter outage"))
+      .mockResolvedValueOnce({
+        commandId: "command_retry_2",
+        entityType: "Lead",
+        entityId: "lead_retry_2",
+      });
+    const service = createService({ executePromotion });
+    const { submission } = await submitPublicEnquiry(service);
+    await service.reviewSubmission(registrar, submission.id, {
+      decision: "under_review",
+      expectedRevision: 1,
+    });
+    await service.reviewSubmission(registrar, submission.id, {
+      decision: "accepted",
+      expectedRevision: 2,
+    });
+
+    const failed = await service.promoteSubmission(registrar, submission.id, {
+      expectedRevision: 3,
+      idempotencyKey: "promotion-retry-attempt-0001",
+    });
+    const failedCommandId = failed.commandId;
+    expect(failed).toMatchObject({
+      status: "failed",
+      error: "Temporary adapter outage",
+    });
+
+    const replay = await service.promoteSubmission(registrar, submission.id, {
+      expectedRevision: 3,
+      idempotencyKey: "promotion-retry-attempt-0001",
+    });
+    expect(replay).toEqual(failed);
+    expect(executePromotion).toHaveBeenCalledTimes(1);
+
+    const retried = await service.promoteSubmission(registrar, submission.id, {
+      expectedRevision: 3,
+      idempotencyKey: `promotion-retry-${failedCommandId}`,
+    });
+    expect(retried).toMatchObject({
+      status: "succeeded",
+      commandId: "command_retry_2",
+      resultingEntityId: "lead_retry_2",
+    });
+    expect(executePromotion).toHaveBeenCalledTimes(2);
+
+    const state = await testRepository.read();
+    expect(
+      state.auditEvents.find(item => item.action === "form.promotion_failed")
+        ?.metadata
+    ).toMatchObject({
+      commandId: failedCommandId,
+      idempotencyKey: "promotion-retry-attempt-0001",
+      error: "Temporary adapter outage",
+    });
+    expect(
+      state.submissions.find(item => item.id === submission.id)?.status
+    ).toBe("promoted");
   });
 });

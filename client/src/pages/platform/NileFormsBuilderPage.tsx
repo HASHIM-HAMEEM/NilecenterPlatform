@@ -26,14 +26,23 @@ import {
   fetchFormDefinition,
   updateFormDraftVersionRequest,
 } from "@/lib/forms/api";
+import {
+  conditionOperatorsForField,
+  conditionUsesNumericInput,
+  conditionValueAsText,
+  conditionValueFromInput,
+  defaultConditionValue,
+  defaultLogicConditionForField,
+} from "@/lib/forms/logicEditor";
 import { formsRoute } from "@/lib/forms/routes";
 import type { Role } from "@/lib/platformData";
 import {
   formFieldTypes,
-  formLogicOperators,
   validateFormVersionContent,
   type FormField,
   type FormFieldType,
+  type FormLogicCondition,
+  type FormLogicOperator,
   type FormLogicRule,
   type FormPage,
   type FormVersion,
@@ -69,6 +78,115 @@ function createKey(prefix: string) {
     globalThis.crypto?.randomUUID?.().replaceAll("-", "") ??
     `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 9)}`;
   return `${prefix}_${random}`;
+}
+
+function LogicConditionValue({
+  field,
+  condition,
+  onChange,
+}: {
+  field: FormField | undefined;
+  condition: FormLogicCondition;
+  onChange(value: FormLogicCondition["value"]): void;
+}) {
+  if (["empty", "not_empty"].includes(condition.operator)) return null;
+  const options = field?.options ?? [];
+
+  if (
+    options.length &&
+    (condition.operator === "in" || condition.operator === "not_in")
+  ) {
+    return (
+      <select
+        multiple
+        aria-label="Condition values"
+        value={Array.isArray(condition.value) ? condition.value : []}
+        onChange={event =>
+          onChange(
+            conditionValueFromInput(
+              field,
+              condition.operator,
+              Array.from(
+                event.currentTarget.selectedOptions,
+                option => option.value
+              )
+            )
+          )
+        }
+      >
+        {options.map(option => (
+          <option key={option.id} value={option.id}>
+            {option.label.en}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (options.length) {
+    return (
+      <select
+        aria-label="Condition value"
+        value={conditionValueAsText(condition.value)}
+        onChange={event =>
+          onChange(
+            conditionValueFromInput(
+              field,
+              condition.operator,
+              event.target.value
+            )
+          )
+        }
+      >
+        {options.map(option => (
+          <option key={option.id} value={option.id}>
+            {option.label.en}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (field?.type === "yes_no" || field?.type === "consent") {
+    return (
+      <select
+        aria-label="Condition value"
+        value={condition.value === false ? "false" : "true"}
+        onChange={event =>
+          onChange(
+            conditionValueFromInput(
+              field,
+              condition.operator,
+              event.target.value
+            )
+          )
+        }
+      >
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    );
+  }
+
+  return (
+    <input
+      type={
+        conditionUsesNumericInput(field, condition.operator) ? "number" : "text"
+      }
+      step="any"
+      aria-label={
+        condition.operator === "in" || condition.operator === "not_in"
+          ? "Condition values, comma separated"
+          : "Condition value"
+      }
+      value={conditionValueAsText(condition.value)}
+      onChange={event =>
+        onChange(
+          conditionValueFromInput(field, condition.operator, event.target.value)
+        )
+      }
+    />
+  );
 }
 
 function newField(type: FormFieldType): FormField {
@@ -330,13 +448,14 @@ export default function NileFormsBuilderPage({
     }
     const source = answerFields[0];
     const target = answerFields[1] ?? answerFields[0];
+    const condition = defaultLogicConditionForField(source);
     const rule: FormLogicRule = {
       id: createKey("rule"),
       order:
         Math.max(0, ...(content?.logic.map(item => item.order) ?? [])) + 10,
       when: {
         mode: "all",
-        conditions: [{ fieldId: source.id, operator: "equals", value: "" }],
+        conditions: [condition],
       },
       action: { type: "show", targetFieldId: target.id },
     };
@@ -384,12 +503,18 @@ export default function NileFormsBuilderPage({
             </strong>
             {message ? <p>{message}</p> : null}
             {status === "error" ? (
-              <Link
-                href={formsRoute(role, "/manage")}
-                className="platform-secondary-button"
-              >
-                <ArrowLeft size={15} /> Manage forms
-              </Link>
+              <>
+                <p>
+                  This form belongs to another owner or scope. Return to the
+                  forms available to your active role.
+                </p>
+                <Link
+                  href={formsRoute(role, "/manage")}
+                  className="platform-secondary-button"
+                >
+                  <ArrowLeft size={15} /> Manage forms
+                </Link>
+              </>
             ) : null}
           </section>
         </div>
@@ -449,7 +574,7 @@ export default function NileFormsBuilderPage({
               className={`platform-secondary-button ${preview ? "is-active" : ""}`}
               onClick={() => setPreview(value => !value)}
             >
-              <Eye size={16} /> {preview ? "Edit" : "Preview"}
+              <Eye size={16} /> <span>{preview ? "Edit" : "Preview"}</span>
             </button>
             <button
               type="button"
@@ -457,13 +582,13 @@ export default function NileFormsBuilderPage({
               disabled={saving}
               onClick={save}
             >
-              <Save size={16} /> {saving ? "Saving" : "Save"}
+              <Save size={16} /> <span>{saving ? "Saving" : "Save"}</span>
             </button>
             <Link
               href={formsRoute(role, `/manage/${formId}/publish`)}
               className="platform-secondary-button"
             >
-              <Send size={16} /> Publish
+              <Send size={16} /> <span>Publish</span>
             </Link>
           </div>
         </header>
@@ -507,137 +632,156 @@ export default function NileFormsBuilderPage({
               </ol>
             </aside>
 
-            <section className="nile-form-canvas">
-              <div className="nile-form-canvas-title">
-                <label>
-                  <span className="sr-only">Page title</span>
-                  <input
-                    value={currentPage.title.en}
-                    onChange={event =>
-                      updatePage(page => {
-                        page.title.en = event.target.value;
-                      })
-                    }
-                  />
-                </label>
-                <label>
-                  <span className="sr-only">Page description</span>
-                  <input
-                    value={currentPage.description?.en ?? ""}
-                    placeholder="Optional page description"
-                    onChange={event =>
-                      updatePage(page => {
-                        page.description = page.description ?? {
-                          en: "",
-                          ar: "",
-                        };
-                        page.description.en = event.target.value;
-                      })
-                    }
-                  />
-                </label>
-              </div>
+            <section className="nile-form-canvas" aria-label="Form page editor">
+              <div className="nile-form-canvas-document">
+                <header className="nile-form-canvas-title">
+                  <span className="nile-form-canvas-kicker">
+                    Page {currentPageIndex + 1}
+                  </span>
+                  <label>
+                    <span className="sr-only">Page title</span>
+                    <input
+                      value={currentPage.title.en}
+                      onChange={event =>
+                        updatePage(page => {
+                          page.title.en = event.target.value;
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span className="sr-only">Page description</span>
+                    <input
+                      value={currentPage.description?.en ?? ""}
+                      placeholder="Optional page description"
+                      onChange={event =>
+                        updatePage(page => {
+                          page.description = page.description ?? {
+                            en: "",
+                            ar: "",
+                          };
+                          page.description.en = event.target.value;
+                        })
+                      }
+                    />
+                  </label>
+                </header>
 
-              <div className="nile-form-builder-fields">
-                {currentPage.fields.map((field, index) => (
-                  <article
-                    key={field.id}
-                    className={field.id === fieldId ? "is-selected" : ""}
-                    onClick={() => {
-                      setFieldId(field.id);
-                      setTab("field");
-                    }}
-                  >
-                    <div className="nile-form-builder-field-head">
-                      <div className="nile-form-builder-field-copy">
-                        <span>{fieldTypeLabels[field.type]}</span>
-                        <strong>{field.label.en}</strong>
-                        {field.description?.en ? (
-                          <p>{field.description.en}</p>
-                        ) : null}
-                        {field.required ? <small>Required</small> : null}
+                <div className="nile-form-builder-fields">
+                  {currentPage.fields.map((field, index) => (
+                    <article
+                      key={field.id}
+                      className={`nile-form-builder-field ${field.id === fieldId ? "is-selected" : ""}`}
+                      onClick={() => {
+                        setFieldId(field.id);
+                        setTab("field");
+                      }}
+                    >
+                      <div className="nile-form-builder-field-head">
+                        <button
+                          type="button"
+                          className="nile-form-builder-select"
+                          aria-pressed={field.id === fieldId}
+                          aria-label={`Edit ${field.label.en}`}
+                          onClick={() => {
+                            setFieldId(field.id);
+                            setTab("field");
+                          }}
+                        >
+                          <span className="nile-form-builder-field-copy">
+                            <span>{fieldTypeLabels[field.type]}</span>
+                            <strong>{field.label.en}</strong>
+                            {field.description?.en ? (
+                              <p>{field.description.en}</p>
+                            ) : null}
+                            {field.required ? <small>Required</small> : null}
+                          </span>
+                        </button>
+                        <div className="nile-form-builder-field-actions">
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={event => {
+                              event.stopPropagation();
+                              updatePage(page => {
+                                page.fields = moveItem(page.fields, index, -1);
+                              });
+                            }}
+                            title="Move up"
+                            aria-label={`Move ${field.label.en} up`}
+                          >
+                            <ArrowUp size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === currentPage.fields.length - 1}
+                            onClick={event => {
+                              event.stopPropagation();
+                              updatePage(page => {
+                                page.fields = moveItem(page.fields, index, 1);
+                              });
+                            }}
+                            title="Move down"
+                            aria-label={`Move ${field.label.en} down`}
+                          >
+                            <ArrowDown size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={event => {
+                              event.stopPropagation();
+                              removeField(field.id);
+                            }}
+                            title="Delete field"
+                            aria-label={`Delete ${field.label.en}`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="nile-form-builder-field-actions">
-                        <button
-                          type="button"
-                          disabled={index === 0}
-                          onClick={event => {
-                            event.stopPropagation();
-                            updatePage(page => {
-                              page.fields = moveItem(page.fields, index, -1);
-                            });
-                          }}
-                          title="Move up"
-                          aria-label={`Move ${field.label.en} up`}
-                        >
-                          <ArrowUp size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={index === currentPage.fields.length - 1}
-                          onClick={event => {
-                            event.stopPropagation();
-                            updatePage(page => {
-                              page.fields = moveItem(page.fields, index, 1);
-                            });
-                          }}
-                          title="Move down"
-                          aria-label={`Move ${field.label.en} down`}
-                        >
-                          <ArrowDown size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={event => {
-                            event.stopPropagation();
-                            removeField(field.id);
-                          }}
-                          title="Delete field"
-                          aria-label={`Delete ${field.label.en}`}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </div>
-                    <BuilderFieldPreview field={field} />
-                  </article>
-                ))}
-                {!currentPage.fields.length ? (
-                  <div className="nile-form-builder-empty">
-                    <ListPlus size={22} />
-                    <strong>Add the first field</strong>
-                  </div>
-                ) : null}
-              </div>
-
-              <footer className="nile-form-add-field">
-                <select
-                  value={addType}
-                  onChange={event =>
-                    setAddType(event.target.value as FormFieldType)
-                  }
-                >
-                  {formFieldTypes.map(type => (
-                    <option key={type} value={type}>
-                      {fieldTypeLabels[type]}
-                    </option>
+                      <BuilderFieldPreview field={field} />
+                    </article>
                   ))}
-                </select>
-                <button
-                  type="button"
-                  className="platform-secondary-button"
-                  onClick={addField}
-                >
-                  <Plus size={15} /> Add field
-                </button>
-              </footer>
+                  {!currentPage.fields.length ? (
+                    <div className="nile-form-builder-empty">
+                      <ListPlus size={22} />
+                      <strong>Add the first field</strong>
+                    </div>
+                  ) : null}
+                </div>
+
+                <footer className="nile-form-add-field">
+                  <select
+                    value={addType}
+                    onChange={event =>
+                      setAddType(event.target.value as FormFieldType)
+                    }
+                  >
+                    {formFieldTypes.map(type => (
+                      <option key={type} value={type}>
+                        {fieldTypeLabels[type]}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="platform-secondary-button"
+                    onClick={addField}
+                  >
+                    <Plus size={15} /> Add field
+                  </button>
+                </footer>
+              </div>
             </section>
 
             <aside className="nile-form-inspector">
-              <nav aria-label="Builder settings">
+              <nav
+                className="nile-form-inspector-tabs"
+                aria-label="Builder settings"
+              >
                 {[
                   { id: "field" as const, label: "Field", icon: Settings2 },
-                  { id: "logic" as const, label: "Logic", icon: Braces },
+                  { id: "logic" as const, label: "Rules", icon: Braces },
                   {
                     id: "language" as const,
                     label: "Language",
@@ -654,7 +798,8 @@ export default function NileFormsBuilderPage({
                     <button
                       key={item.id}
                       type="button"
-                      className={tab === item.id ? "is-active" : ""}
+                      className={`nile-form-inspector-tab ${tab === item.id ? "is-active" : ""}`}
+                      aria-pressed={tab === item.id}
                       onClick={() => setTab(item.id)}
                     >
                       <Icon size={15} /> {item.label}
@@ -911,100 +1056,120 @@ export default function NileFormsBuilderPage({
                           </select>
                         </label>
                         {rule.when.conditions.map(
-                          (condition, conditionIndex) => (
-                            <div
-                              key={`${rule.id}-${conditionIndex}`}
-                              className="nile-form-rule-condition"
-                            >
-                              <select
-                                aria-label="Condition field"
-                                value={condition.fieldId}
-                                onChange={event =>
-                                  updateContent(draft => {
-                                    const item = draft.logic.find(
-                                      value => value.id === rule.id
-                                    );
-                                    if (item)
-                                      item.when.conditions[
-                                        conditionIndex
-                                      ].fieldId = event.target.value;
-                                  })
-                                }
+                          (condition, conditionIndex) => {
+                            const conditionField = answerFields.find(
+                              field => field.id === condition.fieldId
+                            );
+                            const conditionOperators =
+                              conditionOperatorsForField(conditionField);
+                            return (
+                              <div
+                                key={`${rule.id}-${conditionIndex}`}
+                                className="nile-form-rule-condition"
                               >
-                                {answerFields.map(field => (
-                                  <option key={field.id} value={field.id}>
-                                    {field.label.en}
-                                  </option>
-                                ))}
-                              </select>
-                              <select
-                                aria-label="Condition operator"
-                                value={condition.operator}
-                                onChange={event =>
-                                  updateContent(draft => {
-                                    const item = draft.logic.find(
-                                      value => value.id === rule.id
-                                    );
-                                    if (item)
-                                      item.when.conditions[
-                                        conditionIndex
-                                      ].operator = event.target
-                                        .value as typeof condition.operator;
-                                  })
-                                }
-                              >
-                                {formLogicOperators.map(operator => (
-                                  <option key={operator} value={operator}>
-                                    {operator.replaceAll("_", " ")}
-                                  </option>
-                                ))}
-                              </select>
-                              {!["empty", "not_empty"].includes(
-                                condition.operator
-                              ) ? (
-                                <input
-                                  aria-label="Condition value"
-                                  value={
-                                    typeof condition.value === "string" ||
-                                    typeof condition.value === "number"
-                                      ? condition.value
-                                      : ""
-                                  }
+                                <select
+                                  aria-label="Condition field"
+                                  value={condition.fieldId}
                                   onChange={event =>
                                     updateContent(draft => {
                                       const item = draft.logic.find(
                                         value => value.id === rule.id
                                       );
-                                      if (item)
+                                      const nextField = answerFields.find(
+                                        field => field.id === event.target.value
+                                      );
+                                      if (item && nextField) {
+                                        const nextOperator =
+                                          conditionOperatorsForField(
+                                            nextField
+                                          )[0];
+                                        const nextCondition =
+                                          item.when.conditions[conditionIndex];
+                                        nextCondition.fieldId = nextField.id;
+                                        nextCondition.operator = nextOperator;
+                                        nextCondition.value =
+                                          defaultConditionValue(
+                                            nextField,
+                                            nextOperator
+                                          );
+                                      }
+                                    })
+                                  }
+                                >
+                                  {answerFields.map(field => (
+                                    <option key={field.id} value={field.id}>
+                                      {field.label.en}
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  aria-label="Condition operator"
+                                  value={condition.operator}
+                                  onChange={event =>
+                                    updateContent(draft => {
+                                      const item = draft.logic.find(
+                                        value => value.id === rule.id
+                                      );
+                                      if (item) {
+                                        const nextOperator = event.target
+                                          .value as FormLogicOperator;
+                                        const nextCondition =
+                                          item.when.conditions[conditionIndex];
+                                        nextCondition.operator = nextOperator;
+                                        nextCondition.value =
+                                          defaultConditionValue(
+                                            conditionField,
+                                            nextOperator
+                                          );
+                                      }
+                                    })
+                                  }
+                                >
+                                  {conditionOperators.map(operator => (
+                                    <option key={operator} value={operator}>
+                                      {operator.replaceAll("_", " ")}
+                                    </option>
+                                  ))}
+                                </select>
+                                <LogicConditionValue
+                                  field={conditionField}
+                                  condition={condition}
+                                  onChange={value =>
+                                    updateContent(draft => {
+                                      const item = draft.logic.find(
+                                        candidate => candidate.id === rule.id
+                                      );
+                                      if (item) {
                                         item.when.conditions[
                                           conditionIndex
-                                        ].value = event.target.value;
+                                        ].value = value;
+                                      }
                                     })
                                   }
                                 />
-                              ) : null}
-                              <button
-                                type="button"
-                                title="Remove condition"
-                                aria-label="Remove condition"
-                                disabled={rule.when.conditions.length === 1}
-                                onClick={() =>
-                                  updateContent(draft => {
-                                    const item = draft.logic.find(
-                                      value => value.id === rule.id
-                                    );
-                                    if (item)
-                                      item.when.conditions.splice(
-                                        conditionIndex,
-                                        1
+                                <button
+                                  type="button"
+                                  title="Remove condition"
+                                  aria-label="Remove condition"
+                                  disabled={rule.when.conditions.length === 1}
+                                  onClick={() =>
+                                    updateContent(draft => {
+                                      const item = draft.logic.find(
+                                        value => value.id === rule.id
                                       );
-                                  })
-                                }
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          )
+                                      if (item)
+                                        item.when.conditions.splice(
+                                          conditionIndex,
+                                          1
+                                        );
+                                    })
+                                  }
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            );
+                          }
                         )}
                         <button
                           type="button"

@@ -51,7 +51,7 @@ At minimum, run the affected tests plus:
 - `npm run build`
 
 Run `scripts/verify.sh` when routes, workflows, RBAC, persistence, shared UI, or
-portal behavior can change. Preserve the accepted 1,317/0 portal QA baseline.
+portal behavior can change. Preserve the accepted 1,598/0 portal QA baseline.
 
 ## REVIEW
 

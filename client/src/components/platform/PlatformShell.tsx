@@ -740,6 +740,7 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
         <div className="platform-main">
           <motion.header
             className="platform-topbar"
+            data-search-open={searchOpen ? "true" : undefined}
             initial={{ opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{
@@ -761,16 +762,67 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
 
             <div
               className="platform-breadcrumb"
-              aria-label={translateUiLabel(locale, meta.label)}
+              aria-label={translateUiLabel(locale, title ?? meta.label)}
             >
-              <span style={{ background: meta.tint, color: meta.color }}>
-                {meta.shortLabel}
-              </span>
               <strong>{translateUiLabel(locale, title ?? meta.label)}</strong>
             </div>
 
-            <div className="platform-topbar-actions">
-              <div className="platform-search-disclosure" ref={searchWrapRef}>
+            <div
+              className="platform-topbar-end"
+              ref={searchWrapRef}
+              data-search-open={searchOpen ? "true" : undefined}
+            >
+              {searchOpen ? (
+                <div
+                  id="platform-global-search"
+                  className="platform-search"
+                  role="search"
+                  aria-label={t(locale, "globalSearch")}
+                >
+                  <Search size={15} aria-hidden="true" />
+                  <input
+                    ref={searchInputRef}
+                    type="search"
+                    value={query}
+                    onChange={event => setQuery(event.target.value)}
+                    placeholder={t(locale, "search")}
+                    aria-label={t(locale, "globalSearch")}
+                    aria-controls={
+                      hasSearchQuery ? "platform-search-results" : undefined
+                    }
+                  />
+                  {hasSearchQuery ? (
+                    <ul
+                      className="platform-search-results"
+                      id="platform-search-results"
+                      aria-label={t(locale, "searchResults")}
+                    >
+                      {searchResults.length ? (
+                        searchResults.map(item => (
+                          <li key={`${item.type}-${item.label}`}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSearchOpen(false);
+                                setQuery("");
+                                navigate(item.href);
+                              }}
+                            >
+                              <strong>{item.type}</strong> {item.label}
+                            </button>
+                          </li>
+                        ))
+                      ) : (
+                        <li className="platform-search-empty">
+                          {t(locale, "noMatchingRecords")}
+                        </li>
+                      )}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="platform-topbar-actions">
                 <button
                   ref={searchButtonRef}
                   type="button"
@@ -786,58 +838,7 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
                   <Search size={17} />
                 </button>
 
-                {searchOpen ? (
-                  <div
-                    id="platform-global-search"
-                    className="platform-search"
-                    role="search"
-                    aria-label={t(locale, "globalSearch")}
-                  >
-                    <Search size={15} aria-hidden="true" />
-                    <input
-                      ref={searchInputRef}
-                      type="search"
-                      value={query}
-                      onChange={event => setQuery(event.target.value)}
-                      placeholder={t(locale, "search")}
-                      aria-label={t(locale, "globalSearch")}
-                      aria-controls={
-                        hasSearchQuery ? "platform-search-results" : undefined
-                      }
-                    />
-                    {hasSearchQuery ? (
-                      <ul
-                        className="platform-search-results"
-                        id="platform-search-results"
-                        aria-label={t(locale, "searchResults")}
-                      >
-                        {searchResults.length ? (
-                          searchResults.map(item => (
-                            <li key={`${item.type}-${item.label}`}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSearchOpen(false);
-                                  setQuery("");
-                                  navigate(item.href);
-                                }}
-                              >
-                                <strong>{item.type}</strong> {item.label}
-                              </button>
-                            </li>
-                          ))
-                        ) : (
-                          <li className="platform-search-empty">
-                            {t(locale, "noMatchingRecords")}
-                          </li>
-                        )}
-                      </ul>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="platform-language-control">
+                <div className="platform-language-control">
                 <Languages aria-hidden="true" size={16} />
                 <select
                   className="platform-language"
@@ -1006,6 +1007,7 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
                   </div>
                 ) : null}
               </div>
+            </div>
             </div>
           </motion.header>
 

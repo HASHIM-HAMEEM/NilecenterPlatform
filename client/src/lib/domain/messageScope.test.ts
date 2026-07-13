@@ -85,6 +85,30 @@ describe("message relationship scope", () => {
     ).toBe(false);
   });
 
+  it("uses a staff member's full active branch scope for local contacts", () => {
+    const state = cloneState();
+
+    expect(
+      canSendMessageToUser(
+        state,
+        "branchadmin",
+        "usr_branch_demo",
+        "usr_teacher_demo"
+      )
+    ).toBe(true);
+
+    state.users.find(item => item.id === "usr_teacher_demo")!.branchId =
+      "br_alex";
+    expect(
+      canSendMessageToUser(
+        state,
+        "registrar",
+        "usr_registrar_demo",
+        "usr_teacher_demo"
+      )
+    ).toBe(true);
+  });
+
   it("never exposes paused recipient accounts", () => {
     const state = cloneState();
     state.users.find(item => item.id === "usr_student_demo")!.status = "paused";

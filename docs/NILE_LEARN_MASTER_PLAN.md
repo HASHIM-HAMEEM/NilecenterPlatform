@@ -28,7 +28,7 @@ leaks, crowded UI, or ambiguous ownership.
 
 The protected internal-alpha baseline is:
 
-- Portal QA: 1,501 checks, 0 failures.
+- Portal QA: 1,598 checks, 0 failures.
 - TypeScript check, unit tests, and production build are required gates.
 - The accepted evidence is recorded in `docs/qa-baseline.md`.
 
@@ -305,7 +305,7 @@ Deliverables:
 - Correct the legacy discovery ledger.
 - Approve this source-of-truth matrix.
 - Record architecture decisions for auth, Moodle, EMS migration, and audit.
-- Preserve the 1,313/0 QA artifact.
+- Preserve the then-current 1,313/0 QA artifact.
 
 Gate: no unresolved ownership conflict.
 
@@ -349,11 +349,14 @@ Current evidence:
 - `npm run check:phase1-schema:runtime` proves the portable PGlite cycle.
 - `npm run check:phase1-schema:supabase` proves the disposable local Supabase
   cycle for all 25 Phase 1 tables.
-- `npm run check:phase2-session:supabase` proves session create, hashed-token
-  storage, atomic resolution, expiry, live branch/scope refresh, revocation, and
-  four real local PostgREST browser-role denials.
+- `npm run check:phase2-session:postgrest` proves the corrected Phase 2B SQL
+  through the real repository adapter against isolated native PostgreSQL 17 and
+  PostgREST 14.14. The local-only run covers atomic create/revoke, exact replay
+  and conflict rejection, live scope refresh, expiry, audit evidence,
+  `revoked_by`, and eight browser-role denials. The evidence is recorded in
+  `docs/moodle-and-session-foundation-evidence-20260712.md`.
 - `QA_OUTPUT_DIR=output/playwright/phase2a-20260710 scripts/verify.sh` preserves
-  the full 1,313-check portal baseline with 0 failures.
+  the then-current full 1,313-check portal baseline with 0 failures.
 
 A remote dry run, managed-project advisors, backup/restore evidence, and
 explicit promotion approval remain required before any shared-environment
@@ -507,6 +510,30 @@ schema application, normalized production runtime activation, uploads, drawn
 signatures, arbitrary webhooks, payments, or provider actions require their own
 later approvals.
 
+### Phase 14: Nile Forms Processing And Typed Operations
+
+ADR-007 extends the Jotform replacement program without turning form answers
+into mutable workflow state or creating a generic application builder.
+
+Deliverables, implemented as separately approved slices:
+
+- Typed processing modules built only after the Phase 13F1 normalized
+  repository contract is accepted.
+- Structured field, language, validation, calculation, and reusable-template
+  parity, including complete `en | ar | tr` values, Arabic RTL, Turkish LTR,
+  and localized validation message keys with parameters.
+- Typed Requests and bounded Approvals with immutable correction lineage.
+- Typed Appointments with atomic slot capacity and typed Surveys with privacy
+  thresholds.
+- Storage, signature acknowledgment, reporting, PDF, notifications, and
+  external adapters only after their prerequisite approvals.
+- Route-by-route Jotform replacement, selective migration, reconciliation,
+  shutdown, and credential retirement.
+
+Gate: each typed module proves its own authority, state transitions,
+idempotency, concurrency, privacy, rollback, responsive UI, and accepted portal
+baseline before the next module or provider is approved.
+
 ## Testing Strategy
 
 Every phase uses the smallest relevant test pyramid:
@@ -568,36 +595,61 @@ here rather than restating this checkpoint.
 Current status:
 
 - Phase 0 is accepted: authority, legacy boundaries, architecture decisions,
-  and the 1,317/0 QA baseline are recorded.
+  and its then-current 1,317/0 QA baseline are recorded. The current protected
+  baseline is 1,598/0.
 - Phase 1 is accepted as a local-only migration package. It is not approved for
   linked, shared, or remote Supabase promotion.
 - Phase 2A is accepted as a non-default local foundation. The repository
   boundary, disposable-local Data API integration, live scope revalidation,
-  failure classification, and full 1,317/0 regression evidence are complete.
+  failure classification, and its then-current full 1,317/0 regression evidence
+  are complete.
 - The compatibility identity fallback identified during review is removed:
   unmapped student sessions cannot mutate seeded student records, missing or
   ambiguous authority returns `403`, and provider/storage outages return
   `503` without alternate-provider fallback.
-- Phase 2B code is implemented but not accepted. Static SQL checks and 56
-  focused auth/session tests pass. The corrected RPC migration has not been
-  rerun against PostgREST after the explicit instruction to stop Docker use.
-  Manual SQL is packaged in `supabase/manual`; database execution remains
-  unverified.
+- Phase 2B database acceptance is complete locally. Static SQL checks, 60
+  focused auth/session tests, the portable PGlite lifecycle gate, and the
+  corrected migration through native PostgreSQL 17 plus PostgREST 14.14 pass.
+  The real Data API run proves the server repository adapter, atomic
+  create/revoke, exact replay and conflict rejection, denial with no residual
+  write, live branch and relationship refresh, expiry, audit evidence,
+  `revoked_by`, and eight PostgreSQL `42501` browser-role denials. The integrated
+  gate preserves 1,509/0 portal checks in
+  `output/playwright/phase2b-portable-final-20260712/portal-qa-summary.json`.
+  This is local-only database acceptance, not remote promotion or runtime
+  activation.
 - Production Phase 2 is not complete. Memory remains the runtime default, demo
   compatibility remains available under controlled configuration, Supabase
   Auth memory sessions still use the compatibility `app_metadata` role path,
   and normalized sessions cannot access legacy snapshot workflow routes.
 
-The UI V2 shell baseline is accepted. Route-level visual expansion remains
-paused while internal functionality is stabilized, except for the
-product-owner-approved **Phase 12 Insight System** slice. That slice is
-strictly limited to shared accessible chart and motion primitives plus one
-role-specific, decision-focused insight panel on each portal dashboard and
-report route. It must not change workflows, RBAC, persistence, server actions,
-or route ownership, and it must not create analytics walls or dashboard card
-grids. The current primary workstream remains **bounded compatibility workflow
-integrity**, one feature family at a time, while Phase 2B database acceptance
-waits for the manual SQL run:
+The UI V2 shell baseline is accepted. The product owner has explicitly approved
+a controlled continuation of **Phase 12 Route-By-Route UI Completion**. This is
+not permission for a broad visual rewrite: each slice owns one route family,
+preserves its existing workflow and authority boundaries, and must pass visual
+review plus the protected portal baseline before the next family begins. The
+complete sequence and route inventory live in
+`docs/UI_ROUTE_MODERNIZATION_PLAN.md`.
+
+The already-approved **Phase 12 Insight System** remains strictly limited to
+shared accessible chart and motion primitives plus one role-specific,
+decision-focused insight panel on each portal dashboard and report route. It
+must not create analytics walls or dashboard card grids.
+
+The first approved route-modernization slice is **Phase 12A: Super Admin
+system workspaces**:
+
+1. `/app/admin/settings` owns global school setup only.
+2. `/app/admin/integrations` owns connection readiness and reviewed status
+   only.
+3. `/app/admin/system-health` owns concise internal health review only.
+
+Phase 12A may change page composition, concise user-facing copy, responsive
+layout, semantic visualizations, loading/empty/error/success presentation, and
+CSS. It must not change routes, server actions, persistence, auth, RBAC, audit
+behavior, provider activation, or the data each action reads or writes. The
+primary compatibility workstream remains **bounded compatibility workflow
+integrity**, one feature family at a time:
 
 1. Preserve the authenticated session as the server authority for actor, role,
    branch, department, and ownership.
@@ -611,9 +663,13 @@ waits for the manual SQL run:
 6. Require valid session state, run dates, active rooms, and room capacity for
    attendance and class scheduling.
 7. Add domain and server-authority tests for every invariant, run focused portal
-   workflows, then preserve the full 1,317/0 baseline.
+   workflows, then preserve the full 1,598/0 baseline.
 8. Do not add live provider integrations, activate normalized production writes,
    or begin broad route UI polish in this workstream.
+
+Counts in the following slice history identify the artifact used when each
+slice was accepted. The current protected baseline is defined by
+`docs/qa-baseline.md`.
 
 The server projection and client cache authority boundary is complete: scoped
 snapshots replace global collections, protected-route hydration fails closed,
@@ -704,12 +760,21 @@ product-owner-directed Nile Forms phase or the Phase 2B durability gate.
 Regrade and appeal workflows remain out of scope until a separate approval
 defines their history and authority model.
 
-Phase 2B remains the required durability gate before runtime session or
-persistence activation.
+Phase 2B database acceptance is satisfied locally. Runtime session or
+persistence activation remains a separate prohibited step until a later
+checkpoint proves the complete Supabase Auth, HTTP cookie, multi-instance,
+logout, outage, and production-mode boundary.
 
-Phase 2B remains a required open gate. Its manual acceptance must prove atomic
-create/revoke, audit evidence, idempotent replay, conflict rejection, denial
-rollback, browser-role denial, and `revoked_by` before any runtime activation.
+The accepted Phase 2B evidence proves atomic create/revoke, audit evidence,
+idempotent replay, conflict rejection, denial rollback, browser-role denial,
+and `revoked_by` through a real local PostgREST boundary.
+`npm run check:phase2-session-schema:runtime` now provides portable PostgreSQL
+evidence for the enumerated direct-SQL lifecycle, exact replay binding, live
+authority, privilege-catalog, direct database-role denial, transaction rollback,
+and rollback/reapply invariants. It does not prove managed-project settings,
+concurrent advisory-lock behavior, or a managed Supabase environment. The
+separate native PostgREST acceptance covers the current real Data API and
+repository-adapter boundary.
 
 No live provider connection, production runtime switch, remote schema
 application, or broad UI expansion beyond the bounded Phase 12 Insight System
@@ -760,16 +825,143 @@ outbox event, and retain source form, submission, payload hash, run, and
 reconciliation evidence. A second additive migration brings the Forms total to
 14 forced-RLS, service-only tables; two forward applications, two semantic
 assertion passes, and the combined rollback drill pass in PGlite. The full local
-suite now passes 37 files and 447 tests, TypeScript, production build, and the
-expanded 1,501-check portal matrix with 0 failures. Focused offline and finite
-migration browser QA also completed with no console errors.
+suite now passes 38 files and 460 tests, TypeScript, production build, and the
+expanded frozen-production 1,509-check portal matrix with 0 failures. The source
+fingerprint remained unchanged across the complete browser run. Focused
+offline, finite-migration, and HOD certificate browser QA also completed with no
+console errors.
 
-No further Phase 13 runtime expansion is approved by this checkpoint. The
-active modernization gate returns to **Phase 2B durable session database
-acceptance**. Phase 13 remains internal alpha: no remote migration was applied,
-no real Jotform credential or historical data was used, no existing intake
-route was cut over, and normalized production Forms writes remain fail closed.
-Actual selective import requires an approved mapping window, a temporary key,
-reconciliation sign-off, Jotform intake shutdown, and key revocation. Uploads,
-drawn signatures, broad directories, live provider sync, and arbitrary webhooks
-remain prohibited.
+The Forms authority closure also adds server-resolved assignment directories,
+scoped assignment creation and revocation, actionable owner-scope denial states,
+and browser evidence for one complete Super Admin assign/revoke cycle. Global
+Super Admin templates remain unavailable to Registrar management while scoped
+admissions review remains allowed. This does not activate normalized production
+writes or any external provider.
+
+ADR-007 and the authority slice for the full Nile Forms replacement program are
+accepted. This approval establishes the typed processing boundary and sequence;
+it does not approve the program as one broad implementation.
+
+The only approved next Nile Forms implementation slice is **Phase 13F1:
+normalized repository contract foundation**:
+
+1. Replace the callback-only repository boundary with explicit query and
+   command methods for the already accepted Forms lifecycle.
+2. Keep a deterministic memory reference adapter and add a disabled-by-default,
+   server-only Supabase adapter backed by bounded RPCs and projections.
+3. Add additive local-only SQL, semantic assertions, fake fixtures, complete
+   rollback/reapply evidence, and isolated Data API tests.
+4. Resolve the hashed server session token in the command transaction and
+   revalidate unexpired, unrevoked session, user, active role grant, role,
+   canonical action permission, branch, department, ownership, and assignment.
+   Lock authority and target rows in a deterministic order shared with
+   revocation, and prove both outcomes of concurrent revoke/command races.
+5. Give anonymous public submissions a dedicated public command-evidence chain;
+   never fabricate a user, session, or role grant for global protected audit.
+6. Keep domain, command, and audit evidence atomic. Only successful submission
+   and review create outbox events in this slice. Each newly accepted,
+   non-quarantined offline item emits exactly one submission event; the sync
+   envelope, replayed, rejected, and quarantined items emit none. Promotion
+   execution fails closed until its canonical target can join the same
+   transaction.
+7. Prove the explicit colon-to-dot permission mapping and sensitive-value
+   redaction, including export behavior. Add grant-level permission evidence;
+   sensitive-read cannot be granted to a whole non-admin role, and sensitive
+   values never enter search indexes, audit metadata, logs, or outbox payloads.
+8. Make rollback remove only Phase 13F1 objects while preserving all accepted
+   Phase 13A-E evidence.
+9. Keep memory as the runtime default, normalized production Forms requests
+   fail closed, and every route cutover flag disabled.
+10. Require immutable one-to-one public command evidence, persisted MACed
+    offline bundle authority, durable privacy-preserving public rate limits,
+    exact Origin/Fetch-Metadata mutation checks, and a dedicated RPC-only Forms
+    execution principal.
+11. Keep Phase 13F1 SQL outside pushable migration history and reject every
+    non-local or linked database target. A dedicated normalized-persistence flag
+    stays off and cannot activate memory or compatibility promotion paths.
+
+Phase 13F1 must not add fields, processing profiles, requests, approvals,
+appointments, surveys, uploads, signatures, broad directories, provider
+delivery, remote SQL application, or a runtime switch. Those remain later
+Phase 14 slices requiring their own checkpoint acceptance.
+
+Phase 13 remains internal alpha: no remote migration was applied, no real
+Jotform credential or historical data was used, and no existing intake route
+was cut over. Actual selective import still requires an approved mapping
+window, temporary key, reconciliation sign-off, Jotform intake shutdown, and
+key revocation.
+
+The Phase 13F1 checkpoint is the only approved next **Nile Forms** slice. The
+separately approved Phase 12 Insight and Moodle sandbox workstreams may proceed
+only with disjoint write sets. Changes to shared session, permission, audit,
+outbox, migration-history, or server-runtime boundaries are serialized through
+the execution contract and must preserve every accepted gate.
+
+### Approved Moodle Sandbox Slice
+
+The product owner has approved one bounded Moodle sandbox slice against
+`moodle-no-data.enesekremergunesh.com`. This approval is limited to capability
+discovery and a disabled-by-default, server-only, read-only client/probe:
+
+1. Do not store the supplied administrator username or password in the
+   repository, environment examples, fixtures, logs, or provider records.
+2. Use a dedicated minimum-privilege Moodle service account and custom REST
+   service before any live Nile Learn runtime call. An administrator or mobile
+   application token is not an integration credential.
+3. Keep Moodle writes, course creation, enrolment changes, grade changes,
+   messages, attendance writeback, and file transfer disabled.
+4. Keep provider projection persistence disabled until normalized repository
+   and reconciliation prerequisites are accepted.
+5. Implement and test only the server client, capability probe, safe status
+   endpoint, strict read-function allowlist, timeout/error behavior, and
+   Super-Admin authority boundary in this slice.
+6. Keep the client mock projection and all portal behavior unchanged until a
+   later mapping/projection slice is approved.
+
+The detailed sandbox evidence, function allowlist, rollout plan, and stop
+conditions live in `docs/MOODLE_INTEGRATION_EXECUTION_PLAN.md`. This bounded
+foundation does not advance the production Phase 6 projection gate or authorize
+any remote Nile Learn database change.
+
+M0 discovery and the disabled M1 server boundary are accepted locally. The M1
+client rejects protocol-field overrides, broad service surfaces, private or
+unapproved destinations, unbounded responses, provider-controlled error text,
+and requests that exceed the DNS-plus-HTTP timeout. It pins the validated
+public address to the actual TLS socket. Two read-only reviews found no
+remaining high or medium issue, 16 focused Moodle tests pass, and the complete
+repository gate preserves 1,509/0 in
+`output/playwright/moodle-read-foundation-20260712/portal-qa-summary.json`.
+
+The product owner's 2026-07-12 end-to-end sandbox testing instruction approves
+M2 for the dedicated practice site only. M2 may enable the installed Web
+services authentication method and create one synthetic non-interactive
+service user, minimum-capability role, authorised-users-only custom read
+service, expiring token, and synthetic course/user/activity dataset. No real
+student data may be used. Student photos, passports, national IDs, guardian
+documents, consent, addresses, and admissions notes remain Nile Learn-only and
+must never be projected to Moodle. The supplied administrator credential must
+never become a Nile Learn runtime credential.
+
+This approval does not activate M3 persistence, a production runtime flag,
+Moodle writes from Nile Learn, or any remote Nile Learn database change. The
+token may be used only from the local command environment for live contract
+verification and must be revoked if the minimum-privilege boundary fails.
+
+The product owner's 2026-07-13 instruction separately approves **M2B synthetic
+sandbox write proof**. ADR-008 owns this bounded exception. M2B must use a
+separate authorised-users-only service, service user, expiring token,
+configuration namespace, and exact eleven-function surface. The eleventh
+function is a marker-only user lookup required to reconcile a synthetic user
+before enrolment makes it visible to the separate course-scoped read service.
+It may mutate only one marker-bound fake user, that user's manual enrolment in
+the existing synthetic course, and one marker-bound group plus membership. It
+must reconcile before retry, prove replay without duplication, clean up in
+dependency order, and leave the M2 read result unchanged. It may not add a
+portal route, runtime flag, database write, outbox worker, production
+credential, real identity, course or activity write, grade, message,
+attendance writeback, or file transfer.
+
+M2B is provider-contract evidence, not Phase 10 acceptance. Production Moodle
+writes remain blocked on normalized mappings, durable command/audit/outbox
+transactions, worker leases and retry behavior, reconciliation approval, RLS,
+and a separate production threat review.

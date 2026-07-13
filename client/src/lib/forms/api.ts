@@ -4,6 +4,7 @@ import type {
   FormDefinition,
   FormField,
   FormLegacyFieldMapping,
+  FormManagementOptions,
   FormOfflineDevice,
   FormPromotion,
   FormPublication,
@@ -129,6 +130,10 @@ async function formsJson<T>(
 
 export function fetchFormDefinitions() {
   return formsJson<FormDefinition[]>("/api/forms/definitions");
+}
+
+export function fetchFormManagementOptions() {
+  return formsJson<FormManagementOptions>("/api/forms/management-options");
 }
 
 export function fetchFormDefinition(formId: string) {

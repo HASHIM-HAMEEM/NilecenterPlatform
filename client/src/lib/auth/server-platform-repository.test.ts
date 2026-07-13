@@ -105,6 +105,42 @@ describe("platform repository boundary", () => {
     ).toBe("active");
   });
 
+  it("adds Nile Forms permissions to a legacy cached permission catalog once", () => {
+    const legacyState = cloneSeed();
+    delete legacyState.permissionCatalogVersion;
+    for (const role of Object.keys(legacyState.permissions) as Array<
+      keyof PlatformState["permissions"]
+    >) {
+      legacyState.permissions[role] = legacyState.permissions[role].filter(
+        permission =>
+          !permission.startsWith("forms:") &&
+          !permission.startsWith("form_submissions:")
+      );
+    }
+
+    const state = normalizePlatformState(legacyState);
+
+    expect(state.permissionCatalogVersion).toBe(1);
+    expect(state.permissions.student).toEqual(
+      expect.arrayContaining(["forms:read", "forms:respond"])
+    );
+    expect(state.permissions.superadmin).toEqual(
+      expect.arrayContaining(["forms:read", "forms:write", "forms:publish"])
+    );
+  });
+
+  it("does not restore a Forms permission removed after the catalog migration", () => {
+    const state = cloneSeed();
+    state.permissions.student = state.permissions.student.filter(
+      permission => permission !== "forms:read"
+    );
+
+    const normalized = normalizePlatformState(state);
+
+    expect(normalized.permissionCatalogVersion).toBe(1);
+    expect(normalized.permissions.student).not.toContain("forms:read");
+  });
+
   it("reads platform snapshots through the configured repository", async () => {
     const state = cloneSeed();
     state.users = state.users.filter(user => user.id === "usr_admin_demo");

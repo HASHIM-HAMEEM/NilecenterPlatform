@@ -452,8 +452,8 @@
 }
 
 .student-learning-toolbar .portal-simple-tabs a.active {
-  background: var(--foreground);
-  color: var(--background);
+  background: var(--role-color);
+  color: white;
 }
 
 .student-learning-main {
@@ -1427,7 +1427,7 @@
   }
 
   .student-assessment-status-meta dl > div + div {
-    border-inline-start: 0;
+    border-inline-start: 1px solid var(--border);
     border-top: 1px solid var(--border);
   }
 
@@ -1595,7 +1595,7 @@
 
 .student-record-command dl > div:first-child,
 .student-quran-summary dl > div:first-child {
-  border-inline-start: 0;
+  border-inline-start: 1px solid var(--border);
 }
 
 .student-record-command dt,

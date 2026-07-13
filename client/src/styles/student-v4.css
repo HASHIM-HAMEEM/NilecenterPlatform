@@ -86,7 +86,7 @@
 }
 
 .platform-shell[data-role="student"] .platform-v2-work-summary {
-  border-inline-start: 3px solid var(--role-color);
+  border-inline-start: 1px solid var(--border);
   background: var(--card);
 }
 
@@ -106,25 +106,26 @@
 }
 
 .platform-shell[data-role="student"] .platform-v2-summary-body {
-  grid-template-columns: minmax(0, 1fr) minmax(248px, 0.5fr);
-  gap: 22px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   align-items: stretch;
-  padding: 12px 22px 22px;
+  padding: 10px 22px 22px;
 }
 
 .platform-shell[data-role="student"] .platform-v2-summary-copy {
-  min-height: 188px;
-  align-content: center;
+  min-height: 0;
+  align-content: start;
   border-radius: 0;
   background: transparent;
-  padding: 18px 2px 18px 0;
+  padding: 8px 2px 4px 0;
 }
 
 .platform-shell[data-role="student"] .platform-v2-summary-copy h2 {
   max-width: 25ch;
-  font-size: 30px;
+  font-size: clamp(26px, 2.6vw, 32px);
   font-weight: 760;
-  line-height: 1.14;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
 }
 
 .platform-shell[data-role="student"] .platform-v2-summary-copy p {
@@ -133,25 +134,29 @@
 }
 
 .platform-shell[data-role="student"] .platform-v2-summary-facts {
-  gap: 0;
-  border-inline-start: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  border: 0;
   border-radius: 0;
   background: transparent;
 }
 
 .platform-shell[data-role="student"] .platform-v2-summary-facts article {
-  min-height: 96px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 18px;
+  min-height: 112px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: none;
+  padding: 14px 15px;
 }
 
 .platform-shell[data-role="student"]
   .platform-v2-summary-facts
   article
   + article {
-  border-inline-start: 1px solid var(--border);
+  border-inline-start: 1px solid
+    color-mix(in srgb, var(--border) 84%, var(--role-color));
 }
 
 .platform-shell[data-role="student"] .platform-v2-summary-facts strong {
@@ -213,13 +218,12 @@
 .platform-shell[data-role="student"] .student-calendar-list-row {
   min-height: 78px;
   padding: 16px 22px;
-  border-inline-start: 3px solid transparent;
+  border-inline-start: 0;
 }
 
 .platform-shell[data-role="student"] .student-course-list-row:hover,
 .platform-shell[data-role="student"] .student-task-list-row:hover,
 .platform-shell[data-role="student"] .student-calendar-list-row:hover {
-  border-inline-start-color: var(--role-color);
   background: color-mix(in srgb, var(--role-tint) 24%, var(--card));
 }
 
@@ -228,7 +232,7 @@
   grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.54fr);
   gap: 18px 30px;
   padding: 24px;
-  border-inline-start: 3px solid var(--role-color);
+  border-inline-start: 0;
 }
 
 .platform-shell[data-role="student"] .student-course-overview-copy {
@@ -257,14 +261,13 @@
 .platform-shell[data-role="student"] .student-course-map-list article {
   min-height: 66px;
   padding: 14px 22px;
-  border-inline-start: 3px solid transparent;
+  border-inline-start: 0;
   transition:
     border-color 160ms ease,
     background 160ms ease;
 }
 
 .platform-shell[data-role="student"] .student-course-map-list article:hover {
-  border-inline-start-color: var(--role-color);
   background: color-mix(in srgb, var(--role-tint) 22%, var(--card));
 }
 
@@ -282,7 +285,7 @@
 .platform-shell[data-role="student"] .student-assessment-status {
   gap: 22px;
   padding: 20px 22px;
-  border-inline-start: 3px solid var(--role-color);
+  border-inline-start: 1px solid var(--border);
 }
 
 .platform-shell[data-role="student"] .student-assessment-status-copy h2 {

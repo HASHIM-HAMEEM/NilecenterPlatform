@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ProtectedRoute from "./components/platform/ProtectedRoute";
 import LegacyRouteRedirect from "./components/platform/LegacyRouteRedirect";
+import { nileFormsCutoverEnabled } from "./lib/forms/cutover";
 import type { Role } from "./lib/platformData";
 
 // Public
@@ -158,11 +159,20 @@ const NileFormsAssignedPage = lazy(
 const NileFormsManagePage = lazy(
   () => import("./pages/platform/NileFormsManagePage")
 );
+const NileFormsCreatePage = lazy(
+  () => import("./pages/platform/NileFormsCreatePage")
+);
 const NileFormsBuilderPage = lazy(
   () => import("./pages/platform/NileFormsBuilderPage")
 );
 const NileFormsPublishPage = lazy(
   () => import("./pages/platform/NileFormsPublishPage")
+);
+const NileFormsPublicationsPage = lazy(
+  () => import("./pages/platform/NileFormsPublicationsPage")
+);
+const NileFormsAssignmentsPage = lazy(
+  () => import("./pages/platform/NileFormsAssignmentsPage")
 );
 const NileFormsReviewPage = lazy(
   () => import("./pages/platform/NileFormsReviewPage")
@@ -277,10 +287,25 @@ function Router() {
           {params => <PublicSitePage mode="course" slug={params.slug} />}
         </Route>
         <Route path="/book-free-trial">
-          <PublicSitePage mode="trial" />
+          {nileFormsCutoverEnabled ? (
+            <PublicNileFormPage slug="free-trial-enquiry" />
+          ) : (
+            <PublicSitePage mode="trial" />
+          )}
         </Route>
         <Route path="/book-placement-test">
-          <PublicSitePage mode="placement" />
+          {nileFormsCutoverEnabled ? (
+            <PublicNileFormPage slug="placement-request" />
+          ) : (
+            <PublicSitePage mode="placement" />
+          )}
+        </Route>
+        <Route path="/apply">
+          {nileFormsCutoverEnabled ? (
+            <PublicNileFormPage slug="course-application" />
+          ) : (
+            <PublicSitePage mode="contact" />
+          )}
         </Route>
         <Route path="/verify-certificate">
           <PublicSitePage mode="verify" />
@@ -320,6 +345,11 @@ function Router() {
           <Fragment key={route.prefix}>
             {route.manage ? (
               <>
+                <Route path={`${route.prefix}/forms/manage/new`}>
+                  <ProtectedRoute role={route.role} pageId="forms-manage">
+                    <NileFormsCreatePage role={route.role} />
+                  </ProtectedRoute>
+                </Route>
                 <Route path={`${route.prefix}/forms/manage/:formId/builder`}>
                   {params => (
                     <ProtectedRoute role={route.role} pageId="form-builder">
@@ -334,6 +364,31 @@ function Router() {
                   {params => (
                     <ProtectedRoute role={route.role} pageId="form-publish">
                       <NileFormsPublishPage
+                        role={route.role}
+                        formId={params.formId}
+                      />
+                    </ProtectedRoute>
+                  )}
+                </Route>
+                <Route
+                  path={`${route.prefix}/forms/manage/:formId/publications/:publicationId/assignments`}
+                >
+                  {params => (
+                    <ProtectedRoute role={route.role} pageId="form-assignments">
+                      <NileFormsAssignmentsPage
+                        role={route.role}
+                        formId={params.formId}
+                        publicationId={params.publicationId}
+                      />
+                    </ProtectedRoute>
+                  )}
+                </Route>
+                <Route
+                  path={`${route.prefix}/forms/manage/:formId/publications`}
+                >
+                  {params => (
+                    <ProtectedRoute role={route.role} pageId="form-publish">
+                      <NileFormsPublicationsPage
                         role={route.role}
                         formId={params.formId}
                       />
@@ -1311,7 +1366,14 @@ function Router() {
 
         <Route path="/app/student/support/new">
           <ProtectedRoute role="student" pageId="support">
-            <StudentSupportPage mode="create" />
+            {nileFormsCutoverEnabled ? (
+              <NileFormsAssignedPage
+                role="student"
+                publicationId="publication_form_support_1"
+              />
+            ) : (
+              <StudentSupportPage mode="create" />
+            )}
           </ProtectedRoute>
         </Route>
 

@@ -50,14 +50,24 @@ run_prettier_check() {
     docs/auth-session-hardening.md
     docs/internal-admin-workflows.md
     docs/qa-baseline.md
+    supabase/manual/README.md
     docs/decisions/README.md
     docs/decisions/ADR-001-system-authority.md
     docs/decisions/ADR-002-durable-sessions-and-role-grants.md
     docs/decisions/ADR-003-moodle-read-projection.md
     docs/decisions/ADR-004-finite-legacy-ems-migration.md
     docs/decisions/ADR-005-atomic-audit-and-outbox.md
+    docs/decisions/ADR-006-nile-forms-authority.md
+    docs/decisions/ADR-007-nile-forms-processing-boundary.md
     scripts/validate-phase1-schema.mjs
     scripts/validate-phase1-pglite.mjs
+    scripts/validate-phase2-session-schema.mjs
+    scripts/validate-phase2-session-pglite.mjs
+    scripts/validate-phase2-session-postgrest.mjs
+    scripts/validate-phase2-session-supabase.ts
+    scripts/validate-nile-forms-schema.mjs
+    scripts/validate-nile-forms-pglite.mjs
+    scripts/validate-nile-forms-program-contract.mjs
     .codex/hooks.json
     .codex/prompts/00-discovery.md
     .codex/prompts/01-public-site.md
@@ -76,6 +86,8 @@ run_prettier_check() {
     .codex/prompts/14-reports.md
     .codex/prompts/15-security-review.md
     .codex/prompts/16-modernization-execution.md
+    .codex/prompts/17-nile-forms.md
+    .codex/prompts/18-nile-forms-production-core.md
   )
 
   if [[ "${FULL_FORMAT_CHECK:-0}" == "1" ]]; then
@@ -250,6 +262,29 @@ fi
 
 if has_script "check:phase1-schema:runtime"; then
   run_step "Phase 1 PostgreSQL runtime" run_package_script check:phase1-schema:runtime
+fi
+
+if has_script "check:phase2-session-schema"; then
+  run_step "Phase 2B session schema contract" \
+    run_package_script check:phase2-session-schema
+fi
+
+if has_script "check:phase2-session-schema:runtime"; then
+  run_step "Phase 2B session PostgreSQL runtime" \
+    run_package_script check:phase2-session-schema:runtime
+fi
+
+if has_script "check:forms-program"; then
+  run_step "Nile Forms program contract" run_package_script check:forms-program
+fi
+
+if has_script "check:forms-schema"; then
+  run_step "Nile Forms schema contract" run_package_script check:forms-schema
+fi
+
+if has_script "check:forms-schema:runtime"; then
+  run_step "Nile Forms PostgreSQL runtime" \
+    run_package_script check:forms-schema:runtime
 fi
 
 if has_script "check:phase1-schema:supabase"; then

@@ -1,0 +1,710 @@
+/*
+  Student Portal V5
+  A learner workspace should make the next useful step unmistakable. These
+  overrides keep the course player immersive while giving every surrounding
+  route the same quiet, readable cadence.
+*/
+
+.platform-shell[data-role="student"] {
+  --student-line: color-mix(in srgb, var(--border) 92%, var(--foreground));
+  --student-surface: color-mix(in srgb, var(--card) 97%, var(--role-tint));
+  --student-accent: var(--role-color);
+}
+
+.platform-shell[data-role="student"] .platform-content {
+  width: min(100%, 1720px);
+}
+
+.platform-shell[data-role="student"]
+  :is(
+    .student-workspace-page,
+    .student-learning-page,
+    .student-assessment-page,
+    .student-records-page,
+    .student-support-page,
+    .portal-messages-page,
+    .profile-workspace,
+    .moodle-source-page
+  ) {
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+  container-name: student-workspace;
+  container-type: inline-size;
+}
+
+.platform-shell[data-role="student"] .platform-page-header {
+  align-items: flex-end;
+  gap: 16px;
+  padding-block: 4px 2px;
+}
+
+.platform-shell[data-role="student"] .platform-page-header > div,
+.platform-shell[data-role="student"] .platform-v2-layout-main,
+.platform-shell[data-role="student"] .platform-v2-layout-side,
+.platform-shell[data-role="student"] .platform-v2-layout-footer {
+  min-width: 0;
+}
+
+.platform-shell[data-role="student"] .platform-page-header h1 {
+  max-width: 26ch;
+  font-size: 30px;
+  font-weight: 760;
+  line-height: 1.14;
+}
+
+.platform-shell[data-role="student"] .platform-page-header p {
+  max-width: 60ch;
+  font-size: 14px;
+  line-height: 1.48;
+}
+
+.platform-shell[data-role="student"]
+  :is(.platform-v2-layout, .platform-v2-layout-grid) {
+  gap: 18px;
+}
+
+/* Dashboard metrics read as one compact learning pulse, not four tiles. */
+.platform-shell[data-role="student"] .platform-metric-grid {
+  border-color: var(--student-line);
+  box-shadow: none;
+}
+
+.platform-shell[data-role="student"] .platform-metric {
+  min-height: 100px;
+  padding: 17px 20px;
+}
+
+.platform-shell[data-role="student"] .platform-metric span {
+  letter-spacing: 0.02em;
+}
+
+.platform-shell[data-role="student"] .platform-v2-role-main {
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.7fr);
+  gap: 18px;
+}
+
+.platform-shell[data-role="student"] .platform-v2-role-stack {
+  gap: 18px;
+}
+
+.platform-shell[data-role="student"]
+  :is(.platform-v2-work-summary, .platform-v2-panel) {
+  border-color: var(--student-line);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.platform-shell[data-role="student"] .platform-v2-work-summary {
+  border-inline-start: 1px solid var(--border);
+  background: var(--student-surface);
+}
+
+.platform-shell[data-role="student"]
+  :is(.platform-v2-dashboard-list, .platform-v2-attention-list)
+  > * {
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.platform-shell[data-role="student"]
+  :is(.platform-v2-dashboard-list, .platform-v2-attention-list)
+  > *:hover {
+  background: color-mix(in srgb, var(--role-tint) 16%, var(--card));
+}
+
+/* Course, task, and calendar controls are one quiet tool rail. */
+.platform-shell[data-role="student"]
+  :is(
+    .student-workspace-toolbar,
+    .student-learning-toolbar,
+    .student-support-toolbar
+  ) {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--student-line);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 3px;
+  box-shadow: none;
+}
+
+.platform-shell[data-role="student"] .student-learning-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.platform-shell[data-role="student"]
+  .student-learning-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.platform-shell[data-role="student"] .student-learning-course-select {
+  min-width: 0;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border-inline-end: 1px solid var(--student-line);
+  padding: 0 11px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 740;
+  white-space: nowrap;
+}
+
+.platform-shell[data-role="student"] .student-learning-course-select select {
+  min-width: 0;
+  max-width: min(290px, 30vw);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 760;
+  outline: 0;
+}
+
+.platform-shell[data-role="student"]
+  :is(
+    .student-learning-toolbar .portal-simple-tabs,
+    .portal-simple-tabs.profile-section-tabs
+  ) {
+  min-height: 38px;
+  gap: 2px;
+  border: 1px solid var(--student-line);
+  border-radius: 999px;
+  background: var(--card);
+  padding: 3px;
+}
+
+.platform-shell[data-role="student"]
+  :is(
+    .student-learning-toolbar .portal-simple-tabs,
+    .portal-simple-tabs.profile-section-tabs
+  )
+  :is(a, button) {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  padding-inline: 14px;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.platform-shell[data-role="student"] .student-workspace-toolbar {
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.platform-shell[data-role="student"]
+  .student-workspace-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.platform-shell[data-role="student"] .student-workspace-search,
+.platform-shell[data-role="student"] .student-workspace-filter {
+  min-height: 38px;
+}
+
+.platform-shell[data-role="student"] .student-workspace-search {
+  min-width: min(280px, 34vw);
+}
+
+.platform-shell[data-role="student"] .student-workspace-filter button {
+  min-height: 34px;
+  border-radius: 6px;
+}
+
+/* Lists use one softly divided surface, with a clear open action at the edge. */
+.platform-shell[data-role="student"]
+  :is(
+    .student-workspace-surface,
+    .student-course-hero-v3,
+    .student-course-map-v3,
+    .student-lesson-resources-v3,
+    .student-assessment-status,
+    .student-assessment-response,
+    .student-record-command,
+    .student-record-list,
+    .student-quran-summary,
+    .student-quran-composer,
+    .student-certificate-picker,
+    .student-support-create-surface,
+    .student-support-record-card,
+    .portal-message-workspace,
+    .portal-message-compose-surface,
+    .profile-identity-strip,
+    .profile-form-card
+  ) {
+  border-color: var(--student-line);
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.platform-shell[data-role="student"]
+  :is(
+    .student-workspace-surface,
+    .student-course-map-v3,
+    .student-lesson-resources-v3
+  )
+  > :first-child {
+  border-color: var(--student-line);
+}
+
+.platform-shell[data-role="student"]
+  :is(
+    .student-course-list-row,
+    .student-task-list-row,
+    .student-calendar-list-row
+  ) {
+  position: relative;
+  min-height: 76px;
+  border-inline-start: 0;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.platform-shell[data-role="student"]
+  :is(
+    .student-course-list-row,
+    .student-task-list-row,
+    .student-calendar-list-row
+  ):hover {
+  background: color-mix(in srgb, var(--role-tint) 17%, var(--card));
+}
+
+.platform-shell[data-role="student"]
+  :is(.student-workspace-row-action, .student-course-map-action) {
+  min-width: 72px;
+  min-height: 34px;
+  justify-content: center;
+  border-radius: 6px;
+  font-weight: 760;
+}
+
+.platform-shell[data-role="student"] .student-workspace-icon,
+.platform-shell[data-role="student"] .student-course-map-icon {
+  border-radius: 8px;
+}
+
+/* Course context is a single information panel; the player remains immersive. */
+.platform-shell[data-role="student"] .student-course-hero-v3 {
+  gap: 18px 28px;
+  background: var(--student-surface);
+  padding: 24px;
+}
+
+.platform-shell[data-role="student"] .student-course-overview-copy p {
+  max-width: 62ch;
+}
+
+.platform-shell[data-role="student"] .student-course-hero-progress {
+  align-self: stretch;
+  display: grid;
+  align-content: center;
+}
+
+.platform-shell[data-role="student"] .student-course-hero-facts {
+  border-color: var(--student-line);
+}
+
+.platform-shell[data-role="student"] .student-course-map-list article {
+  min-height: 70px;
+  border-inline-start: 0;
+}
+
+.platform-shell[data-role="student"] .student-course-map-list article:hover {
+  background: color-mix(in srgb, var(--role-tint) 16%, var(--card));
+}
+
+.platform-shell[data-role="student"] .student-learning-player-card {
+  overflow: hidden;
+  border-color: var(--student-line);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.platform-shell[data-role="student"] .learning-player-top {
+  min-height: 56px;
+  border-color: var(--student-line);
+  padding-inline: 20px;
+}
+
+/* Assessments are intentionally a short status read followed by one response. */
+.platform-shell[data-role="student"]
+  .student-assessment-page
+  .platform-v2-layout-main {
+  width: min(100%, 1080px);
+}
+
+.platform-shell[data-role="student"] .student-assessment-workspace {
+  gap: 16px;
+}
+
+.platform-shell[data-role="student"] .student-assessment-status {
+  gap: 24px;
+  border-inline-start: 1px solid var(--border);
+  background: var(--student-surface);
+  padding: 20px 22px;
+}
+
+.platform-shell[data-role="student"] .student-assessment-status-copy p {
+  max-width: 62ch;
+}
+
+.platform-shell[data-role="student"] .student-assessment-status-meta dl {
+  border: 1px solid var(--student-line);
+  border-radius: 6px;
+  background: var(--card);
+}
+
+.platform-shell[data-role="student"] .student-assessment-response {
+  padding: 0 22px 22px;
+}
+
+.platform-shell[data-role="student"] .student-assessment-response-head {
+  min-height: 68px;
+  border-color: var(--student-line);
+}
+
+.platform-shell[data-role="student"] .student-quiz-question {
+  border-color: var(--student-line);
+}
+
+.platform-shell[data-role="student"] .student-quiz-tags span {
+  border-radius: 999px;
+}
+
+/* Student records retain a single outcome strip and clear, low-noise rows. */
+.platform-shell[data-role="student"]
+  :is(.student-record-command, .student-quran-summary) {
+  gap: 22px;
+  border-inline-start: 1px solid var(--border);
+  background: var(--student-surface);
+  padding: 22px 24px;
+}
+
+.platform-shell[data-role="student"]
+  :is(.student-record-command, .student-quran-summary)
+  dl
+  > div {
+  border-color: var(--student-line);
+}
+
+.platform-shell[data-role="student"] .student-record-list-heading {
+  min-height: 72px;
+  border-color: var(--student-line);
+  padding: 16px 22px;
+}
+
+.platform-shell[data-role="student"] .student-record-list > article {
+  min-height: 78px;
+  border-color: var(--student-line);
+  padding: 16px 22px;
+  transition: background 160ms ease;
+}
+
+.platform-shell[data-role="student"] .student-record-list > article:hover {
+  background: color-mix(in srgb, var(--role-tint) 12%, var(--card));
+}
+
+.platform-shell[data-role="student"] .student-certificate-document {
+  border-color: var(--student-line);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.platform-shell[data-role="student"] .student-certificate-document-mark {
+  border-radius: 8px;
+}
+
+/* Messaging, support, and profile use the same calm workspace language. */
+.platform-shell[data-role="student"] .portal-message-toolbar-v3,
+.platform-shell[data-role="student"] .student-support-toolbar {
+  width: 100%;
+  max-width: 100%;
+}
+
+.platform-shell[data-role="student"] .portal-message-toolbar-v3 label,
+.platform-shell[data-role="student"] .student-support-toolbar label {
+  min-height: 42px;
+  border-color: var(--student-line);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.platform-shell[data-role="student"] .portal-message-thread:hover {
+  background: color-mix(in srgb, var(--role-tint) 12%, var(--card));
+}
+
+.platform-shell[data-role="student"] .profile-identity-strip {
+  border-inline-start: 1px solid var(--border);
+  background: var(--student-surface);
+}
+
+.platform-shell[data-role="student"] .profile-form-card {
+  padding: 22px;
+}
+
+.platform-shell[data-role="student"] .profile-form-card + .profile-form-card {
+  margin-top: 16px;
+}
+
+.platform-shell[data-role="student"]
+  :is(.profile-form-grid, .profile-security-form, .portal-message-compose-form)
+  :is(input, select, textarea) {
+  border-color: var(--student-line);
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+@media (min-width: 1600px) {
+  .platform-shell[data-role="student"]
+    :is(
+      .student-workspace-page,
+      .student-learning-page,
+      .student-assessment-page,
+      .student-records-page,
+      .student-support-page,
+      .portal-messages-page,
+      .profile-workspace,
+      .moodle-source-page
+    ) {
+    max-width: 1640px;
+  }
+
+  .platform-shell[data-role="student"] .student-course-hero-v3 {
+    padding: 28px 30px;
+  }
+}
+
+@media (max-width: 980px) {
+  .platform-shell[data-role="student"] .platform-v2-role-main {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-shell[data-role="student"] .student-course-hero-v3 {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-shell[data-role="student"] .student-course-hero-progress {
+    border-top: 1px solid var(--student-line);
+    border-inline-start: 0;
+    padding: 18px 0 0;
+  }
+
+  .platform-shell[data-role="student"]
+    :is(.student-record-command, .student-quran-summary) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .platform-shell[data-role="student"]
+    :is(.student-record-command, .student-quran-summary)
+    dl {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 760px) {
+  .platform-shell[data-role="student"] .platform-page-header {
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .platform-shell[data-role="student"] .platform-page-header h1 {
+    font-size: 26px;
+  }
+
+  .platform-shell[data-role="student"]
+    .platform-page-header
+    .platform-primary-button,
+  .platform-shell[data-role="student"]
+    .platform-page-header
+    .platform-secondary-button {
+    width: 100%;
+  }
+
+  .platform-shell[data-role="student"]
+    :is(
+      .student-workspace-toolbar,
+      .student-learning-toolbar,
+      .student-support-toolbar
+    ) {
+    width: 100%;
+  }
+
+  .platform-shell[data-role="student"] .student-workspace-search {
+    min-width: min(242px, 68vw);
+  }
+
+  .platform-shell[data-role="student"] .student-learning-toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+    padding: 5px;
+    overflow: visible;
+  }
+
+  .platform-shell[data-role="student"] .student-learning-course-select {
+    width: 100%;
+    border-bottom: 1px solid var(--student-line);
+    border-inline-end: 0;
+  }
+
+  .platform-shell[data-role="student"] .student-learning-course-select select {
+    max-width: none;
+    flex: 1;
+  }
+
+  .platform-shell[data-role="student"]
+    .student-learning-toolbar
+    .portal-simple-tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .platform-shell[data-role="student"]
+    .portal-simple-tabs.profile-section-tabs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .platform-shell[data-role="student"]
+    .student-learning-toolbar
+    .portal-simple-tabs
+    :is(a, button) {
+    width: 100%;
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+
+  .platform-shell[data-role="student"] .student-course-hero-v3 {
+    gap: 16px;
+    padding: 20px 18px;
+  }
+
+  .platform-shell[data-role="student"] .student-course-hero-facts > div {
+    padding-block: 14px;
+  }
+
+  .platform-shell[data-role="student"] .student-course-map-list article {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .platform-shell[data-role="student"] .student-course-map-list article > a {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+
+  .platform-shell[data-role="student"] .learning-player-top {
+    min-height: 50px;
+    padding-inline: 16px;
+  }
+
+  .platform-shell[data-role="student"] .student-assessment-status {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 18px;
+  }
+
+  .platform-shell[data-role="student"] .student-assessment-status-meta {
+    justify-items: stretch;
+  }
+
+  .platform-shell[data-role="student"] .student-assessment-response {
+    padding: 0 18px 18px;
+  }
+
+  .platform-shell[data-role="student"] .student-assessment-response-head {
+    min-height: 62px;
+  }
+
+  .platform-shell[data-role="student"]
+    :is(.student-record-command, .student-quran-summary) {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 20px 18px;
+  }
+
+  .platform-shell[data-role="student"]
+    :is(.student-record-command, .student-quran-summary)
+    dl {
+    width: 100%;
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .platform-shell[data-role="student"] .student-record-list-heading,
+  .platform-shell[data-role="student"] .student-record-list > article {
+    padding-inline: 16px;
+  }
+
+  .platform-shell[data-role="student"] .student-record-list > article {
+    min-height: 0;
+  }
+
+  .platform-shell[data-role="student"] .portal-message-toolbar-v3,
+  .platform-shell[data-role="student"] .student-support-toolbar {
+    width: 100%;
+  }
+
+  .platform-shell[data-role="student"] .profile-form-card {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 420px) {
+  .platform-shell[data-role="student"] .platform-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .platform-shell[data-role="student"] .platform-metric {
+    min-height: 90px;
+    padding: 14px;
+  }
+
+  .platform-shell[data-role="student"] .student-workspace-search {
+    min-width: 215px;
+  }
+
+  .platform-shell[data-role="student"] .student-course-map-list article {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .platform-shell[data-role="student"] .student-course-map-list article > a {
+    grid-column: 2;
+  }
+
+  .platform-shell[data-role="student"]
+    :is(.student-record-command, .student-quran-summary)
+    dl
+    > div {
+    padding-inline: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .platform-shell[data-role="student"] *,
+  .platform-shell[data-role="student"] *::before,
+  .platform-shell[data-role="student"] *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

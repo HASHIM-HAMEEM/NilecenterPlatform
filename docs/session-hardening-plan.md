@@ -46,12 +46,13 @@ Current tests:
 
 - Default memory sessions are lost on process restart, are not shared across
   instances, and revoke only in one process.
-- The non-default durable adapter passes a real disposable-local PostgREST
-  integration gate. It has not passed a linked/shared-environment promotion
-  gate and is not approved as the runtime default.
+- The non-default durable adapter passes the corrected Phase 2B lifecycle
+  through isolated native PostgreSQL 17 and PostgREST 14.14. This is local-only
+  database acceptance; linked/shared promotion and runtime-default use remain
+  prohibited.
 - The schema includes `last_seen_at`, `revoked_at`, `revoked_by`, `ip_hash`, and
-  `user_agent_hash`. The adapter currently writes `revoked_at`; it does not yet
-  populate `last_seen_at`, `revoked_by`, IP hash, or user-agent hash.
+  `user_agent_hash`. The adapter currently writes `revoked_at` and `revoked_by`;
+  it does not yet populate `last_seen_at`, IP hash, or user-agent hash.
 - Supabase Auth can authenticate, but normalized identity and session authority
   remain non-default until the promotion gates pass.
 - In memory mode, roles remain alpha session values. In Supabase mode, every
@@ -194,17 +195,16 @@ Status: implemented in Phase 2A with no runtime default change.
   `NILE_SESSION_REPOSITORY=supabase`.
 - Repository code uses the server-only Supabase REST boundary; auth handlers do
   not contain table operations.
-- Contract tests use fake server responses, and the disposable-local Data API
-  gate proves the same boundary through real PostgREST requests.
+- Contract tests use fake server responses, and the corrected Phase 2B SQL now
+  passes the real repository adapter through isolated native PostgREST.
 - Keep memory store as the explicit local/demo adapter. Failing closed instead
   of selecting memory when production durable storage is unavailable is a
   required activation gate, not current default behavior.
 
 ### Adapter Stage C: Durable Writes
 
-Status: implemented and verified through the disposable-local PostgREST gate.
-Lifecycle command/audit evidence is not yet atomic, and linked/shared promotion
-remains prohibited. No UX change.
+Status: implemented and accepted against the isolated local database/Data API
+boundary. Linked/shared promotion remains prohibited. No UX change.
 
 - On sign-in, write a durable session row.
 - Store only a safe cookie/session identifier.
@@ -214,8 +214,8 @@ remains prohibited. No UX change.
 
 ### Adapter Stage D: Durable Reads And Revocation
 
-Status: implemented and verified through the disposable-local PostgREST gate;
-activation remains prohibited.
+Status: implemented and accepted against the isolated local database/Data API
+boundary; activation remains prohibited.
 
 - `getRequestSession` loads from the configured durable store.
 - Every lookup revalidates the mapped user and referenced role grant. Missing,
@@ -287,7 +287,9 @@ Browser/portal QA:
 - role switch with valid role
 - role switch after role removal once role refresh exists
 
-Use Aside by default for manual/browser QA, with Browser plugin and Computer fallback if Aside is unavailable.
+Use the Codex in-app Browser for manual QA. If it is unavailable, stop browser
+work and report the blocker. Built-in repository QA may continue using its own
+automation.
 
 ## Rollback Plan
 
@@ -304,8 +306,8 @@ Use Aside by default for manual/browser QA, with Browser plugin and Computer fal
 Before any durable session runtime change is accepted:
 
 - `npm run check`
-- `npm run check:phase2-session:supabase` for slices that touch the durable
-  adapter or its database contract
+- `npm run check:phase2-session-schema`
+- `npm run check:phase2-session-schema:runtime`
 - `npm test -- --run`
 - `npm run build`
 - focused auth/session tests
@@ -313,7 +315,18 @@ Before any durable session runtime change is accepted:
 - full portal QA with 0 failures
 - manual browser QA for login/logout and protected-route behavior
 
-Current protected baseline remains 1,205 portal QA checks with 0 failures.
+The real local Data API gate is required for slices that touch the durable
+adapter or its database contract. Use
+`npm run check:phase2-session:supabase` only with the recognized disposable
+local Supabase stack. When Docker operation is not approved, use
+`npm run check:phase2-session:postgrest` only with an already-running isolated
+local PostgREST endpoint. The latter requires an explicit local-only
+acknowledgement, rejects non-local URLs, and requires the exact fresh fake
+fixture marker; its SQL and fake-data prerequisites remain in
+`supabase/manual/README.md`. Either command is local acceptance evidence only
+and does not approve a runtime-default change.
+
+The accepted portal baseline is defined by the current master-plan checkpoint.
 
 ## Current Slice Authority
 

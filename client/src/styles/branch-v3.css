@@ -887,9 +887,9 @@
 }
 
 .branch-attendance-options button.active {
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: var(--background);
+  border-color: var(--role-color);
+  background: var(--role-color);
+  color: white;
 }
 
 .branch-attendance-note {

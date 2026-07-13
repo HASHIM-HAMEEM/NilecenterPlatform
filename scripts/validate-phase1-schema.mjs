@@ -75,6 +75,8 @@ for (const marker of [
   "hod@nilelearn.local",
   "branch@nilelearn.local",
   "admin@nilelearn.local",
+  "nile_phase2_test_fixture",
+  "phase2b-disposable-local-v1",
 ]) {
   if (!seed.includes(marker)) {
     throw new Error(`Local Phase 1 seed marker is missing: ${marker}`);

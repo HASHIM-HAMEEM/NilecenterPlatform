@@ -54,16 +54,18 @@ export default function PendingMediaField({
   kind,
   label,
   description,
+  accept: acceptOverride,
 }: {
   value: PendingMediaAttachment[];
   onChange: (items: PendingMediaAttachment[]) => void;
   kind: PendingMediaAttachment["kind"];
   label: string;
   description: string;
+  accept?: string;
 }) {
   const inputId = useId();
   const [error, setError] = useState("");
-  const accept = pendingMediaAcceptByKind[kind];
+  const accept = acceptOverride ?? pendingMediaAcceptByKind[kind];
 
   const addFiles = (files: FileList | null) => {
     setError("");

@@ -732,6 +732,7 @@ describe("platformStore workflow guards", () => {
       userId: "usr_student_demo",
       title: "Lesson material",
       href: "/app/student/messages",
+      relatedMessageId: message.id,
     });
     expect(after.auditLogs[0]).toMatchObject({
       action: "message.sent",
@@ -739,6 +740,16 @@ describe("platformStore workflow guards", () => {
       entityType: "Message",
       entityId: message.id,
     });
+
+    platformStore.markMessageRead(message.id);
+    expect(
+      platformStore.getState().messages.find(item => item.id === message.id)
+    ).toMatchObject({ read: true });
+    expect(
+      platformStore
+        .getState()
+        .notifications.find(item => item.relatedMessageId === message.id)
+    ).toMatchObject({ read: true });
   });
 
   it("creates per-recipient rows for internal broadcast messages", () => {

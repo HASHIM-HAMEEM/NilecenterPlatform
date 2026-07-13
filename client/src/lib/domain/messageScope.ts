@@ -24,6 +24,48 @@ function activeStaffProfile(state: PlatformState, actorId: string, role: Role) {
   );
 }
 
+function activeStaffProfilesForUser(state: PlatformState, user: User) {
+  return state.staffProfiles.filter(
+    profile =>
+      profile.userId === user.id &&
+      profile.status === "active" &&
+      user.roles.includes(profile.role)
+  );
+}
+
+function userMatchesBranchScope(
+  state: PlatformState,
+  user: User,
+  branchIds: Set<string>
+) {
+  if (branchIds.has("br_global")) return true;
+  const recipientBranchIds = new Set([
+    ...(user.branchId ? [user.branchId] : []),
+    ...activeStaffProfilesForUser(state, user).flatMap(profile =>
+      profile.branchIds.filter(Boolean)
+    ),
+  ]);
+  return Array.from(recipientBranchIds).some(branchId =>
+    branchIds.has(branchId)
+  );
+}
+
+function userMatchesDepartmentScope(
+  state: PlatformState,
+  user: User,
+  departmentIds: Set<string>
+) {
+  const recipientDepartmentIds = new Set([
+    ...(user.departmentId ? [user.departmentId] : []),
+    ...activeStaffProfilesForUser(state, user).flatMap(profile =>
+      profile.departmentIds.filter(Boolean)
+    ),
+  ]);
+  return Array.from(recipientDepartmentIds).some(departmentId =>
+    departmentIds.has(departmentId)
+  );
+}
+
 function activeStudent(state: PlatformState, studentId: string) {
   const student = state.students.find(item => item.id === studentId);
   const user = student
@@ -146,13 +188,16 @@ export function getMessageRecipientScope(state: PlatformState, role: Role, actor
 
   if (role === "student") {
     assignedTeacherIdsForStudent(state, actorId).forEach((userId) => sendableUserIds.add(userId));
+    const studentBranchIds = new Set(actor?.branchId ? [actor.branchId] : []);
     state.users.forEach((user) => {
       addIf(
         sendableUserIds,
         user,
         user.id !== actorId &&
           (userHasRole(user, "registrar") || userHasRole(user, "branchadmin")) &&
-          (!actor?.branchId || user.branchId === actor.branchId || user.branchId === "br_global"),
+          (studentBranchIds.size > 0
+            ? userMatchesBranchScope(state, user, studentBranchIds)
+            : user.branchId === "br_global"),
       );
     });
     return { visibleUserIds: new Set(sendableUserIds), sendableUserIds };
@@ -169,8 +214,10 @@ export function getMessageRecipientScope(state: PlatformState, role: Role, actor
         user,
         user.id !== actorId &&
           (userHasRole(user, "superadmin") ||
-            ((userHasRole(user, "registrar") || userHasRole(user, "branchadmin")) && Boolean(user.branchId && branchIds.has(user.branchId))) ||
-            (userHasRole(user, "headofdepartment") && Boolean(user.departmentId && departmentIds.has(user.departmentId)))),
+            ((userHasRole(user, "registrar") || userHasRole(user, "branchadmin")) &&
+              userMatchesBranchScope(state, user, branchIds)) ||
+            (userHasRole(user, "headofdepartment") &&
+              userMatchesDepartmentScope(state, user, departmentIds))),
       );
     });
     return { visibleUserIds, sendableUserIds };
@@ -182,7 +229,7 @@ export function getMessageRecipientScope(state: PlatformState, role: Role, actor
       addIf(
         sendableUserIds,
         user,
-        user.id !== actorId && Boolean(user.branchId && branchIds.has(user.branchId))
+        user.id !== actorId && userMatchesBranchScope(state, user, branchIds)
       );
     });
     return { visibleUserIds: new Set(sendableUserIds), sendableUserIds };
@@ -196,12 +243,9 @@ export function getMessageRecipientScope(state: PlatformState, role: Role, actor
         user,
         user.id !== actorId &&
           (userHasRole(user, "superadmin") ||
-            (typeof user.departmentId === "string" && departmentIds.has(user.departmentId)) ||
+            userMatchesDepartmentScope(state, user, departmentIds) ||
             (userHasRole(user, "registrar") &&
-              Boolean(
-                user.branchId &&
-                  (branchIds.has("br_global") || branchIds.has(user.branchId))
-              ))),
+              userMatchesBranchScope(state, user, branchIds))),
       );
     });
     return { visibleUserIds: new Set(sendableUserIds), sendableUserIds };
@@ -215,10 +259,7 @@ export function getMessageRecipientScope(state: PlatformState, role: Role, actor
         user.id !== actorId &&
           (userHasRole(user, "superadmin") ||
             ((userHasRole(user, "student") || userHasRole(user, "teacher") || userHasRole(user, "branchadmin") || userHasRole(user, "headofdepartment")) &&
-              Boolean(
-                user.branchId &&
-                  (branchIds.has(user.branchId) || user.branchId === "br_global")
-              ))),
+              userMatchesBranchScope(state, user, branchIds))),
       );
     });
     return { visibleUserIds: new Set(sendableUserIds), sendableUserIds };

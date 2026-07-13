@@ -13,9 +13,9 @@
   width: 100%;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--card) 97%, var(--role-tint));
-  box-shadow: 0 14px 36px rgba(26, 26, 26, 0.035);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: none;
   padding: 22px 24px;
 }
 
@@ -33,21 +33,22 @@
 
 .portal-insight-heading span {
   font-size: 11px;
-  font-weight: 760;
-  letter-spacing: 0;
+  font-weight: 720;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .portal-insight-heading svg {
   color: var(--portal-insight-color);
+  opacity: 0.86;
 }
 
 .portal-insight h2 {
   margin: 8px 0 6px;
   color: var(--foreground);
-  font-size: 20px;
+  font-size: 21px;
   font-weight: 760;
-  letter-spacing: 0;
+  letter-spacing: -0.015em;
   line-height: 1.18;
 }
 
@@ -69,9 +70,9 @@
 
 .portal-insight-value strong {
   color: var(--foreground);
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 780;
-  letter-spacing: 0;
+  letter-spacing: -0.03em;
   line-height: 1;
 }
 
@@ -82,26 +83,41 @@
 }
 
 .portal-insight-chart {
+  position: relative;
   min-width: 0;
   margin: 0;
+  padding: 14px 14px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
 }
 
 .portal-insight-chart svg {
   display: block;
   width: 100%;
-  height: 150px;
+  height: clamp(124px, 10vw, 168px);
   overflow: visible;
+}
+
+.portal-insight-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
 }
 
 .portal-insight-grid {
   fill: none;
-  stroke: color-mix(in srgb, var(--border) 80%, transparent);
-  stroke-dasharray: 3 5;
+  stroke: color-mix(in srgb, var(--border) 72%, transparent);
+  stroke-dasharray: 2 6;
   stroke-width: 1;
 }
 
 .portal-insight-area {
-  fill: color-mix(in srgb, var(--portal-insight-color) 12%, transparent);
+  fill: color-mix(in srgb, var(--portal-insight-color) 16%, transparent);
 }
 
 .portal-insight-line {
@@ -109,40 +125,135 @@
   stroke: var(--portal-insight-color);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 3;
+  stroke-width: 3.25;
+  filter: none;
 }
 
 .portal-insight-point {
   fill: var(--card);
   stroke: var(--portal-insight-color);
-  stroke-width: 2.5;
+  stroke-width: 2.75;
+}
+
+.portal-insight-bar-track {
+  fill: color-mix(in srgb, var(--portal-insight-color) 8%, var(--muted));
 }
 
 .portal-insight-bar {
-  fill: color-mix(in srgb, var(--portal-insight-color) 85%, var(--foreground));
+  fill: var(--portal-insight-color);
+}
+
+.portal-insight-value-label {
+  fill: color-mix(in srgb, var(--foreground) 78%, var(--muted-foreground));
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.portal-insight-distribution {
+  display: flex;
+  align-items: center;
+  min-height: clamp(118px, 10vw, 164px);
+}
+
+.portal-insight-distribution-track {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  gap: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 78%, white);
+  padding: 4px;
+}
+
+.portal-insight-distribution-track span {
+  min-width: 0;
+  transform-origin: left center;
+  border-radius: 999px;
+  background: var(--portal-insight-color);
+}
+
+.portal-insight-distribution-track span:nth-child(2) {
+  background: color-mix(in srgb, var(--portal-insight-color) 78%, var(--card));
+}
+
+.portal-insight-distribution-track span:nth-child(3) {
+  background: color-mix(in srgb, var(--portal-insight-color) 62%, var(--card));
+}
+
+.portal-insight-distribution-track span:nth-child(4) {
+  background: color-mix(in srgb, var(--portal-insight-color) 48%, var(--card));
+}
+
+.portal-insight-distribution-track span:nth-child(5) {
+  background: color-mix(in srgb, var(--portal-insight-color) 36%, var(--card));
+}
+
+.portal-insight-distribution-track span:nth-child(n + 6) {
+  background: color-mix(in srgb, var(--portal-insight-color) 24%, var(--card));
+}
+
+.portal-insight-distribution.is-empty .portal-insight-distribution-track {
+  background: color-mix(in srgb, var(--muted) 88%, var(--card));
+}
+
+.portal-insight-distribution.is-empty .portal-insight-distribution-track span {
+  background: color-mix(in srgb, var(--border) 72%, var(--card));
 }
 
 .portal-insight-chart figcaption {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
-  gap: 6px;
-  margin-top: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .portal-insight-chart figcaption span {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-width: 0;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
   color: var(--muted-foreground);
   font-size: 11px;
   line-height: 1.25;
 }
 
+.portal-insight-chart figcaption i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--portal-insight-color);
+}
+
+.portal-insight-chart figcaption span:nth-child(2) i {
+  background: color-mix(in srgb, var(--portal-insight-color) 70%, var(--card));
+}
+
+.portal-insight-chart figcaption span:nth-child(3) i {
+  background: color-mix(in srgb, var(--portal-insight-color) 54%, var(--card));
+}
+
+.portal-insight-chart figcaption span:nth-child(4) i {
+  background: color-mix(in srgb, var(--portal-insight-color) 42%, var(--card));
+}
+
+.portal-insight-chart figcaption span:nth-child(5) i {
+  background: color-mix(in srgb, var(--portal-insight-color) 30%, var(--card));
+}
+
+.portal-insight-chart figcaption span:nth-child(n + 6) i {
+  background: color-mix(in srgb, var(--portal-insight-color) 20%, var(--card));
+}
+
 .portal-insight-chart figcaption b {
-  overflow: hidden;
   font-weight: 650;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -153,6 +264,15 @@
   font-size: 11px;
   font-style: normal;
   font-weight: 760;
+}
+
+.portal-insight-chart figcaption small {
+  grid-column: 2 / -1;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .portal-insight.compact {
@@ -175,10 +295,23 @@
 
 .portal-insight.compact .portal-insight-chart {
   margin-top: 14px;
+  padding: 12px;
 }
 
 .portal-insight.compact .portal-insight-chart svg {
-  height: 126px;
+  height: 116px;
+}
+
+.portal-insight.compact .portal-insight-distribution {
+  min-height: 82px;
+}
+
+.portal-insight.compact .portal-insight-distribution-track {
+  min-height: 30px;
+}
+
+.portal-insight.compact .portal-insight-value-label {
+  display: none;
 }
 
 .portal-insight.compact .portal-insight-chart figcaption {
@@ -186,11 +319,15 @@
 }
 
 .platform-shell[data-role="student"] .portal-insight {
-  background: color-mix(in srgb, var(--card) 97%, #e9f2ec);
+  --portal-insight-color: #1a3a5c;
+  background: var(--card);
+  box-shadow: none;
 }
 
 .platform-shell[data-role="teacher"] .portal-insight {
-  background: color-mix(in srgb, var(--card) 97%, #e9f1f7);
+  --portal-insight-color: #1a3a5c;
+  background: var(--card);
+  box-shadow: none;
 }
 
 @media (min-width: 1080px) {
@@ -222,23 +359,63 @@
   }
 }
 
+@media (max-width: 980px) {
+  .portal-insight {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .platform-v2-summary-body,
+  .teacher-plan-body {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-v2-summary-facts,
+  .teacher-plan-facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 720px) {
   .portal-insight {
     grid-template-columns: 1fr;
     gap: 16px;
     padding: 18px;
+    border-radius: 14px;
   }
 
   .portal-insight h2 {
     font-size: 19px;
   }
 
+  .portal-insight-chart {
+    padding: 12px;
+  }
+
   .portal-insight-chart svg {
-    height: 134px;
+    height: 130px;
+  }
+
+  .portal-insight-value-label {
+    display: none;
+  }
+
+  .portal-insight-distribution {
+    min-height: 96px;
   }
 
   .portal-insight-chart figcaption {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .portal-insight-chart[data-point-count="1"] figcaption,
+  .portal-insight-chart[data-point-count="2"] figcaption {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .platform-v2-summary-facts,
+  .teacher-plan-facts {
+    grid-template-columns: 1fr;
   }
 }
 

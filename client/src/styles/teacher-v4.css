@@ -84,13 +84,15 @@
   .teacher-dashboard-main
   .platform-v2-panel {
   overflow: hidden;
-  border-radius: 8px;
-  box-shadow: 0 14px 36px rgba(26, 26, 26, 0.03);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: none;
 }
 
 .platform-shell[data-role="teacher"] .teacher-plan-panel {
-  border-inline-start: 3px solid var(--role-color);
+  border-inline-start: 1px solid var(--border);
   background: var(--card);
+  box-shadow: none;
 }
 
 .platform-shell[data-role="teacher"]
@@ -108,24 +110,25 @@
 
 .platform-shell[data-role="teacher"] .teacher-plan-copy h2 {
   max-width: 24ch;
-  font-size: 32px;
+  font-size: clamp(28px, 2.8vw, 34px);
   font-weight: 760;
-  line-height: 1.14;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
 }
 
 .platform-shell[data-role="teacher"] .teacher-plan-body {
-  grid-template-columns: minmax(0, 1fr) minmax(245px, 0.5fr);
-  gap: 22px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   align-items: stretch;
-  padding: 12px 22px 22px;
+  padding: 10px 22px 22px;
 }
 
 .platform-shell[data-role="teacher"] .teacher-plan-copy {
-  min-height: 188px;
-  align-content: center;
+  min-height: 0;
+  align-content: start;
   border-radius: 0;
   background: transparent;
-  padding: 18px 2px 18px 0;
+  padding: 8px 2px 4px 0;
 }
 
 .platform-shell[data-role="teacher"] .teacher-plan-copy p {
@@ -134,18 +137,21 @@
 }
 
 .platform-shell[data-role="teacher"] .teacher-plan-facts {
-  gap: 0;
-  border-inline-start: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  border: 0;
   border-radius: 0;
   background: transparent;
 }
 
 .platform-shell[data-role="teacher"] .teacher-plan-facts article {
-  min-height: 96px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 18px;
+  min-height: 112px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: none;
+  padding: 14px 15px;
 }
 
 .platform-shell[data-role="teacher"] .teacher-plan-facts article + article {
@@ -153,7 +159,9 @@
 }
 
 .platform-shell[data-role="teacher"] .teacher-plan-facts strong {
-  font-size: 17px;
+  font-size: 18px;
+  font-weight: 760;
+  letter-spacing: -0.02em;
 }
 
 .platform-shell[data-role="teacher"]
@@ -271,9 +279,9 @@
 }
 
 .platform-shell[data-role="teacher"] .teacher-class-route-nav a.active {
-  background: var(--foreground);
-  color: var(--background);
-  box-shadow: 0 1px 2px rgba(26, 26, 26, 0.16);
+  background: var(--role-color);
+  color: white;
+  box-shadow: none;
 }
 
 /* Lists are dense enough to scan, but each row remains a single task. */
@@ -296,7 +304,7 @@
 .platform-shell[data-role="teacher"] .teacher-assessment-record-list > article {
   gap: 20px;
   padding: 18px 22px;
-  border-inline-start: 3px solid transparent;
+  border-inline-start: 0;
 }
 
 .platform-shell[data-role="teacher"]
@@ -307,7 +315,6 @@
 .platform-shell[data-role="teacher"]
   .teacher-assessment-record-list
   > article:hover {
-  border-inline-start-color: var(--role-color);
   background: color-mix(in srgb, var(--role-tint) 26%, var(--card));
 }
 
@@ -342,7 +349,7 @@
 .platform-shell[data-role="teacher"] .teacher-class-overview-v3 {
   padding: 24px;
   gap: 24px;
-  border-inline-start: 3px solid var(--role-color);
+  border-inline-start: 0;
 }
 
 .platform-shell[data-role="teacher"] .teacher-class-overview-heading > span {
@@ -471,17 +478,22 @@
   }
 
   .platform-shell[data-role="teacher"] .teacher-plan-copy h2 {
-    font-size: 27px;
+    font-size: 26px;
   }
 
   .platform-shell[data-role="teacher"] .teacher-plan-facts {
-    border-inline-start: 0;
-    border-top: 1px solid var(--border);
+    grid-template-columns: 1fr;
+    border: 0;
   }
 
   .platform-shell[data-role="teacher"] .teacher-plan-facts article {
-    min-height: 84px;
-    padding: 15px;
+    min-height: 88px;
+    padding: 14px 15px;
+  }
+
+  .platform-shell[data-role="teacher"] .teacher-plan-facts article + article {
+    border-inline-start: 1px solid
+      color-mix(in srgb, var(--border) 84%, var(--role-color));
   }
 
   .platform-shell[data-role="teacher"] .teacher-classes-toolbar-v4,

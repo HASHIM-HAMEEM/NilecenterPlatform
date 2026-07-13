@@ -75,6 +75,18 @@ const templateContent: Record<string, FormVersionContent> = {
             searchable: true,
           }),
           field(
+            "preferred_branch",
+            "entity_reference",
+            "Preferred branch",
+            "الفرع المفضل",
+            {
+              required: true,
+              entityType: "branch",
+              searchable: true,
+              reportable: true,
+            }
+          ),
+          field(
             "course_interest",
             "single_choice",
             "Course interest",
@@ -236,6 +248,18 @@ const templateContent: Record<string, FormVersionContent> = {
             required: true,
             searchable: true,
           }),
+          field(
+            "preferred_branch",
+            "entity_reference",
+            "Preferred branch",
+            "الفرع المفضل",
+            {
+              required: true,
+              entityType: "branch",
+              searchable: true,
+              reportable: true,
+            }
+          ),
           field("course_interest", "single_choice", "Course", "الدورة", {
             required: true,
             reportable: true,
@@ -460,7 +484,6 @@ const definitionSeed: Array<
     category: "admissions",
     ownerUserId: "usr_admin_demo",
     ownerRole: "superadmin",
-    branchId: "br_cairo",
     status: "active",
     audience: "public",
     slug: "free-trial-enquiry",
@@ -471,9 +494,8 @@ const definitionSeed: Array<
     key: "application_intake",
     title: "Course application",
     category: "admissions",
-    ownerUserId: "usr_registrar_demo",
-    ownerRole: "registrar",
-    branchId: "br_cairo",
+    ownerUserId: "usr_admin_demo",
+    ownerRole: "superadmin",
     status: "active",
     audience: "public",
     slug: "course-application",
@@ -484,9 +506,8 @@ const definitionSeed: Array<
     key: "placement_request",
     title: "Placement request",
     category: "admissions",
-    ownerUserId: "usr_registrar_demo",
-    ownerRole: "registrar",
-    branchId: "br_cairo",
+    ownerUserId: "usr_admin_demo",
+    ownerRole: "superadmin",
     status: "active",
     audience: "public",
     slug: "placement-request",
@@ -509,9 +530,8 @@ const definitionSeed: Array<
     key: "attendance_exception",
     title: "Attendance exception request",
     category: "attendance",
-    ownerUserId: "usr_branch_demo",
-    ownerRole: "branchadmin",
-    branchId: "br_cairo",
+    ownerUserId: "usr_admin_demo",
+    ownerRole: "superadmin",
     status: "active",
     audience: "assigned",
     slug: "attendance-exception-request",
@@ -581,7 +601,10 @@ export function createNileFormsSeedState(): NileFormsState {
     slug: item.slug,
     audience: item.audience,
     status: "open",
-    allowMultiple: item.id === "form_support" || item.id === "form_incident",
+    allowMultiple:
+      item.id === "form_support" ||
+      item.id === "form_attendance_exception" ||
+      item.id === "form_incident",
     allowDrafts: true,
     offlineEligible: item.offlineEligible,
     createdBy: item.ownerUserId,

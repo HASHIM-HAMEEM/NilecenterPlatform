@@ -247,6 +247,22 @@ Status: Current for `/app/admin/branches`; nested routes are Target.
 - `/app/admin/branches/schedule`: Branch schedule.
 - `/app/admin/branches/activity`: Branch activity.
 
+### System Workspaces
+
+Status: Current for the listed routes. They are separate System pages, not one
+technical control center.
+
+- `/app/admin/settings`: SettingsPage for global school setup only.
+- `/app/admin/integrations`: SettingsPage for connection readiness and reviewed
+  connection status only. Protected credentials and provider configuration stay
+  outside browser UI.
+- `/app/admin/system-health`: ReportPage for concise service-health review and
+  the existing health-check action only.
+- `/app/admin/audit-logs`: ReportPage for searchable, exportable activity only.
+
+Do not merge settings, connection status, health checks, activity, provider
+configuration, or audit evidence into one page.
+
 ### Registrar Admissions
 
 Status: Current for the listed routes.
@@ -278,8 +294,13 @@ legacy cutover remain separately gated.
 - `/app/{role}/forms/:publicationId/responses/:submissionId`: the respondent's
   own submitted response, review status, and permitted withdrawal only.
 - `/app/{role}/forms/manage`: scoped form definitions only.
+- `/app/{role}/forms/manage/new`: create one scoped form definition only.
 - `/app/{role}/forms/manage/:formId/builder`: one draft version only.
 - `/app/{role}/forms/manage/:formId/publish`: preview and publication settings only.
+- `/app/{role}/forms/manage/:formId/publications`: publication history and
+  retirement only.
+- `/app/{role}/forms/manage/:formId/publications/:publicationId/assignments`:
+  assignment targets for one active assigned publication only.
 - `/app/{role}/forms/review`: scoped submission queue only.
 - `/app/{role}/forms/review/:submissionId`: one submission, review decision,
   promotion state, and evidence timeline only.
@@ -294,6 +315,22 @@ Offline, Manage, and Review according to server permissions; Super Admin also
 receives Migration. Do not combine assigned
 forms, definition management, the builder, publication settings, the inbox,
 exports, migration, and review detail on one page.
+
+Future ADR-007 typed modules own separate route families. They must not be
+embedded in Forms Manage, Builder, Publish, or Review:
+
+- `/app/{role}/requests`, `/requests/new`, and `/requests/:requestId` own the
+  request queue, creation, and one request record respectively.
+- `/app/{role}/approvals` and `/approvals/:approvalId` own the approval queue and
+  one bounded approval decision.
+- `/app/{role}/appointments`, `/appointments/services`, and
+  `/appointments/:bookingId` own booking lists, service/schedule configuration,
+  and one booking respectively.
+- `/app/{role}/surveys/results` and `/surveys/results/:surveyId` own aggregate
+  results and one privacy-filtered survey result.
+- `/app/{role}/forms/manage/:formId/processing` may select one registered,
+  versioned processing profile. Processing execution and case management never
+  occur inside the builder.
 
 ### Teacher Assessments
 

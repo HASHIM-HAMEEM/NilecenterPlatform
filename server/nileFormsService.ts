@@ -22,6 +22,7 @@ import {
   type FormDefinition,
   type FormOfflineDevice,
   type FormLocale,
+  type FormManagementOptions,
   type FormOwnerRole,
   type FormPermission,
   type FormPromotion,
@@ -53,6 +54,8 @@ export type NileFormsActor = {
   role: FormRespondentRole;
   branchIds: string[];
   departmentIds: string[];
+  allBranches: boolean;
+  allDepartments: boolean;
   courseIds: string[];
   classIds: string[];
   platformState: PlatformState;
@@ -63,6 +66,7 @@ export type FormDefinitionBundle = {
   versions: FormVersion[];
   publications: FormPublication[];
   assignments: FormAssignment[];
+  assignmentOptions: FormManagementOptions;
 };
 
 export type FormResponderBundle = {
@@ -131,6 +135,17 @@ const ownerRoles = new Set<FormOwnerRole>([
   "branchadmin",
   "superadmin",
 ]);
+const respondentRoleLabels: Record<FormRespondentRole, string> = {
+  student: "Student",
+  teacher: "Teacher",
+  registrar: "Registrar",
+  headofdepartment: "Head of Department",
+  branchadmin: "Branch Admin",
+  superadmin: "Super Admin",
+};
+const respondentRoleOrder = Object.keys(
+  respondentRoleLabels
+) as FormRespondentRole[];
 const offlineStaffRoles = new Set<FormRespondentRole>([
   "teacher",
   "registrar",
@@ -319,13 +334,44 @@ function requirePermission(
   }
 }
 
-function narrowedScope(configured: string[], sessionScope?: string[]) {
-  const normalized = configured.filter(
-    id => id !== "br_global" && id !== "dep_platform"
+function narrowedScope(
+  configured: string[],
+  sessionScope: string[] | undefined,
+  globalMarker: string
+) {
+  const configuredAll = configured.includes(globalMarker);
+  const configuredIds = unique(configured.filter(id => id !== globalMarker));
+  if (sessionScope === undefined) {
+    return { ids: configuredIds, all: configuredAll };
+  }
+
+  const sessionAll = sessionScope.includes(globalMarker);
+  const sessionIds = unique(sessionScope.filter(id => id !== globalMarker));
+  if (configuredAll && sessionAll) return { ids: [], all: true };
+  if (configuredAll) return { ids: sessionIds, all: false };
+  if (sessionAll) return { ids: configuredIds, all: false };
+
+  const requested = new Set(sessionIds);
+  return {
+    ids: configuredIds.filter(id => requested.has(id)),
+    all: false,
+  };
+}
+
+function actorHasBranch(actor: NileFormsActor, branchId: string) {
+  return (
+    actor.role === "superadmin" ||
+    actor.allBranches ||
+    actor.branchIds.includes(branchId)
   );
-  if (!sessionScope?.length) return unique(normalized);
-  const requested = new Set(sessionScope);
-  return unique(normalized.filter(id => requested.has(id)));
+}
+
+function actorHasDepartment(actor: NileFormsActor, departmentId: string) {
+  return (
+    actor.role === "superadmin" ||
+    actor.allDepartments ||
+    actor.departmentIds.includes(departmentId)
+  );
 }
 
 function resolveActor(
@@ -412,16 +458,34 @@ function resolveActor(
     configuredDepartmentIds = profile.departmentIds;
   }
 
-  const branchIds = narrowedScope(configuredBranchIds, session.branchIds);
-  const departmentIds = narrowedScope(
-    configuredDepartmentIds,
-    session.departmentIds
+  const branchScope = narrowedScope(
+    configuredBranchIds,
+    session.branchIds,
+    "br_global"
   );
+  const departmentScope = narrowedScope(
+    configuredDepartmentIds,
+    session.departmentIds,
+    "dep_platform"
+  );
+  if (
+    session.activeRole !== "superadmin" &&
+    ((!branchScope.all && branchScope.ids.length === 0) ||
+      (!departmentScope.all && departmentScope.ids.length === 0))
+  ) {
+    throw new NileFormsError(
+      "The active session scope no longer overlaps the assigned role scope.",
+      403,
+      "session_scope_denied"
+    );
+  }
   return {
     userId: session.userId,
     role: session.activeRole,
-    branchIds,
-    departmentIds,
+    branchIds: branchScope.ids,
+    departmentIds: departmentScope.ids,
+    allBranches: session.activeRole === "superadmin" || branchScope.all,
+    allDepartments: session.activeRole === "superadmin" || departmentScope.all,
     courseIds,
     classIds,
     platformState: state,
@@ -434,11 +498,11 @@ function canAccessDefinition(
 ) {
   if (actor.role === "superadmin") return true;
   if (definition.ownerRole !== actor.role) return false;
-  if (definition.branchId && !actor.branchIds.includes(definition.branchId))
+  if (definition.branchId && !actorHasBranch(actor, definition.branchId))
     return false;
   if (
     definition.departmentId &&
-    !actor.departmentIds.includes(definition.departmentId)
+    !actorHasDepartment(actor, definition.departmentId)
   ) {
     return false;
   }
@@ -450,19 +514,22 @@ function canReviewDefinition(
   definition: FormDefinition
 ) {
   if (actor.role === "superadmin") return true;
-  if (definition.branchId && !actor.branchIds.includes(definition.branchId))
+  if (definition.branchId && !actorHasBranch(actor, definition.branchId))
     return false;
   if (
     definition.departmentId &&
-    !actor.departmentIds.includes(definition.departmentId)
+    !actorHasDepartment(actor, definition.departmentId)
   ) {
     return false;
   }
   if (actor.role === "registrar") return definition.category === "admissions";
   if (actor.role === "branchadmin") {
-    return ["attendance", "branch_operations", "consent"].includes(
-      definition.category
-    );
+    return [
+      "student_support",
+      "attendance",
+      "branch_operations",
+      "consent",
+    ].includes(definition.category);
   }
   if (actor.role === "headofdepartment") {
     return ["consent", "attendance"].includes(definition.category);
@@ -478,7 +545,7 @@ function canReviewSubmission(
   if (!canReviewDefinition(actor, definition)) return false;
   if (actor.role === "superadmin") return true;
 
-  if (actor.branchIds.length) {
+  if (!actor.allBranches) {
     if (
       !submission.branchId ||
       !actor.branchIds.includes(submission.branchId)
@@ -486,7 +553,7 @@ function canReviewSubmission(
       return false;
     }
   }
-  if (actor.role === "headofdepartment" && actor.departmentIds.length) {
+  if (actor.role === "headofdepartment" && !actor.allDepartments) {
     if (
       !submission.departmentId ||
       !actor.departmentIds.includes(submission.departmentId)
@@ -527,9 +594,9 @@ function assignmentMatches(
     case "role":
       return assignment.target.role === actor.role;
     case "branch":
-      return actor.branchIds.includes(assignment.target.branchId);
+      return actorHasBranch(actor, assignment.target.branchId);
     case "department":
-      return actor.departmentIds.includes(assignment.target.departmentId);
+      return actorHasDepartment(actor, assignment.target.departmentId);
     case "course":
       return actor.courseIds.includes(assignment.target.courseId);
     case "class":
@@ -564,14 +631,14 @@ function publicationAvailableToActor(
   if (
     actor.role !== "superadmin" &&
     definition.branchId &&
-    !actor.branchIds.includes(definition.branchId)
+    !actorHasBranch(actor, definition.branchId)
   ) {
     return false;
   }
   if (
     actor.role !== "superadmin" &&
     definition.departmentId &&
-    !actor.departmentIds.includes(definition.departmentId)
+    !actorHasDepartment(actor, definition.departmentId)
   ) {
     return false;
   }
@@ -671,8 +738,7 @@ function entityOptionsForContent(
           branch =>
             !actor ||
             actor.role === "superadmin" ||
-            actor.branchIds.length === 0 ||
-            actor.branchIds.includes(branch.id)
+            actorHasBranch(actor, branch.id)
         )
         .map(branch => ({
           id: branch.id,
@@ -692,7 +758,7 @@ function entityOptionsForContent(
           department =>
             !actor ||
             actor.role === "superadmin" ||
-            actor.departmentIds.includes(department.id)
+            actorHasDepartment(actor, department.id)
         )
         .map(department => ({
           id: department.id,
@@ -718,7 +784,7 @@ function entityOptionsForContent(
           return (
             group.status === "active" &&
             (actor.role === "superadmin" ||
-              (run ? actor.branchIds.includes(run.branchId) : false))
+              (run ? actorHasBranch(actor, run.branchId) : false))
           );
         })
         .map(group => ({
@@ -925,7 +991,7 @@ function validateScopeForNewDefinition(
   const departmentId = clean(input.departmentId, 120) || undefined;
   if (actor.role === "superadmin") return {};
   if (actor.role === "registrar" || actor.role === "branchadmin") {
-    if (!branchId || !actor.branchIds.includes(branchId)) {
+    if (!branchId || !actorHasBranch(actor, branchId)) {
       throw new NileFormsError(
         "Choose a branch inside the active role scope.",
         403,
@@ -935,18 +1001,14 @@ function validateScopeForNewDefinition(
     return { branchId };
   }
   if (actor.role === "headofdepartment") {
-    if (!departmentId || !actor.departmentIds.includes(departmentId)) {
+    if (!departmentId || !actorHasDepartment(actor, departmentId)) {
       throw new NileFormsError(
         "Choose a department inside the active role scope.",
         403,
         "department_scope_denied"
       );
     }
-    if (
-      branchId &&
-      actor.branchIds.length &&
-      !actor.branchIds.includes(branchId)
-    ) {
+    if (branchId && !actorHasBranch(actor, branchId)) {
       throw new NileFormsError(
         "Choose a branch inside the active role scope.",
         403,
@@ -965,8 +1027,82 @@ function validateScopeForNewDefinition(
 function validateAssignmentTarget(
   actor: NileFormsActor,
   target: FormAssignmentTarget,
-  state: PlatformState
+  state: PlatformState,
+  definition?: FormDefinition
 ) {
+  const definitionAllowsTarget = () => {
+    if (!definition?.branchId && !definition?.departmentId) return true;
+    if (target.type === "role") return true;
+
+    if (target.type === "user") {
+      const user = state.users.find(item => item.id === target.userId);
+      return Boolean(
+        user &&
+          (!definition.branchId || user.branchId === definition.branchId) &&
+          (!definition.departmentId ||
+            user.departmentId === definition.departmentId)
+      );
+    }
+    if (target.type === "branch") {
+      return !definition.branchId || target.branchId === definition.branchId;
+    }
+    if (target.type === "department") {
+      const department = state.departments.find(
+        item => item.id === target.departmentId
+      );
+      return Boolean(
+        department &&
+          (!definition.departmentId ||
+            department.id === definition.departmentId) &&
+          (!definition.branchId ||
+            department.branchIds.includes(definition.branchId))
+      );
+    }
+    if (target.type === "course") {
+      const course = state.courses.find(item => item.id === target.courseId);
+      const program = course
+        ? state.programs.find(item => item.id === course.programId)
+        : undefined;
+      return Boolean(
+        course &&
+          (!definition.departmentId ||
+            program?.departmentId === definition.departmentId) &&
+          (!definition.branchId ||
+            state.courseRuns.some(
+              run =>
+                run.courseId === course.id &&
+                run.branchId === definition.branchId &&
+                run.status === "active"
+            ))
+      );
+    }
+    const group = state.classGroups.find(item => item.id === target.classId);
+    const run = group
+      ? state.courseRuns.find(item => item.id === group.courseRunId)
+      : undefined;
+    const course = run
+      ? state.courses.find(item => item.id === run.courseId)
+      : undefined;
+    const program = course
+      ? state.programs.find(item => item.id === course.programId)
+      : undefined;
+    return Boolean(
+      group &&
+        run &&
+        (!definition.branchId || run.branchId === definition.branchId) &&
+        (!definition.departmentId ||
+          program?.departmentId === definition.departmentId)
+    );
+  };
+
+  if (!definitionAllowsTarget()) {
+    throw new NileFormsError(
+      "The assignment target is outside the form scope.",
+      403,
+      "assignment_scope_denied"
+    );
+  }
+
   if (target.type === "user") {
     const user = state.users.find(
       item => item.id === target.userId && item.status === "active"
@@ -980,12 +1116,10 @@ function validateAssignmentTarget(
     }
     if (
       actor.role !== "superadmin" &&
-      ((user.branchId &&
-        actor.branchIds.length > 0 &&
-        !actor.branchIds.includes(user.branchId)) ||
-        (user.departmentId &&
-          actor.departmentIds.length > 0 &&
-          !actor.departmentIds.includes(user.departmentId)))
+      ((user.branchId && !actorHasBranch(actor, user.branchId)) ||
+        (actor.role === "headofdepartment" &&
+          user.departmentId &&
+          !actorHasDepartment(actor, user.departmentId)))
     ) {
       throw new NileFormsError(
         "The assignment user is outside the active scope.",
@@ -1036,10 +1170,10 @@ function validateAssignmentTarget(
         run =>
           run.courseId === course.id &&
           run.status === "active" &&
-          actor.branchIds.includes(run.branchId)
+          actorHasBranch(actor, run.branchId)
       );
       const departmentAllowed = Boolean(
-        program && actor.departmentIds.includes(program.departmentId)
+        program && actorHasDepartment(actor, program.departmentId)
       );
       if (!branchAllowed && !departmentAllowed) {
         throw new NileFormsError(
@@ -1069,7 +1203,7 @@ function validateAssignmentTarget(
     }
     if (
       actor.role !== "superadmin" &&
-      !actor.branchIds.includes(run.branchId) &&
+      !actorHasBranch(actor, run.branchId) &&
       !actor.classIds.includes(group.id)
     ) {
       throw new NileFormsError(
@@ -1081,7 +1215,7 @@ function validateAssignmentTarget(
     return;
   }
   if (actor.role === "superadmin") return;
-  if (target.type === "branch" && !actor.branchIds.includes(target.branchId)) {
+  if (target.type === "branch" && !actorHasBranch(actor, target.branchId)) {
     throw new NileFormsError(
       "The assignment branch is outside the active scope.",
       403,
@@ -1090,7 +1224,7 @@ function validateAssignmentTarget(
   }
   if (
     target.type === "department" &&
-    !actor.departmentIds.includes(target.departmentId)
+    !actorHasDepartment(actor, target.departmentId)
   ) {
     throw new NileFormsError(
       "The assignment department is outside the active scope.",
@@ -1105,6 +1239,88 @@ function validateAssignmentTarget(
       "assignment_scope_denied"
     );
   }
+}
+
+function managementOptionsForActor(
+  actor: NileFormsActor,
+  definition?: FormDefinition
+): FormManagementOptions {
+  const state = actor.platformState;
+  const allowed = (target: FormAssignmentTarget) => {
+    try {
+      validateAssignmentTarget(actor, target, state, definition);
+      return true;
+    } catch (error) {
+      if (error instanceof NileFormsError) return false;
+      throw error;
+    }
+  };
+
+  return {
+    roles: respondentRoleOrder
+      .filter(role => allowed({ type: "role", role }))
+      .map(role => ({ id: role, label: respondentRoleLabels[role] })),
+    users: state.users
+      .filter(user => user.status === "active")
+      .filter(user => allowed({ type: "user", userId: user.id }))
+      .map(user => ({
+        id: user.id,
+        label: user.name,
+        context: `${user.email} / ${user.activeRole}`,
+      })),
+    branches: state.branches
+      .filter(branch => branch.status === "active")
+      .filter(branch => allowed({ type: "branch", branchId: branch.id }))
+      .map(branch => ({
+        id: branch.id,
+        label: branch.name,
+        context: branch.code,
+      })),
+    departments: state.departments
+      .filter(department => department.status === "active")
+      .filter(department =>
+        allowed({ type: "department", departmentId: department.id })
+      )
+      .map(department => ({
+        id: department.id,
+        label: department.name,
+        context: department.branchIds
+          .map(
+            branchId =>
+              state.branches.find(branch => branch.id === branchId)?.name
+          )
+          .filter(Boolean)
+          .join(" / "),
+      })),
+    courses: state.courses
+      .filter(course => course.status === "active")
+      .filter(course => allowed({ type: "course", courseId: course.id }))
+      .map(course => ({
+        id: course.id,
+        label: course.title,
+        context: state.programs.find(program => program.id === course.programId)
+          ?.title,
+      })),
+    classes: state.classGroups
+      .filter(group => group.status === "active")
+      .filter(group => allowed({ type: "class", classId: group.id }))
+      .map(group => {
+        const run = state.courseRuns.find(
+          item => item.id === group.courseRunId
+        );
+        const course = run
+          ? state.courses.find(item => item.id === run.courseId)
+          : undefined;
+        const branch = run
+          ? state.branches.find(item => item.id === run.branchId)
+          : undefined;
+        return {
+          id: group.id,
+          label: group.name,
+          context: [course?.title, branch?.name].filter(Boolean).join(" / "),
+        };
+      }),
+  };
 }
 
 function csvCell(value: unknown) {
@@ -1151,6 +1367,14 @@ export function createNileFormsService(
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     },
 
+    async getManagementOptions(
+      sessionInput: ServerSession | null | undefined
+    ): Promise<FormManagementOptions> {
+      const session = requireSession(sessionInput);
+      const actor = await authorize(session, "forms:write");
+      return managementOptionsForActor(actor);
+    },
+
     async getDefinition(
       sessionInput: ServerSession | null | undefined,
       definitionId: string
@@ -1179,6 +1403,7 @@ export function createNileFormsService(
         assignments: state.assignments.filter(item =>
           publicationIds.has(item.publicationId)
         ),
+        assignmentOptions: managementOptionsForActor(actor, definition),
       };
     },
 
@@ -1467,6 +1692,13 @@ export function createNileFormsService(
           "publication_invalid"
         );
       }
+      if (closesAt && new Date(closesAt).getTime() <= nowDate().getTime()) {
+        throw new NileFormsError(
+          "Closing time must be in the future.",
+          400,
+          "publication_invalid"
+        );
+      }
       if (opensAt && closesAt && new Date(closesAt) <= new Date(opensAt)) {
         throw new NileFormsError(
           "Closing time must follow opening time.",
@@ -1521,9 +1753,12 @@ export function createNileFormsService(
             offline
           );
         }
+        const activeSlugPublications = state.publications.filter(
+          item => item.slug === slug && item.status !== "retired"
+        );
         if (
-          state.publications.some(
-            item => item.slug === slug && item.status !== "retired"
+          activeSlugPublications.some(
+            item => item.definitionId !== definition.id
           )
         ) {
           throw new NileFormsError(
@@ -1532,7 +1767,36 @@ export function createNileFormsService(
             "slug_conflict"
           );
         }
+        if (
+          activeSlugPublications.length > 0 &&
+          opensAt &&
+          new Date(opensAt).getTime() > nowDate().getTime()
+        ) {
+          throw new NileFormsError(
+            "A stable slug replacement must open immediately.",
+            409,
+            "replacement_schedule_invalid"
+          );
+        }
         const now = currentIso();
+        const replacedPublicationIds = activeSlugPublications.map(
+          item => item.id
+        );
+        const carriedAssignments =
+          audience === "assigned"
+            ? state.assignments.filter(
+                assignment =>
+                  replacedPublicationIds.includes(assignment.publicationId) &&
+                  !assignment.revokedAt &&
+                  (!assignment.expiresAt ||
+                    new Date(assignment.expiresAt).getTime() >
+                      nowDate().getTime())
+              )
+            : [];
+        for (const replaced of activeSlugPublications) {
+          replaced.status = "retired";
+          replaced.retiredAt = now;
+        }
         version.status = "published";
         version.publishedBy = actor.userId;
         version.publishedAt = now;
@@ -1560,6 +1824,16 @@ export function createNileFormsService(
           createdAt: now,
         };
         state.publications.unshift(publication);
+        for (const assignment of carriedAssignments) {
+          state.assignments.unshift({
+            id: createId("form_assignment"),
+            publicationId: publication.id,
+            target: clone(assignment.target),
+            assignedBy: actor.userId,
+            assignedAt: now,
+            expiresAt: assignment.expiresAt,
+          });
+        }
         appendAudit(
           state,
           {
@@ -1568,7 +1842,14 @@ export function createNileFormsService(
             action: "form.published",
             entityType: "FormPublication",
             entityId: publication.id,
-            metadata: { definitionId, versionId, audience, offlineEligible },
+            metadata: {
+              definitionId,
+              versionId,
+              audience,
+              offlineEligible,
+              replacedPublicationIds,
+              carriedAssignmentCount: carriedAssignments.length,
+            },
           },
           createId,
           now
@@ -1622,7 +1903,6 @@ export function createNileFormsService(
     ) {
       const session = requireSession(sessionInput);
       const actor = await authorize(session, "forms:assign");
-      validateAssignmentTarget(actor, target, await readAuthorityState());
       if (
         expiresAt &&
         (Number.isNaN(new Date(expiresAt).getTime()) ||
@@ -1644,6 +1924,12 @@ export function createNileFormsService(
             "form_scope_denied"
           );
         }
+        validateAssignmentTarget(
+          actor,
+          target,
+          actor.platformState,
+          definition
+        );
         if (publication.audience !== "assigned") {
           throw new NileFormsError(
             "Only assigned publications accept assignments.",
@@ -1651,10 +1937,24 @@ export function createNileFormsService(
             "assignment_invalid"
           );
         }
+        if (
+          publication.status === "closed" ||
+          publication.status === "retired" ||
+          (publication.closesAt &&
+            new Date(publication.closesAt).getTime() <= nowDate().getTime())
+        ) {
+          throw new NileFormsError(
+            "This publication no longer accepts assignments.",
+            409,
+            "publication_unavailable"
+          );
+        }
         const duplicate = state.assignments.find(
           item =>
             item.publicationId === publicationId &&
             !item.revokedAt &&
+            (!item.expiresAt ||
+              new Date(item.expiresAt).getTime() > nowDate().getTime()) &&
             canonicalJson(item.target) === canonicalJson(target)
         );
         if (duplicate) return duplicate;
@@ -2420,7 +2720,7 @@ export function createNileFormsService(
           sanitized.answers,
           entityOptionsForContent(
             version.content,
-            actor,
+            publication.audience === "public" ? null : actor,
             definition,
             authorityState
           )
@@ -2643,7 +2943,7 @@ export function createNileFormsService(
           normalized.answers,
           entityOptionsForContent(
             version.content,
-            actor,
+            publication.audience === "public" ? null : actor,
             definition,
             authorityState
           )
@@ -3255,7 +3555,13 @@ export function createNileFormsService(
               action: "form.promotion_failed",
               entityType: "FormSubmission",
               entityId: submissionId,
-              metadata: { adapter, promotionId: promotion.id },
+              metadata: {
+                adapter,
+                promotionId: promotion.id,
+                commandId: promotion.commandId,
+                idempotencyKey: promotion.idempotencyKey,
+                error: promotion.error,
+              },
             },
             createId,
             completedAt
@@ -3283,6 +3589,8 @@ export function createNileFormsService(
             metadata: {
               adapter,
               promotionId: promotion.id,
+              commandId: promotion.commandId,
+              idempotencyKey: promotion.idempotencyKey,
               resultingEntityType: result.entityType,
               resultingEntityId: result.entityId,
             },

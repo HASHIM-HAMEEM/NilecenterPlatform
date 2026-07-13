@@ -390,7 +390,7 @@ export default function BranchPaymentsPage({
               />
             </label>
             <label className="branch-payment-filter">
-              <span className="sr-only">Status</span>
+              <span>Status</span>
               <select
                 value={status}
                 onChange={event =>

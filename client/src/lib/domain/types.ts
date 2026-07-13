@@ -30,6 +30,16 @@ export type StudentEntrySource =
   | "application"
   | "placement";
 
+export type StudentMinorStatus = "minor" | "adult" | "unknown";
+
+export type StudentIntakeDocumentType =
+  | "profile_photo"
+  | "passport"
+  | "national_id"
+  | "birth_certificate"
+  | "guardian_id"
+  | "consent";
+
 export type AttendanceStatus = "present" | "late" | "absent" | "excused";
 export type AttendanceExceptionStatus = "pending" | "approved" | "rejected";
 export type PaymentStatus =
@@ -218,6 +228,10 @@ export type StudentProfile = {
   userId: string;
   status: StudentStatus;
   source?: StudentEntrySource;
+  legalName?: string;
+  displayName?: string;
+  dateOfBirth?: string;
+  minorStatus?: StudentMinorStatus;
   guardianId?: string;
   guardianName?: string;
   guardianPhone?: string;
@@ -430,6 +444,7 @@ export type AttendanceExceptionRequest = {
   reviewedAt?: string;
   reviewedBy?: string;
   reviewNote?: string;
+  sourceKey?: string;
 };
 
 export type TeacherAvailability = {
@@ -476,6 +491,7 @@ export type Lead = {
   source: "website" | "trial_form" | "placement_form" | "whatsapp" | "manual";
   status: StudentStatus;
   notes?: string;
+  sourceKey?: string;
   createdAt: string;
 };
 
@@ -485,6 +501,7 @@ export type Application = {
   branchId: string;
   courseInterest: string;
   schedulePreference: string;
+  sourceKey?: string;
   status: EntityStatus;
 };
 
@@ -498,6 +515,7 @@ export type PlacementTestBooking = {
   subject: string;
   preferredDate: string;
   currentLevel: string;
+  sourceKey?: string;
   status: EntityStatus;
   recommendedLevel?: string;
 };
@@ -644,6 +662,10 @@ export type Message = {
   id: string;
   fromUserId: string;
   toUserId: string;
+  /** Server-assigned direct conversation identifier. Legacy rows derive one at read time. */
+  threadId?: string;
+  /** The exact earlier message this reply continues, when the message is a reply. */
+  replyToMessageId?: string;
   subject: string;
   body: string;
   attachments?: MessageAttachment[];
@@ -659,6 +681,7 @@ export type CommunicationLog = {
   body: string;
   attachments?: MessageAttachment[];
   relatedUserId?: string;
+  sourceKey?: string;
   status: EntityStatus;
   createdAt: string;
 };
@@ -677,9 +700,23 @@ export type Document = {
   id: string;
   ownerId: string;
   title: string;
-  type: "id" | "receipt" | "certificate" | "resource" | "other";
+  type:
+    | "id"
+    | "receipt"
+    | "certificate"
+    | "resource"
+    | "other"
+    | StudentIntakeDocumentType;
   url: string;
   status: EntityStatus;
+  ownerType?: "student" | "user";
+  sensitivity?: "standard" | "restricted_identity";
+  fileName?: string;
+  mimeType?: string;
+  size?: number;
+  storageStatus?: "pending_storage" | "stored";
+  createdAt?: string;
+  createdBy?: string;
 };
 
 export type Notification = {
@@ -688,6 +725,7 @@ export type Notification = {
   title: string;
   body: string;
   href: string;
+  relatedMessageId?: string;
   read: boolean;
   createdAt: string;
 };
@@ -700,6 +738,7 @@ export type SupportTicket = {
   category?: string;
   status: EntityStatus;
   priority: "low" | "normal" | "high" | "urgent";
+  sourceKey?: string;
   lastUpdatedAt: string;
 };
 
@@ -710,6 +749,7 @@ export type AuditLog = {
   entityType: string;
   entityId: string;
   summary: string;
+  sourceKey?: string;
   createdAt: string;
 };
 
@@ -834,5 +874,7 @@ export type PlatformState = {
   reportPresets: ReportPreset[];
   auditLogs: AuditLog[];
   integrations: IntegrationConfig[];
+  /** Tracks one-time default permission migrations for legacy demo snapshots. */
+  permissionCatalogVersion?: number;
   permissions: Record<Role, Permission[]>;
 };

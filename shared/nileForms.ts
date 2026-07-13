@@ -233,6 +233,21 @@ export type FormAssignment = {
   revokedAt?: string;
 };
 
+export type FormManagementOption = {
+  id: string;
+  label: string;
+  context?: string;
+};
+
+export type FormManagementOptions = {
+  roles: Array<FormManagementOption & { id: FormRespondentRole }>;
+  users: FormManagementOption[];
+  branches: FormManagementOption[];
+  departments: FormManagementOption[];
+  courses: FormManagementOption[];
+  classes: FormManagementOption[];
+};
+
 export type FormDraft = {
   id: string;
   publicationId: string;
@@ -548,6 +563,16 @@ const choiceFieldTypes = new Set<FormFieldType>([
   "multiple_choice",
 ]);
 const nonAnswerFieldTypes = new Set<FormFieldType>(["heading", "instructions"]);
+const valuelessLogicOperators = new Set<FormLogicOperator>([
+  "empty",
+  "not_empty",
+]);
+const numericLogicOperators = new Set<FormLogicOperator>([
+  "greater_than",
+  "greater_than_or_equal",
+  "less_than",
+  "less_than_or_equal",
+]);
 const searchableFieldTypes = new Set<FormFieldType>([
   "short_text",
   "email",
@@ -705,28 +730,106 @@ export function validateFormVersionContent(input: unknown): {
           issue(`${path}.when`, `Unknown answer field: ${condition.fieldId}`)
         );
       }
-      if (
-        !["empty", "not_empty"].includes(condition.operator) &&
-        condition.value === undefined
-      ) {
+      if (!sourceField || nonAnswerFieldTypes.has(sourceField.type)) continue;
+
+      const allowedOperators: FormLogicOperator[] =
+        sourceField.type === "multiple_choice"
+          ? ["in", "not_in", "empty", "not_empty"]
+          : sourceField.type === "number" || sourceField.type === "rating"
+            ? formLogicOperators.filter(
+                operator => operator !== "in" && operator !== "not_in"
+              )
+            : sourceField.type === "single_choice" ||
+                sourceField.type === "entity_reference"
+              ? ["equals", "not_equals", "in", "not_in", "empty", "not_empty"]
+              : ["equals", "not_equals", "empty", "not_empty"];
+      if (!allowedOperators.includes(condition.operator)) {
+        issues.push(
+          issue(
+            `${path}.when`,
+            `${condition.operator} is not supported for ${sourceField.type}`
+          )
+        );
+        continue;
+      }
+
+      if (valuelessLogicOperators.has(condition.operator)) {
+        if (condition.value !== undefined) {
+          issues.push(
+            issue(
+              `${path}.when`,
+              `${condition.operator} cannot include a comparison value`
+            )
+          );
+        }
+        continue;
+      }
+      if (condition.value === undefined) {
         issues.push(
           issue(
             `${path}.when`,
             `${condition.operator} requires a comparison value`
           )
         );
+        continue;
       }
+
+      if (condition.operator === "in" || condition.operator === "not_in") {
+        const values = condition.value;
+        if (
+          !Array.isArray(values) ||
+          values.length === 0 ||
+          values.some(value => !value.trim())
+        ) {
+          issues.push(
+            issue(
+              `${path}.when`,
+              `${condition.operator} requires one or more string values`
+            )
+          );
+        } else if (
+          sourceField.options?.length &&
+          values.some(
+            value => !sourceField.options?.some(option => option.id === value)
+          )
+        ) {
+          issues.push(
+            issue(`${path}.when`, "Condition contains an unknown option value")
+          );
+        }
+        continue;
+      }
+
+      const value = condition.value;
       if (
-        [
-          "greater_than",
-          "greater_than_or_equal",
-          "less_than",
-          "less_than_or_equal",
-        ].includes(condition.operator) &&
-        typeof condition.value !== "number"
+        numericLogicOperators.has(condition.operator) ||
+        sourceField.type === "number" ||
+        sourceField.type === "rating"
+      ) {
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+          issues.push(
+            issue(`${path}.when`, "Numeric fields require a numeric value")
+          );
+        }
+      } else if (
+        sourceField.type === "yes_no" ||
+        sourceField.type === "consent"
+      ) {
+        if (typeof value !== "boolean") {
+          issues.push(
+            issue(`${path}.when`, "Boolean fields require a boolean value")
+          );
+        }
+      } else if (typeof value !== "string" || !value.trim()) {
+        issues.push(
+          issue(`${path}.when`, "Text fields require a non-empty string value")
+        );
+      } else if (
+        sourceField.options?.length &&
+        !sourceField.options.some(option => option.id === value)
       ) {
         issues.push(
-          issue(`${path}.when`, "Numeric comparisons require a numeric value")
+          issue(`${path}.when`, "Condition contains an unknown option value")
         );
       }
     }

@@ -2,7 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ServerRole, ServerSession } from "../../../../server/auth";
-import { applyPlatformWorkflowAction } from "../../../../server/platformState";
+import {
+  applyPlatformWorkflowAction,
+  parsePlatformWorkflowAction,
+} from "../../../../server/platformState";
 
 const originalLocalOnly = process.env.NILE_PLATFORM_STATE_LOCAL_ONLY;
 const localStateFile = path.resolve(
@@ -693,6 +696,7 @@ describe("server platform action scope gates", () => {
       fromUserId: "usr_teacher_demo",
       toUserId: "usr_student_demo",
       subject: "Scoped class note",
+      threadId: expect.any(String),
       attachments: [
         {
           name: "class-note.pdf",
@@ -711,6 +715,39 @@ describe("server platform action scope gates", () => {
       actorId: "usr_teacher_demo",
       entityId: sentMessage.id,
     });
+
+    const replyResult = await applyPlatformWorkflowAction(
+      {
+        type: "message.send",
+        toUserId: "usr_teacher_demo",
+        subject: "Re: Scoped class note",
+        body: "Student reply stays in the selected conversation.",
+        replyToMessageId: sentMessage.id,
+      },
+      sessionFor("student")
+    );
+    const reply = replyResult.state.messages.find(
+      item => item.replyToMessageId === sentMessage.id
+    );
+    expect(reply).toMatchObject({
+      fromUserId: "usr_student_demo",
+      toUserId: "usr_teacher_demo",
+      threadId: sentMessage.threadId,
+      replyToMessageId: sentMessage.id,
+    });
+
+    await expect(
+      applyPlatformWorkflowAction(
+        {
+          type: "message.send",
+          toUserId: "usr_admin_demo",
+          subject: "Re: Scoped class note",
+          body: "A reply cannot be redirected to another recipient.",
+          replyToMessageId: sentMessage.id,
+        },
+        sessionFor("teacher")
+      )
+    ).rejects.toThrow("The reply must stay in the selected conversation.");
 
     await expect(
       applyPlatformWorkflowAction(
@@ -747,6 +784,125 @@ describe("server platform action scope gates", () => {
     expect(
       broadcastMessages.every(item => item.fromUserId === "usr_admin_demo")
     ).toBe(true);
+    expect(new Set(broadcastMessages.map(item => item.threadId)).size).toBe(2);
+
+    const registrarResult = await applyPlatformWorkflowAction(
+      {
+        type: "message.send",
+        toUserId: "usr_student_demo",
+        subject: "Admissions follow-up",
+        body: "Registrar scope and audit evidence are required.",
+      },
+      sessionFor("registrar")
+    );
+    const registrarMessage = registrarResult.state.messages.find(
+      item => item.subject === "Admissions follow-up"
+    );
+    expect(registrarMessage).toMatchObject({
+      fromUserId: "usr_registrar_demo",
+      toUserId: "usr_student_demo",
+    });
+    expect(
+      registrarResult.state.auditLogs.find(
+        item => item.action === "message.sent" && item.entityId === registrarMessage?.id
+      )
+    ).toMatchObject({ actorId: "usr_registrar_demo" });
+  });
+
+  it("keeps message reads recipient-owned and honors the recipient message preference", async () => {
+    const parsedRead = parsePlatformWorkflowAction({
+      type: "message.read",
+      messageId: "msg_demo_1",
+    });
+    expect(parsedRead).toEqual({ type: "message.read", messageId: "msg_demo_1" });
+    expect(
+      parsePlatformWorkflowAction({
+        type: "message.send",
+        toUserId: "usr_student_demo",
+        subject: "x".repeat(161),
+        body: "This input is intentionally too long for a subject.",
+      })
+    ).toBeNull();
+
+    const readResult = await applyPlatformWorkflowAction(
+      { type: "message.read", messageId: "msg_demo_1" },
+      sessionFor("student")
+    );
+    expect(readResult.result).toMatchObject({
+      action: "message.read",
+      entityId: "msg_demo_1",
+    });
+    expect(
+      readResult.state.messages.find(item => item.id === "msg_demo_1")
+    ).toMatchObject({ read: true });
+
+    await expect(
+      applyPlatformWorkflowAction(
+        { type: "message.read", messageId: "msg_demo_1" },
+        sessionFor("teacher")
+      )
+    ).rejects.toThrow("You can only mark received messages as read.");
+
+    await applyPlatformWorkflowAction(
+      {
+        type: "profile.update",
+        notificationPreferences: { messages: false },
+      },
+      sessionFor("student")
+    );
+    const subject = "Preference-respecting message";
+    const sentResult = await applyPlatformWorkflowAction(
+      {
+        type: "message.send",
+        toUserId: "usr_student_demo",
+        subject,
+        body: "The in-app message and audit remain available.",
+      },
+      sessionFor("teacher")
+    );
+
+    expect(
+      sentResult.state.messages.find(item => item.subject === subject)
+    ).toMatchObject({
+      fromUserId: "usr_teacher_demo",
+      toUserId: "usr_student_demo",
+    });
+    expect(
+      sentResult.state.communicationLogs.find(item => item.subject === subject)
+    ).toMatchObject({
+      actorId: "usr_teacher_demo",
+      relatedUserId: "usr_student_demo",
+    });
+    expect(
+      sentResult.state.auditLogs.find(
+        item => item.action === "message.sent" && item.summary.includes(subject)
+      )
+    ).toBeDefined();
+    expect(
+      sentResult.state.notifications.some(item => item.title === subject)
+    ).toBe(false);
+  });
+
+  it("allows branch staff to message teachers assigned through an active branch profile", async () => {
+    const result = await applyPlatformWorkflowAction(
+      {
+        type: "message.send",
+        toUserId: "usr_teacher_demo",
+        subject: "Cairo branch coordination",
+        body: "Please confirm the local class room before the next session.",
+      },
+      sessionFor("branchadmin")
+    );
+
+    expect(result.state.messages[0]).toMatchObject({
+      fromUserId: "usr_branch_demo",
+      toUserId: "usr_teacher_demo",
+      subject: "Cairo branch coordination",
+    });
+    expect(result.state.auditLogs[0]).toMatchObject({
+      action: "message.sent",
+      actorId: "usr_branch_demo",
+    });
   });
 
   it("blocks HOD finance report presets outside academic report scope", async () => {

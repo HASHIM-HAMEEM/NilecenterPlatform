@@ -4,6 +4,22 @@
   across normal desktop, large display, tablet, and phone widths.
 */
 
+/* No decorative side accent rails / inset shades on content surfaces.
+   Keep normal 1px box borders; only kill colored left rails and inset bars. */
+.platform-shell :is(
+  .admin-system-integration-grid button.active,
+  .platform-integration-grid button.active,
+  .admin-record-list > article:hover,
+  .nile-migration-history-layout > aside > button.is-active
+) {
+  box-shadow: none;
+}
+
+.platform-shell .admin-system-recent-audit article {
+  border-left: 0;
+  padding-inline-start: 0;
+}
+
 .platform-v2-layout {
   gap: 18px;
 }
@@ -85,8 +101,9 @@
 .portal-simple-tabs button.active,
 .portal-ia-subnav a.active,
 .platform-segmented button.active {
-  background: var(--foreground);
-  box-shadow: 0 1px 2px rgba(26, 26, 26, 0.14);
+  background: var(--role-color);
+  color: white;
+  box-shadow: none;
 }
 
 .platform-status,

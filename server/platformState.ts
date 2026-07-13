@@ -1,6 +1,7 @@
 import {
   applyPlatformWorkflowAction as applyWorkflowMutation,
   type PlatformWorkflowAction,
+  type PlatformWorkflowActionResult,
 } from "../client/src/lib/domain/actions.js";
 import type {
   AttendanceStatus,
@@ -16,6 +17,7 @@ import type {
   StaffPermissionScope,
   StaffRole,
   StudentEntrySource,
+  StudentIntakeDocumentType,
   StudentStatus,
   UserNotificationPreferences,
 } from "../client/src/lib/domain/types.js";
@@ -468,6 +470,7 @@ function roleCanRunAction(
       "quiz.submit",
       "recitation.submit",
       "message.send",
+      "message.read",
       "notification.read",
       "report.preset.save",
       "profile.update",
@@ -490,6 +493,7 @@ function roleCanRunAction(
       "class.session.cancel",
       "material.publish.update",
       "message.send",
+      "message.read",
       "quran.progress.update",
       "recitation.review",
       "notification.read",
@@ -505,12 +509,14 @@ function roleCanRunAction(
       "application.convert",
       "student.create",
       "student.status.update",
+      "student.document.add",
       "enrollment.activate",
       "enrollment.transfer",
       "enrollment.status.update",
       "payment.record",
       "calendar.create",
       "message.send",
+      "message.read",
       "record.save",
       "notification.read",
       "report.preset.save",
@@ -534,6 +540,7 @@ function roleCanRunAction(
       "curriculum.module.create",
       "course.status.update",
       "message.send",
+      "message.read",
       "quran.progress.update",
       "recitation.review",
       "record.save",
@@ -552,6 +559,7 @@ function roleCanRunAction(
       "class.session.reschedule",
       "class.session.cancel",
       "message.send",
+      "message.read",
       "payment.record",
       "record.save",
       "room.create",
@@ -574,6 +582,7 @@ function roleCanRunAction(
       "lead.convert",
       "student.create",
       "student.status.update",
+      "student.document.add",
       "application.convert",
       "enrollment.activate",
       "enrollment.transfer",
@@ -608,6 +617,7 @@ function roleCanRunAction(
       "assignment.grade",
       "quiz.review",
       "message.send",
+      "message.read",
       "record.save",
       "notification.read",
       "report.preset.save",
@@ -734,6 +744,7 @@ const actionPermissionRuleByType = {
   "application.convert": "students:write",
   "student.create": "students:write",
   "student.status.update": "students:write",
+  "student.document.add": "students:write",
   "enrollment.activate": "students:write",
   "enrollment.transfer": "students:write",
   "enrollment.status.update": "students:write",
@@ -751,6 +762,7 @@ const actionPermissionRuleByType = {
   "attendance.exception.review": "attendance:write",
   "payment.record": "payments:write",
   "message.send": "messages:write",
+  "message.read": SELF_SCOPED_ACTION,
   "report.preset.save": "reports:read",
   "staff.user.create": "settings:write",
   "user.create": "settings:write",
@@ -868,10 +880,7 @@ function assertScopedAction(
         );
       }
     }
-    if (
-      action.type === "quiz.update" ||
-      action.type === "quiz.status.update"
-    ) {
+    if (action.type === "quiz.update" || action.type === "quiz.status.update") {
       const run = courseRunForQuiz(state, action.quizId);
       if (run?.teacherId !== session.userId) {
         throw new Error(
@@ -1237,15 +1246,10 @@ function assertScopedAction(
     ) {
       const run = courseRunForAssignment(state, action.assignmentId);
       if (!hodOwnsCourseRun(state, session, run)) {
-        throw new Error(
-          "HOD can only manage assignments in their department."
-        );
+        throw new Error("HOD can only manage assignments in their department.");
       }
     }
-    if (
-      action.type === "quiz.update" ||
-      action.type === "quiz.status.update"
-    ) {
+    if (action.type === "quiz.update" || action.type === "quiz.status.update") {
       const run = courseRunForQuiz(state, action.quizId);
       if (!hodOwnsCourseRun(state, session, run)) {
         throw new Error("HOD can only manage quizzes in their department.");
@@ -1418,6 +1422,15 @@ function assertScopedAction(
         );
       }
     }
+    if (action.type === "student.document.add") {
+      const student = state.students.find(item => item.id === action.studentId);
+      const studentUser = state.users.find(item => item.id === student?.userId);
+      if (!student || !branchIds.has(studentUser?.branchId ?? "")) {
+        throw new Error(
+          "Registrar can only add student documents inside admissions branches."
+        );
+      }
+    }
     if (
       action.type === "payment.record" &&
       !branchIds.has(branchForInvoice(state, action.invoiceId) ?? "")
@@ -1543,6 +1556,34 @@ function assertScopedAction(
     ) {
       throw new Error("Message recipient is outside this role scope.");
     }
+
+    if (action.replyToMessageId) {
+      const replyTarget = state.messages.find(
+        item => item.id === action.replyToMessageId
+      );
+      if (!replyTarget) {
+        throw new Error("The selected message is no longer available.");
+      }
+      const counterpartUserId =
+        replyTarget.fromUserId === session.userId
+          ? replyTarget.toUserId
+          : replyTarget.fromUserId;
+      const continuesSelectedConversation =
+        (replyTarget.fromUserId === session.userId ||
+          replyTarget.toUserId === session.userId) &&
+        recipientUserIds.length === 1 &&
+        recipientUserIds[0] === counterpartUserId;
+      if (!continuesSelectedConversation) {
+        throw new Error("The reply must stay in the selected conversation.");
+      }
+    }
+  }
+
+  if (action.type === "message.read") {
+    const message = state.messages.find(item => item.id === action.messageId);
+    if (message?.toUserId !== session.userId) {
+      throw new Error("You can only mark received messages as read.");
+    }
   }
 }
 
@@ -1617,6 +1658,14 @@ const attendanceStatuses = new Set<AttendanceStatus>([
   "late",
   "absent",
   "excused",
+]);
+const studentIntakeDocumentTypes = new Set<StudentIntakeDocumentType>([
+  "profile_photo",
+  "passport",
+  "national_id",
+  "birth_certificate",
+  "guardian_id",
+  "consent",
 ]);
 const leadSources = new Set<Lead["source"]>([
   "website",
@@ -2193,6 +2242,27 @@ export function parsePlatformWorkflowAction(
     };
   }
 
+  if (type === "student.document.add") {
+    const studentId = stringValue(input, "studentId");
+    const documentType = stringValue(input, "documentType");
+    const attachment = pendingMediaValue([input.attachment])?.[0];
+    if (
+      !studentId ||
+      !studentIntakeDocumentTypes.has(
+        documentType as StudentIntakeDocumentType
+      ) ||
+      !attachment
+    ) {
+      return null;
+    }
+    return {
+      type,
+      studentId,
+      documentType: documentType as StudentIntakeDocumentType,
+      attachment,
+    };
+  }
+
   if (type === "student.status.update") {
     const studentId = stringValue(input, "studentId");
     const status = stringValue(input, "status");
@@ -2627,10 +2697,7 @@ export function parsePlatformWorkflowAction(
   if (type === "quiz.status.update") {
     const quizId = stringValue(input, "quizId");
     const status = stringValue(input, "status");
-    if (
-      !quizId ||
-      !["active", "completed", "cancelled"].includes(status)
-    ) {
+    if (!quizId || !["active", "completed", "cancelled"].includes(status)) {
       return null;
     }
     return {
@@ -2773,11 +2840,19 @@ export function parsePlatformWorkflowAction(
     const toUserId = stringValue(input, "toUserId");
     const subject = stringValue(input, "subject").trim();
     const body = stringValue(input, "body").trim();
-    if (!toUserId || !subject || !body) return null;
+    if (
+      !toUserId ||
+      !subject ||
+      !body ||
+      subject.length > 160 ||
+      body.length > 10000
+    )
+      return null;
     return {
       type,
       toUserId,
       recipientUserIds: recipientUserIdsValue(input.recipientUserIds),
+      replyToMessageId: optionalStringValue(input, "replyToMessageId"),
       subject,
       body,
       attachments: messageAttachmentsValue(input.attachments),
@@ -2951,6 +3026,11 @@ export function parsePlatformWorkflowAction(
     return notificationId ? { type, notificationId } : null;
   }
 
+  if (type === "message.read") {
+    const messageId = stringValue(input, "messageId");
+    return messageId ? { type, messageId } : null;
+  }
+
   if (type === "report.preset.save") {
     const role = stringValue(input, "role");
     const label = stringValue(input, "label");
@@ -2985,6 +3065,50 @@ export function parsePlatformWorkflowAction(
 
 export const parsePlatformLearningAction = parsePlatformWorkflowAction;
 
+const sensitiveRepositoryEventActions = new Set<PlatformWorkflowAction["type"]>(
+  [
+    "lead.create",
+    "application.create",
+    "placement.create",
+    "student.create",
+    "student.document.add",
+    "staff.user.create",
+    "user.create",
+    "profile.update",
+    "message.send",
+    "assignment.submit",
+    "quiz.submit",
+    "recitation.submit",
+  ]
+);
+
+function repositoryEventPayload(
+  serverAction: PlatformWorkflowAction,
+  result: PlatformWorkflowActionResult,
+  sourcePersistence: PlatformStatePayload["persistence"]
+) {
+  if (sensitiveRepositoryEventActions.has(serverAction.type)) {
+    return {
+      request: {
+        type: serverAction.type,
+        actorId: serverAction.actorId,
+      },
+      result: {
+        action: result.action,
+        entityType: result.entityType,
+        entityId: result.entityId,
+      },
+      sourcePersistence,
+      redacted: true,
+    };
+  }
+  return {
+    request: serverAction,
+    result: result.result,
+    sourcePersistence,
+  };
+}
+
 export async function applyPlatformWorkflowAction(
   action: PlatformWorkflowAction,
   session: ServerSession
@@ -3013,11 +3137,11 @@ export async function applyPlatformWorkflowAction(
       entityType: result.entityType,
       entityId: result.entityId,
       summary: result.summary,
-      payload: {
-        request: serverAction,
-        result: result.result,
-        sourcePersistence: snapshot.persistence,
-      },
+      payload: repositoryEventPayload(
+        serverAction,
+        result,
+        snapshot.persistence
+      ),
     });
   } catch {
     // Snapshot persistence is the source of truth; event logging must not block the workflow.

@@ -16,6 +16,12 @@ import "./styles/operations-v4.css";
 import "./styles/admin-v4.css";
 import "./styles/portal-insights.css";
 import "./styles/nile-forms.css";
+import "./styles/teacher-v5.css";
+import "./styles/registrar-v5.css";
+import "./styles/hod-v4.css";
+import "./styles/branch-v4.css";
+import "./styles/student-v5.css";
+import "./styles/messages-v1.css";
 
 createRoot(document.getElementById("root")!).render(
   <MotionConfig reducedMotion="user">

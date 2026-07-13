@@ -40,6 +40,7 @@ type NileFormRendererProps = {
   mode: RendererMode;
   slug?: string;
   initialAnswers?: Record<string, unknown>;
+  onLocaleChange?: (locale: FormLocale) => void;
   onSubmitted?: (submissionId: string) => void;
   onOfflineQueued?: (
     payload: OfflineSubmissionPayload
@@ -84,7 +85,13 @@ function FieldControl({
   const description = field.description
     ? getLocalizedText(field.description, locale)
     : "";
-  const describedBy = `${field.id}-description ${field.id}-error`.trim();
+  const labelId = `${field.id}-label`;
+  const describedBy = [
+    description ? `${field.id}-description` : "",
+    error ? `${field.id}-error` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   if (field.type === "heading") {
     return (
@@ -104,7 +111,7 @@ function FieldControl({
   }
 
   const labelContent = (
-    <span className="nile-form-field-label">
+    <span id={labelId} className="nile-form-field-label">
       {label}
       {required ? <span aria-hidden="true">*</span> : null}
     </span>
@@ -115,7 +122,14 @@ function FieldControl({
     disabled,
     required,
     "aria-invalid": Boolean(error) as boolean,
-    "aria-describedby": describedBy,
+    "aria-describedby": describedBy || undefined,
+  };
+  const groupAccessibility = {
+    role: "group" as const,
+    "aria-labelledby": labelId,
+    "aria-required": required,
+    "aria-invalid": Boolean(error) as boolean,
+    "aria-describedby": describedBy || undefined,
   };
 
   let control;
@@ -153,11 +167,12 @@ function FieldControl({
         : []
     );
     control = (
-      <div className="nile-form-choice-list" role="group" aria-label={label}>
+      <div className="nile-form-choice-list" {...groupAccessibility}>
         {(options ?? []).map(option => (
           <label key={option.id} className="nile-form-choice-row">
             <input
               type="checkbox"
+              name={field.id}
               checked={selected.has(option.id)}
               disabled={disabled}
               onChange={event => {
@@ -174,7 +189,7 @@ function FieldControl({
     );
   } else if (field.type === "yes_no") {
     control = (
-      <div className="nile-form-segmented" role="group" aria-label={label}>
+      <div className="nile-form-segmented" {...groupAccessibility}>
         {[
           { value: true, en: "Yes", ar: "نعم" },
           { value: false, en: "No", ar: "لا" },
@@ -196,7 +211,7 @@ function FieldControl({
     const min = field.validation?.min ?? 1;
     const max = field.validation?.max ?? 5;
     control = (
-      <div className="nile-form-rating" role="group" aria-label={label}>
+      <div className="nile-form-rating" {...groupAccessibility}>
         {Array.from({ length: max - min + 1 }, (_, index) => min + index).map(
           rating => (
             <button
@@ -222,7 +237,7 @@ function FieldControl({
           disabled={disabled}
           required={required}
           aria-invalid={Boolean(error)}
-          aria-describedby={describedBy}
+          aria-describedby={describedBy || undefined}
           onChange={event => onChange(event.target.checked)}
         />
         <span>{description || label}</span>
@@ -291,6 +306,7 @@ export default function NileFormRenderer({
   mode,
   slug,
   initialAnswers = {},
+  onLocaleChange,
   onSubmitted,
   onOfflineQueued,
 }: NileFormRendererProps) {
@@ -318,6 +334,10 @@ export default function NileFormRenderer({
   const page = content.pages[Math.min(pageIndex, content.pages.length - 1)];
   const isLastPage = pageIndex === content.pages.length - 1;
   const direction = locale === "ar" ? "rtl" : "ltr";
+
+  useEffect(() => {
+    onLocaleChange?.(locale);
+  }, [locale, onLocaleChange]);
 
   useEffect(() => {
     if (mode === "preview" || mode === "offline") return;

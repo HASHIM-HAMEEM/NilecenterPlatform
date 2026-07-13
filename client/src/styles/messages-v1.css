@@ -1,0 +1,797 @@
+/*
+  Shared direct-message workspace. Roles keep their existing accent token while
+  every portal uses the same conversation hierarchy and responsive behavior.
+*/
+.portal-messages-page {
+  width: 100%;
+  max-width: 1720px;
+  margin-inline: auto;
+}
+
+.portal-messages-page .platform-v2-layout-grid,
+.portal-messages-page .platform-v2-layout-main {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.nile-message-workspace {
+  --nile-message-rail: minmax(300px, 360px);
+  --nile-message-height: min(70dvh, 800px);
+  display: grid;
+  grid-template-columns: var(--nile-message-rail) minmax(0, 1fr);
+  width: 100%;
+  min-height: var(--nile-message-height);
+  max-height: var(--nile-message-height);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: none;
+}
+
+.nile-message-rail {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  border-inline-end: 1px solid var(--border);
+  background: var(--card);
+}
+
+.nile-message-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.nile-message-rail-head > div:first-child {
+  min-width: 0;
+}
+
+.nile-message-rail-head strong {
+  display: block;
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.nile-message-rail-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.nile-message-rail-actions > small {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--role-color) 10%, var(--card));
+  color: var(--role-color);
+  font-size: 11px;
+  font-weight: 740;
+  white-space: nowrap;
+}
+
+.nile-message-refresh {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  flex: 0 0 30px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.nile-message-refresh:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--role-color) 34%, var(--border));
+  background: color-mix(in srgb, var(--role-color) 7%, var(--card));
+  color: var(--role-color);
+}
+
+.nile-message-refresh:disabled {
+  cursor: progress;
+  opacity: 0.72;
+}
+
+.nile-message-refresh .is-spinning {
+  animation: nile-message-spin 680ms linear infinite;
+}
+
+.nile-message-search {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 28%, var(--card));
+}
+
+.nile-message-search label {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.nile-message-search label:focus-within {
+  border-color: color-mix(in srgb, var(--role-color) 42%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--role-color) 12%, transparent);
+}
+
+.nile-message-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+}
+
+.nile-message-search input::placeholder {
+  color: var(--muted-foreground);
+}
+
+.nile-message-search .sr-only,
+.nile-message-reply-field .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.nile-message-sync-error {
+  margin: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--destructive, #b42318) 18%, var(--border));
+  background: color-mix(in srgb, var(--destructive, #b42318) 7%, var(--card));
+  color: var(--destructive, #b42318);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.nile-message-conversation-list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.nile-message-conversation-list > li + li {
+  border-top: 1px solid var(--border);
+}
+
+.nile-message-conversation {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+  min-height: 79px;
+  margin: 0;
+  padding: 12px 13px 12px 16px;
+  border: 0;
+  border-inline-start: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.nile-message-conversation:hover {
+  background: color-mix(in srgb, var(--muted) 58%, var(--card));
+}
+
+.nile-message-conversation.is-active {
+  border-inline-start-color: var(--role-color);
+  background: color-mix(in srgb, var(--role-color) 8%, var(--card));
+}
+
+.nile-message-conversation.unread strong {
+  font-weight: 800;
+}
+
+.nile-message-avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--role-color) 10%, var(--card));
+  color: var(--role-color);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.nile-message-avatar.is-large {
+  width: 40px;
+  height: 40px;
+  font-size: 11px;
+}
+
+.nile-message-conversation-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.nile-message-conversation-meta {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.nile-message-conversation-meta > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nile-message-conversation-meta time {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.nile-message-conversation strong {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nile-message-conversation p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.nile-message-unread-count {
+  display: inline-grid;
+  width: 19px;
+  height: 19px;
+  place-items: center;
+  align-self: center;
+  border-radius: 50%;
+  background: var(--role-color);
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.nile-message-empty {
+  display: grid;
+  padding: 28px 16px;
+}
+
+.nile-message-empty strong {
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.nile-message-reader {
+  min-width: 0;
+  min-height: 0;
+  background: var(--card);
+}
+
+.nile-message-reader-content {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+}
+
+.nile-message-reader-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 17px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.nile-message-reader-back {
+  display: none;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--role-color);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.nile-message-reader-title {
+  min-width: 0;
+}
+
+.nile-message-reader-title h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--foreground);
+  font-size: clamp(1.25rem, 1.05rem + 0.5vw, 1.65rem);
+  font-weight: 740;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.nile-message-reader-person {
+  display: flex;
+  min-width: min(260px, 30vw);
+  align-items: center;
+  gap: 10px;
+}
+
+.nile-message-reader-person > div {
+  min-width: 0;
+}
+
+.nile-message-reader-person strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nile-message-reader-person strong {
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.nile-message-transcript {
+  display: flex;
+  min-height: 0;
+  margin: 0;
+  padding: 18px 22px;
+  overflow: auto;
+  list-style: none;
+  flex-direction: column;
+  gap: 11px;
+  overscroll-behavior: contain;
+  background: color-mix(in srgb, var(--muted) 22%, var(--card));
+}
+
+.nile-message-entry {
+  display: flex;
+  min-width: 0;
+}
+
+.nile-message-entry.is-outgoing .nile-message-bubble {
+  margin-inline-start: auto;
+  border-color: color-mix(in srgb, var(--role-color) 26%, var(--border));
+  background: color-mix(in srgb, var(--role-color) 8%, var(--card));
+}
+
+.nile-message-bubble {
+  width: fit-content;
+  max-width: min(78%, 700px);
+  min-width: min(180px, 100%);
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card);
+}
+
+.nile-message-bubble > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nile-message-bubble strong {
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.nile-message-bubble time {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.nile-message-bubble p {
+  margin: 6px 0 0;
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.nile-message-attachments {
+  display: flex;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nile-message-attachments li {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--role-color));
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.nile-message-attachments span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nile-message-reply,
+.nile-message-reply-unavailable {
+  display: grid;
+  gap: 10px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+}
+
+.nile-message-reply-field {
+  display: grid;
+  min-width: 0;
+}
+
+.nile-message-reply-field textarea {
+  width: 100%;
+  min-height: 80px;
+  max-height: 180px;
+  margin: 0;
+  padding: 11px 12px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.nile-message-reply-field textarea:focus {
+  border-color: color-mix(in srgb, var(--role-color) 42%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--role-color) 12%, transparent);
+}
+
+.nile-message-reply-actions,
+.nile-message-reply-unavailable {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nile-message-reply-unavailable > span {
+  margin-inline-end: auto;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.nile-message-reply-status {
+  font-size: 12px;
+  font-weight: 740;
+}
+
+.nile-message-reply-status.is-success {
+  color: var(--role-color);
+}
+
+.nile-message-reply-status.is-error {
+  color: var(--destructive, #b42318);
+}
+
+.nile-message-reply-actions .platform-primary-button {
+  min-height: 40px;
+}
+
+.nile-message-reader-empty {
+  display: grid;
+  min-height: 280px;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 32px 20px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.nile-message-reader-empty strong {
+  color: var(--foreground);
+  font-size: 16px;
+}
+
+.nile-message-compose-page .platform-v2-layout-main {
+  min-width: 0;
+}
+
+.nile-message-compose-surface {
+  width: min(100%, 760px);
+  margin-inline: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.nile-message-compose-form {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+}
+
+.nile-message-compose-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 730;
+}
+
+.nile-message-compose-form :is(input, select, textarea) {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14px;
+}
+
+.nile-message-compose-form :is(input, select) {
+  min-height: 42px;
+  padding-inline: 12px;
+}
+
+.nile-message-compose-form textarea {
+  min-height: 160px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.nile-message-compose-form :is(input, select, textarea):focus {
+  border-color: color-mix(in srgb, var(--role-color) 42%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--role-color) 12%, transparent);
+}
+
+.nile-message-compose-success {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 28px;
+}
+
+.nile-message-compose-success > svg {
+  color: var(--role-color);
+}
+
+.nile-message-compose-success strong {
+  color: var(--foreground);
+  font-size: 16px;
+}
+
+@keyframes nile-message-reader-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes nile-message-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nile-message-reader-content {
+    animation: nile-message-reader-in 150ms ease-out both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nile-message-reader-content,
+  .nile-message-refresh .is-spinning {
+    animation: none;
+  }
+}
+
+@media (max-width: 959px) {
+  .nile-message-workspace {
+    --nile-message-height: min(74dvh, 780px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nile-message-rail {
+    border-inline-end: 0;
+  }
+
+  .nile-message-reader {
+    display: none;
+  }
+
+  .nile-message-workspace.is-reading .nile-message-rail {
+    display: none;
+  }
+
+  .nile-message-workspace.is-reading .nile-message-reader {
+    display: block;
+  }
+
+  .nile-message-reader-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .nile-message-reader-back {
+    display: inline-flex;
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 639px) {
+  .nile-message-workspace {
+    --nile-message-height: min(76dvh, 720px);
+    border-radius: 8px;
+  }
+
+  .nile-message-rail-head {
+    padding: 14px 13px 10px;
+  }
+
+  .nile-message-rail-actions > small {
+    display: none;
+  }
+
+  .nile-message-search {
+    padding: 9px 10px;
+  }
+
+  .nile-message-conversation {
+    min-height: 76px;
+    padding-inline: 12px;
+  }
+
+  .nile-message-reader-head {
+    gap: 12px;
+    padding: 13px 14px;
+  }
+
+  .nile-message-reader-person {
+    min-width: 0;
+  }
+
+  .nile-message-reader-person > div {
+    display: none;
+  }
+
+  .nile-message-transcript {
+    padding: 14px;
+  }
+
+  .nile-message-bubble {
+    max-width: 92%;
+  }
+
+  .nile-message-reply,
+  .nile-message-reply-unavailable {
+    padding: 10px 12px 12px;
+  }
+
+  .nile-message-reply-actions,
+  .nile-message-reply-unavailable {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .nile-message-reply-unavailable > span {
+    margin-inline-end: 0;
+  }
+
+  .nile-message-reply-actions .platform-primary-button,
+  .nile-message-reply-unavailable .platform-secondary-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .nile-message-compose-form {
+    padding: 18px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .nile-message-workspace {
+    --nile-message-rail: minmax(340px, 400px);
+    --nile-message-height: min(72dvh, 880px);
+  }
+
+  .nile-message-transcript,
+  .nile-message-reader-head {
+    padding-inline: 28px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .nile-message-workspace {
+    --nile-message-rail: 420px;
+    --nile-message-height: min(74dvh, 980px);
+  }
+}

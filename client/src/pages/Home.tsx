@@ -357,31 +357,31 @@ export default function Home() {
           </motion.div>
         </motion.div>
 
-        {/* Hero Product Mockup */}
+        {/* Hero Product Mockup — fluid frame only; image asset unchanged */}
         <motion.div
           initial={{ opacity: 0, y: 48, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.9, delay: 0.5 }}
-          className="relative z-10 mt-16 max-w-[900px] mx-auto w-full px-4"
+          className="relative z-10 mt-12 sm:mt-14 md:mt-16 w-full max-w-[min(100%,80rem)] mx-auto"
         >
-          <div className="relative rounded-2xl overflow-hidden shadow-[0_32px_80px_-12px_rgba(0,0,0,0.18)] border border-[#E8E2D8]">
+          <div className="relative rounded-xl sm:rounded-2xl xl:rounded-[1.35rem] overflow-hidden shadow-[0_24px_64px_-12px_rgba(0,0,0,0.16)] sm:shadow-[0_32px_80px_-12px_rgba(0,0,0,0.18)] border border-[#E8E2D8]">
             <img
               src="https://d2xsxph8kpxj0f.cloudfront.net/310519663054618609/iE3uDMyhDt3MKxxF4wRZj3/hero-mockup-6QBaCKGDdp9ftZD34Dswc3.webp"
               alt="Nile Center Dashboard"
-              className="w-full h-auto"
+              className="w-full h-auto block"
             />
             {/* Floating badge */}
             <motion.div
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute top-6 right-6 bg-white rounded-xl px-4 py-3 shadow-lg border border-[#E8E2D8] flex items-center gap-3"
+              className="absolute top-3 right-3 sm:top-5 sm:right-5 md:top-6 md:right-6 bg-white rounded-lg sm:rounded-xl px-3 py-2 sm:px-4 sm:py-3 shadow-lg border border-[#E8E2D8] flex items-center gap-2 sm:gap-3 max-w-[min(70%,16rem)] sm:max-w-none"
             >
-              <div className="w-8 h-8 rounded-lg bg-[#2D5016]/10 flex items-center justify-center">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#2D5016]/10 flex items-center justify-center shrink-0">
                 <CheckCircle2 size={16} className="text-[#2D5016]" />
               </div>
-              <div>
-                <div className="text-[11px] font-semibold text-[#1A1A1A]">Lesson completed</div>
-                <div className="text-[10px] text-[#8A8A8A]">Surah Al-Fatiha · Tajweed</div>
+              <div className="min-w-0">
+                <div className="text-[10px] sm:text-[11px] font-semibold text-[#1A1A1A] truncate">Lesson completed</div>
+                <div className="text-[9px] sm:text-[10px] text-[#8A8A8A] truncate">Surah Al-Fatiha · Tajweed</div>
               </div>
             </motion.div>
           </div>
@@ -425,52 +425,52 @@ export default function Home() {
       </section>
 
       {/* ── FEATURES ── */}
-      <section className="py-24 px-6 bg-white">
-        <div className="max-w-[1200px] mx-auto">
+      <section className="py-16 sm:py-20 md:py-24 px-4 sm:px-6 bg-white">
+        <div className="mx-auto w-full max-w-[min(100%,88rem)]">
           <Reveal>
             <SectionLabel>Features</SectionLabel>
           </Reveal>
           <Reveal delay={0.1}>
             <h2
-              className="text-[48px] md:text-[60px] font-bold leading-[1.05] tracking-tight mb-4 max-w-[700px]"
+              className="text-[clamp(2rem,4vw+0.5rem,3.75rem)] font-bold leading-[1.05] tracking-tight mb-4 max-w-[700px]"
               style={{ fontFamily: "'Instrument Serif', serif" }}
             >
               An education platform built for Arabic learning.
             </h2>
           </Reveal>
           <Reveal delay={0.2}>
-            <p className="text-[16px] text-[#6A6A6A] max-w-[480px] mb-20 leading-relaxed">
+            <p className="text-[15px] sm:text-[16px] text-[#6A6A6A] max-w-[480px] mb-12 sm:mb-16 md:mb-20 leading-relaxed">
               Purpose-built tools for students, teachers, and administrators — all in one unified platform.
             </p>
           </Reveal>
 
           {/* Feature cards — alternating layout like Syncrun */}
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4 sm:gap-5 md:gap-6 xl:gap-8">
 
             {/* Feature 1 — Quran Recitation */}
             <Reveal>
-              <div className="grid md:grid-cols-2 gap-6 bg-[#F7F5F0] rounded-2xl overflow-hidden border border-[#E8E2D8]">
-                <div className="p-10 flex flex-col justify-center">
+              <div className="grid md:grid-cols-2 gap-0 md:gap-0 bg-[#F7F5F0] rounded-xl sm:rounded-2xl xl:rounded-[1.35rem] overflow-hidden border border-[#E8E2D8]">
+                <div className="p-6 sm:p-8 md:p-10 xl:p-12 flex flex-col justify-center">
                   <SectionLabel>Quran Recitation</SectionLabel>
                   <h3
-                    className="text-[32px] font-bold leading-tight mb-4"
+                    className="text-[clamp(1.5rem,2vw+0.75rem,2rem)] font-bold leading-tight mb-3 sm:mb-4"
                     style={{ fontFamily: "'Instrument Serif', serif" }}
                   >
                     Master Tajweed with certified Huffaz.
                   </h3>
-                  <p className="text-[15px] text-[#6A6A6A] leading-relaxed mb-6">
+                  <p className="text-[14px] sm:text-[15px] text-[#6A6A6A] leading-relaxed mb-5 sm:mb-6">
                     Live one-on-one and group sessions with certified teachers. Track your memorization progress, attendance, and recitation quality.
                   </p>
                   <ul className="space-y-2.5">
                     {["Structured Hifz curriculum", "Audio recording & playback", "Progress tracking per Surah", "Tajweed correction in real-time"].map(f => (
-                      <li key={f} className="flex items-center gap-2.5 text-[14px] text-[#4A4A4A]">
+                      <li key={f} className="flex items-center gap-2.5 text-[13px] sm:text-[14px] text-[#4A4A4A]">
                         <CheckCircle2 size={15} className="text-[#2D5016] shrink-0" />
                         {f}
                       </li>
                     ))}
                   </ul>
                 </div>
-                <div className="relative overflow-hidden min-h-[320px]">
+                <div className="relative overflow-hidden min-h-[220px] sm:min-h-[280px] md:min-h-[320px] xl:min-h-[380px]">
                   <img
                     src="https://d2xsxph8kpxj0f.cloudfront.net/310519663054618609/iE3uDMyhDt3MKxxF4wRZj3/feature-quran-QWePE76VrhAWcerJZJfLcx.webp"
                     alt="Quran Recitation Feature"
@@ -482,28 +482,28 @@ export default function Home() {
 
             {/* Feature 2 — Arabic Calligraphy (reversed) */}
             <Reveal>
-              <div className="grid md:grid-cols-2 gap-6 bg-[#F7F5F0] rounded-2xl overflow-hidden border border-[#E8E2D8]">
-                <div className="relative overflow-hidden min-h-[320px] order-2 md:order-1">
+              <div className="grid md:grid-cols-2 gap-0 bg-[#F7F5F0] rounded-xl sm:rounded-2xl xl:rounded-[1.35rem] overflow-hidden border border-[#E8E2D8]">
+                <div className="relative overflow-hidden min-h-[220px] sm:min-h-[280px] md:min-h-[320px] xl:min-h-[380px] order-2 md:order-1">
                   <img
                     src="https://d2xsxph8kpxj0f.cloudfront.net/310519663054618609/iE3uDMyhDt3MKxxF4wRZj3/feature-arabic-QAQmVS3adzA27SABmJd6v9.webp"
                     alt="Arabic Calligraphy Feature"
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <div className="p-10 flex flex-col justify-center order-1 md:order-2">
+                <div className="p-6 sm:p-8 md:p-10 xl:p-12 flex flex-col justify-center order-1 md:order-2">
                   <SectionLabel>Arabic Language</SectionLabel>
                   <h3
-                    className="text-[32px] font-bold leading-tight mb-4"
+                    className="text-[clamp(1.5rem,2vw+0.75rem,2rem)] font-bold leading-tight mb-3 sm:mb-4"
                     style={{ fontFamily: "'Instrument Serif', serif" }}
                   >
                     From alphabet to classical texts.
                   </h3>
-                  <p className="text-[15px] text-[#6A6A6A] leading-relaxed mb-6">
+                  <p className="text-[14px] sm:text-[15px] text-[#6A6A6A] leading-relaxed mb-5 sm:mb-6">
                     Comprehensive Arabic curriculum covering calligraphy, grammar (Nahw & Sarf), reading, writing, and classical literature.
                   </p>
                   <ul className="space-y-2.5">
                     {["Naskh, Thuluth & Ruq'ah calligraphy", "Nahw & Sarf grammar courses", "Vocabulary building programs", "Classical text reading"].map(f => (
-                      <li key={f} className="flex items-center gap-2.5 text-[14px] text-[#4A4A4A]">
+                      <li key={f} className="flex items-center gap-2.5 text-[13px] sm:text-[14px] text-[#4A4A4A]">
                         <CheckCircle2 size={15} className="text-[#1A3A5C] shrink-0" />
                         {f}
                       </li>
@@ -515,38 +515,38 @@ export default function Home() {
 
             {/* Feature 3 — Management */}
             <Reveal>
-              <div className="grid md:grid-cols-2 gap-6 bg-[#F7F5F0] rounded-2xl overflow-hidden border border-[#E8E2D8]">
-                <div className="p-10 flex flex-col justify-center">
+              <div className="grid md:grid-cols-2 gap-0 bg-[#F7F5F0] rounded-xl sm:rounded-2xl xl:rounded-[1.35rem] overflow-hidden border border-[#E8E2D8]">
+                <div className="p-6 sm:p-8 md:p-10 xl:p-12 flex flex-col justify-center">
                   <SectionLabel>Administration</SectionLabel>
                   <h3
-                    className="text-[32px] font-bold leading-tight mb-4"
+                    className="text-[clamp(1.5rem,2vw+0.75rem,2rem)] font-bold leading-tight mb-3 sm:mb-4"
                     style={{ fontFamily: "'Instrument Serif', serif" }}
                   >
                     Full enrollment management, automated.
                   </h3>
-                  <p className="text-[15px] text-[#6A6A6A] leading-relaxed mb-6">
+                  <p className="text-[14px] sm:text-[15px] text-[#6A6A6A] leading-relaxed mb-5 sm:mb-6">
                     From student registration to payment processing, attendance tracking, and grade reporting — everything in one dashboard.
                   </p>
                   <ul className="space-y-2.5">
                     {["Student registration & enrollment", "Payment tracking & invoicing", "Attendance & grade reports", "Multi-branch management"].map(f => (
-                      <li key={f} className="flex items-center gap-2.5 text-[14px] text-[#4A4A4A]">
+                      <li key={f} className="flex items-center gap-2.5 text-[13px] sm:text-[14px] text-[#4A4A4A]">
                         <CheckCircle2 size={15} className="text-[#5C2D00] shrink-0" />
                         {f}
                       </li>
                     ))}
                   </ul>
                 </div>
-                <div className="p-10 flex flex-col justify-center bg-[#1A1A1A] text-white">
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="p-6 sm:p-8 md:p-10 xl:p-12 flex flex-col justify-center bg-[#1A1A1A] text-white min-h-[240px]">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
                     {[
                       { icon: Users, label: "Students", value: "5,247", change: "+12%" },
                       { icon: BookOpen, label: "Active Courses", value: "48", change: "+3" },
                       { icon: BarChart3, label: "Attendance", value: "94%", change: "+2%" },
                       { icon: Award, label: "Completions", value: "1,832", change: "+18%" },
                     ].map(({ icon: Icon, label, value, change }) => (
-                      <div key={label} className="bg-white/10 rounded-xl p-4">
+                      <div key={label} className="bg-white/10 rounded-xl p-3 sm:p-4">
                         <Icon size={16} className="text-white/60 mb-2" />
-                        <div className="text-[22px] font-bold mb-0.5">{value}</div>
+                        <div className="text-[20px] sm:text-[22px] font-bold mb-0.5">{value}</div>
                         <div className="text-[11px] text-white/60">{label}</div>
                         <div className="text-[11px] text-[#7EC8A0] mt-1">{change} this month</div>
                       </div>
@@ -717,54 +717,55 @@ export default function Home() {
       </section>
 
       {/* ── CTA ── */}
-      <section className="py-24 px-6">
-        <div className="max-w-[1200px] mx-auto">
+      <section className="py-16 sm:py-20 md:py-24 px-4 sm:px-6">
+        <div className="mx-auto w-full max-w-[min(100%,88rem)]">
           <Reveal>
-            <div className="bg-[#1A1A1A] rounded-3xl p-12 md:p-16 text-white text-center relative overflow-hidden">
-              {/* Subtle bg pattern */}
+            <div className="bg-[#1A1A1A] rounded-2xl sm:rounded-3xl xl:rounded-[2rem] p-8 sm:p-10 md:p-14 lg:p-16 xl:p-[4.5rem] text-white text-center relative overflow-hidden">
+              {/* Subtle bg pattern — fills the CTA frame only */}
               <div
-                className="absolute inset-0 opacity-5"
+                className="absolute inset-0 opacity-5 pointer-events-none"
+                aria-hidden="true"
                 style={{
                   backgroundImage: `radial-gradient(circle at 30% 50%, rgba(255,255,255,0.3) 0%, transparent 60%),
                                     radial-gradient(circle at 70% 30%, rgba(196,163,90,0.4) 0%, transparent 50%)`
                 }}
               />
-              <div className="relative z-10">
-                <div className="text-[12px] font-semibold tracking-[0.15em] uppercase text-white/50 mb-6">
+              <div className="relative z-10 mx-auto w-full max-w-[min(100%,42rem)]">
+                <div className="text-[11px] sm:text-[12px] font-semibold tracking-[0.15em] uppercase text-white/50 mb-5 sm:mb-6">
                   Start your journey
                 </div>
                 <h2
-                  className="text-[48px] md:text-[64px] font-bold leading-[1.05] tracking-tight mb-6"
+                  className="text-[clamp(2rem,5vw+0.5rem,4rem)] font-bold leading-[1.05] tracking-tight mb-5 sm:mb-6"
                   style={{ fontFamily: "'Instrument Serif', serif" }}
                 >
                   Begin learning Arabic<br />
                   <span className="italic text-[#C4A35A]">today.</span>
                 </h2>
-                <p className="text-[16px] text-white/60 max-w-[400px] mx-auto mb-10 leading-relaxed">
+                <p className="text-[14px] sm:text-[16px] text-white/60 max-w-[400px] mx-auto mb-8 sm:mb-10 leading-relaxed">
                   Join thousands of students learning Arabic and Quran with certified teachers from around the world.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <Link
                     href="/auth/login"
-                    className="group flex items-center gap-2 bg-white text-[#1A1A1A] text-[15px] font-semibold px-8 py-3.5 rounded-full hover:bg-[#F0EDE8] transition-all duration-200 active:scale-[0.97]"
+                    className="group w-full sm:w-auto justify-center flex items-center gap-2 bg-white text-[#1A1A1A] text-[15px] font-semibold px-8 py-3.5 rounded-full hover:bg-[#F0EDE8] transition-all duration-200 active:scale-[0.97]"
                   >
                     Get started free
                     <ArrowRight size={15} className="group-hover:translate-x-0.5 transition-transform" />
                   </Link>
                   <a
                     href="/contact"
-                    className="flex items-center gap-2 border border-white/20 text-white text-[15px] font-medium px-8 py-3.5 rounded-full hover:bg-white/10 transition-all duration-200"
+                    className="w-full sm:w-auto justify-center flex items-center gap-2 border border-white/20 text-white text-[15px] font-medium px-8 py-3.5 rounded-full hover:bg-white/10 transition-all duration-200"
                   >
                     <MessageSquare size={15} />
                     Contact us
                   </a>
                 </div>
                 {/* Email input */}
-                <div className="mt-8 flex items-center justify-center gap-3 max-w-[400px] mx-auto">
+                <div className="mt-7 sm:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 w-full max-w-[400px] mx-auto">
                   <input
                     type="email"
                     placeholder="Enter your email"
-                    className="flex-1 bg-white/10 border border-white/20 text-white placeholder-white/40 text-[14px] px-4 py-3 rounded-full outline-none focus:border-white/40 transition-colors"
+                    className="flex-1 min-w-0 bg-white/10 border border-white/20 text-white placeholder-white/40 text-[14px] px-4 py-3 rounded-full outline-none focus:border-white/40 transition-colors"
                   />
                   <button className="bg-white text-[#1A1A1A] text-[14px] font-semibold px-5 py-3 rounded-full hover:bg-[#F0EDE8] transition-colors whitespace-nowrap">
                     Send

@@ -94,6 +94,10 @@ for (const marker of [
   "pg_advisory_xact_lock",
   "revoked_by",
   "p_request_hash",
+  "v_existing_audit",
+  "v_existing_session.token_hash",
+  "auth_user_id",
+  "requested_ttl_seconds",
 ]) {
   if (!migration.includes(marker)) {
     throw new Error(`Phase 2B lifecycle marker is missing: ${marker}`);

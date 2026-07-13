@@ -33,9 +33,10 @@ Current Supabase posture:
   `supabase/migrations/20260710053837_phase1_identity_scope_session_audit_mapping.sql`.
 - The migration and fake-only seed pass static, PGlite, disposable local
   Supabase reset, assertion, rollback, reapply, and database-lint gates.
-- The non-default session adapter passes a real disposable-local PostgREST gate
-  for create, hashed-token storage, atomic resolve, expiry, live scope refresh,
-  revocation, and browser-role denial.
+- The non-default session adapter has a disposable-local PostgREST gate for
+  create, hashed-token storage, atomic resolve, expiry, live scope refresh,
+  revocation, and browser-role denial. Corrected-migration database acceptance
+  remains open under the current master-plan checkpoint.
 - The migration is not applied to the linked or any shared Supabase project.
 - Normalized Supabase/Postgres tables and complete RLS policies are not yet the production source of truth.
 - Memory-backed Supabase Auth sessions still derive compatibility roles from

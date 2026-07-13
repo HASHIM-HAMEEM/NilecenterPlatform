@@ -209,6 +209,25 @@ Optional fields:
 - lead/application/placement references
 - country and timezone where available
 
+Private intake document metadata:
+
+- Scoped Registrar and Super Admin workflows may record one pending metadata
+  row for profile photo, passport, national ID, birth certificate, guardian ID,
+  or consent evidence through `student.document.add`.
+- Accepted metadata is limited to PDF, JPEG, PNG, or WebP files up to 10 MB.
+  The alpha stores no bytes, base64 content, document number, or public URL; the
+  record remains `pending_storage` until private production storage is
+  separately approved.
+- Student self-service can see its own rows. Teacher, HOD, and Branch Admin
+  academic projections exclude restricted documents, legal identity fields,
+  guardian contact, and admissions notes.
+- Repository event evidence is redacted for admissions, profile, message, and
+  submission actions so contact data and filenames are not duplicated into the
+  event payload.
+- Date-of-birth-derived minor status and a normalized guardian relationship are
+  still required production follow-ups. The current compatibility model retains
+  the legacy age-group field and must not be treated as legal age evidence.
+
 Branch/department scope:
 
 - A student belongs to a branch through the linked user.
@@ -258,6 +277,8 @@ Audit logs generated:
 - `message.sent`
 - `notification.read`
 - `report.preset.saved`
+- `student.document_metadata_added` when scoped staff records pending private
+  document metadata
 
 Current status:
 

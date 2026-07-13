@@ -38,6 +38,12 @@ const promotionCommandLabels: Record<string, string> = {
   attendance_exception: "attendance-exception command",
 };
 
+function promotionIdempotencyKey(detail: FormSubmissionDetail) {
+  const failed = detail.promotions.find(item => item.status === "failed");
+  const base = `promotion:${detail.submission.id}:${detail.submission.revision}`;
+  return failed ? `${base}:retry:${failed.commandId}` : base;
+}
+
 export default function NileFormsReviewDetailPage({
   role,
   submissionId,
@@ -88,6 +94,9 @@ export default function NileFormsReviewDetailPage({
         "attendance_exception",
       ].includes(detail.definition.key)
     : false;
+  const failedPromotion = detail?.promotions.find(
+    item => item.status === "failed"
+  );
 
   const decide = async (decision: "under_review" | "accepted" | "rejected") => {
     if (!detail) return;
@@ -113,11 +122,27 @@ export default function NileFormsReviewDetailPage({
     setMessage("");
     const response = await promoteFormSubmissionRequest(detail.submission.id, {
       expectedRevision: detail.submission.revision,
-      idempotencyKey: `promotion:${detail.submission.id}:${detail.submission.revision}`,
+      idempotencyKey: promotionIdempotencyKey(detail),
     });
     setBusy(false);
     if (!response.ok) {
       setMessage(response.error ?? "The submission could not be promoted.");
+      return;
+    }
+    if (response.data?.status === "failed") {
+      setDetail(current =>
+        current
+          ? {
+              ...current,
+              promotions: [
+                response.data!,
+                ...current.promotions.filter(
+                  item => item.id !== response.data!.id
+                ),
+              ],
+            }
+          : current
+      );
       return;
     }
     setReload(value => value + 1);
@@ -312,14 +337,29 @@ export default function NileFormsReviewDetailPage({
                   <h2>{canPromote ? "Promote" : "Accepted evidence"}</h2>
                 </header>
                 {canPromote ? (
-                  <button
-                    type="button"
-                    className="platform-primary-button"
-                    disabled={busy}
-                    onClick={promote}
-                  >
-                    <Send size={16} /> Promote to workflow
-                  </button>
+                  <>
+                    {failedPromotion ? (
+                      <p className="nile-form-notice is-error" role="alert">
+                        Promotion failed:{" "}
+                        {failedPromotion.error ?? "Try again."}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="platform-primary-button"
+                      disabled={busy}
+                      onClick={promote}
+                    >
+                      {failedPromotion ? (
+                        <RefreshCw size={16} />
+                      ) : (
+                        <Send size={16} />
+                      )}
+                      {failedPromotion
+                        ? "Retry promotion"
+                        : "Promote to workflow"}
+                    </button>
+                  </>
                 ) : (
                   <p>This response remains versioned evidence.</p>
                 )}

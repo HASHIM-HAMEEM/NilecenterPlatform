@@ -11,6 +11,7 @@ const DATA_DIR = process.env.NILE_LOCAL_DATA_DIR?.trim()
     : path.resolve(process.cwd(), ".local-data");
 const STATE_FILE = path.join(DATA_DIR, "platform-state.json");
 const DEFAULT_STATE_ID = "nile-learn-demo";
+const NILE_FORMS_PERMISSION_CATALOG_VERSION = 1;
 
 export type PersistenceMode = "supabase" | "local";
 
@@ -102,13 +103,53 @@ function mergePortalSettings(
   return Array.from(merged.values());
 }
 
+function isNileFormsPermission(permission: string) {
+  return (
+    permission.startsWith("forms:") ||
+    permission.startsWith("form_submissions:")
+  );
+}
+
+function migrateNileFormsPermissionDefaults(
+  current: PlatformState["permissions"],
+  defaults: PlatformState["permissions"]
+): PlatformState["permissions"] {
+  return (Object.keys(defaults) as Array<keyof PlatformState["permissions"]>)
+    .reduce<PlatformState["permissions"]>((next, role) => {
+      next[role] = Array.from(
+        new Set([
+          ...(current[role] ?? []),
+          ...defaults[role].filter(isNileFormsPermission),
+        ])
+      );
+      return next;
+    }, {} as PlatformState["permissions"]);
+}
+
 export function normalizePlatformState(value: unknown): PlatformState {
   if (!value || typeof value !== "object") return cloneSeed();
   const seed = cloneSeed();
   const stored = value as Partial<PlatformState>;
+  const storedPermissionCatalogVersion = Number.isInteger(
+    stored.permissionCatalogVersion
+  )
+    ? Math.max(0, stored.permissionCatalogVersion ?? 0)
+    : 0;
+  const permissions =
+    storedPermissionCatalogVersion < NILE_FORMS_PERMISSION_CATALOG_VERSION
+      ? migrateNileFormsPermissionDefaults(
+          stored.permissions ?? seed.permissions,
+          seed.permissions
+        )
+      : stored.permissions ?? seed.permissions;
   return {
     ...seed,
     ...stored,
+    permissionCatalogVersion: Math.max(
+      storedPermissionCatalogVersion,
+      NILE_FORMS_PERMISSION_CATALOG_VERSION
+    ),
+    permissions,
     users: mergeById(seed.users, stored.users),
     staffProfiles: mergeById(seed.staffProfiles, stored.staffProfiles),
     courseRuns: mergeById(seed.courseRuns, stored.courseRuns),

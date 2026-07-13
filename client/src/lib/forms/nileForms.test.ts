@@ -60,6 +60,41 @@ describe("Nile Forms schema and answer authority", () => {
     });
   });
 
+  it("rejects condition operators and values that do not match the source field", () => {
+    const content: FormVersionContent = {
+      ...structuredClone(nileFormsTemplateContent.support),
+      logic: [
+        {
+          id: "invalid_typed_logic",
+          order: 1,
+          when: {
+            mode: "all",
+            conditions: [
+              { fieldId: "urgent", operator: "equals", value: "" },
+              { fieldId: "category", operator: "greater_than", value: 2 },
+            ],
+          },
+          action: { type: "show", targetFieldId: "details" },
+        },
+      ],
+    };
+
+    const result = validateFormVersionContent(content);
+    expect(result.ok).toBe(false);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        {
+          path: "logic.0.when",
+          message: "Boolean fields require a boolean value",
+        },
+        {
+          path: "logic.0.when",
+          message: "greater_than is not supported for single_choice",
+        },
+      ])
+    );
+  });
+
   it("applies rules in deterministic order and clears hidden values", () => {
     const content: FormVersionContent = {
       ...structuredClone(nileFormsTemplateContent.support),

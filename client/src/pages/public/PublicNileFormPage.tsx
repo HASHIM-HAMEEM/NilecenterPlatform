@@ -4,6 +4,10 @@ import { Link } from "wouter";
 
 import NileFormRenderer from "@/components/forms/NileFormRenderer";
 import { fetchPublicForm } from "@/lib/forms/api";
+import {
+  getLocalizedText,
+  type FormLocale,
+} from "@shared/nileForms";
 import type { FormResponderBundle } from "../../../../server/nileFormsService";
 
 export default function PublicNileFormPage({ slug }: { slug: string }) {
@@ -11,6 +15,7 @@ export default function PublicNileFormPage({ slug }: { slug: string }) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
+  const [locale, setLocale] = useState<FormLocale>("en");
 
   useEffect(() => {
     let cancelled = false;
@@ -25,6 +30,7 @@ export default function PublicNileFormPage({ slug }: { slug: string }) {
         return;
       }
       setBundle(response.data);
+      setLocale(response.data.version.content.defaultLanguage);
       setStatus("ready");
     };
     void load();
@@ -64,16 +70,32 @@ export default function PublicNileFormPage({ slug }: { slug: string }) {
         </section>
       ) : (
         <div className="nile-public-form-layout">
-          <aside className="nile-public-form-context">
-            <span className="nile-forms-eyebrow">Nile Forms</span>
-            <h2>{bundle.definition.title}</h2>
-            <p>{bundle.version.content.description.en}</p>
+          <aside
+            className="nile-public-form-context"
+            lang={locale}
+            dir={locale === "ar" ? "rtl" : "ltr"}
+          >
+            <span className="nile-forms-eyebrow">
+              {locale === "ar" ? "نماذج نايل" : "Nile Forms"}
+            </span>
+            <h2>{getLocalizedText(bundle.version.content.title, locale)}</h2>
+            <p>
+              {getLocalizedText(bundle.version.content.description, locale)}
+            </p>
             <div>
               <ShieldCheck size={17} />
-              <span>Version {bundle.version.versionNumber}</span>
+              <span>
+                {locale === "ar" ? "الإصدار" : "Version"}{" "}
+                {bundle.version.versionNumber}
+              </span>
             </div>
           </aside>
-          <NileFormRenderer bundle={bundle} mode="public" slug={slug} />
+          <NileFormRenderer
+            bundle={bundle}
+            mode="public"
+            slug={slug}
+            onLocaleChange={setLocale}
+          />
         </div>
       )}
     </main>

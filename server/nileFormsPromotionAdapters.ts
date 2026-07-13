@@ -12,10 +12,7 @@ import {
   normalizePlatformState,
 } from "./platformRepository.js";
 import { applyPlatformLearningAction } from "./platformState.js";
-import type {
-  FormPromotion,
-  FormSubmission,
-} from "../shared/nileForms.js";
+import type { FormPromotion, FormSubmission } from "../shared/nileForms.js";
 
 function answerText(submission: FormSubmission, fieldId: string) {
   const value = submission.answers[fieldId];
@@ -26,12 +23,23 @@ function answerBoolean(submission: FormSubmission, fieldId: string) {
   return submission.answers[fieldId] === true;
 }
 
-function commandId(submissionId: string) {
-  return `form_command_${submissionId}_${crypto.randomUUID().replaceAll("-", "")}`;
+function promotionSourceKey(
+  adapter: FormPromotion["adapter"],
+  submissionId: string
+) {
+  return `nile_form:${adapter}:${submissionId}`;
+}
+
+function commandId(adapter: FormPromotion["adapter"], submissionId: string) {
+  return `form_command_${adapter.replaceAll(".", "_")}_${submissionId}`;
 }
 
 async function applyInternalCompatibilityCommand<T>(
-  mutate: (state: PlatformState) => { entityType: string; entityId: string; result: T }
+  mutate: (state: PlatformState) => {
+    entityType: string;
+    entityId: string;
+    result: T;
+  }
 ) {
   const repository = getPlatformStateRepository();
   const snapshot = await repository.readSnapshot();
@@ -46,6 +54,7 @@ export async function executeNileFormPromotion(
   submission: FormSubmission,
   session: ServerSession
 ) {
+  const sourceKey = promotionSourceKey(adapter, submission.id);
   if (adapter === "lead.create") {
     const action: PlatformWorkflowAction = {
       type: "lead.create",
@@ -55,10 +64,11 @@ export async function executeNileFormPromotion(
       subject: answerText(submission, "course_interest"),
       notes: answerText(submission, "notes"),
       source: "trial_form",
+      sourceKey,
     };
     const applied = await applyPlatformLearningAction(action, session);
     return {
-      commandId: commandId(submission.id),
+      commandId: commandId(adapter, submission.id),
       entityType: applied.result.entityType,
       entityId: applied.result.entityId,
     };
@@ -76,10 +86,11 @@ export async function executeNileFormPromotion(
       schedulePreference: answerText(submission, "schedule_preference"),
       notes: answerText(submission, "goals"),
       source: "website",
+      sourceKey,
     };
     const applied = await applyPlatformLearningAction(action, session);
     return {
-      commandId: commandId(submission.id),
+      commandId: commandId(adapter, submission.id),
       entityType: applied.result.entityType,
       entityId: applied.result.entityId,
     };
@@ -95,10 +106,11 @@ export async function executeNileFormPromotion(
       preferredDate: answerText(submission, "preferred_date"),
       currentLevel: answerText(submission, "current_level"),
       branchId: submission.branchId,
+      sourceKey,
     };
     const applied = await applyPlatformLearningAction(action, session);
     return {
-      commandId: commandId(submission.id),
+      commandId: commandId(adapter, submission.id),
       entityType: applied.result.entityType,
       entityId: applied.result.entityId,
     };
@@ -106,7 +118,9 @@ export async function executeNileFormPromotion(
 
   if (adapter === "support_ticket.create") {
     if (!submission.respondentUserId) {
-      throw new Error("Support promotion requires an authenticated respondent.");
+      throw new Error(
+        "Support promotion requires an authenticated respondent."
+      );
     }
     const applied = await applyInternalCompatibilityCommand(state => {
       const ticket = applyCreateSupportTicket(
@@ -118,6 +132,7 @@ export async function executeNileFormPromotion(
           category: answerText(submission, "category"),
           priority: answerBoolean(submission, "urgent") ? "high" : "normal",
           actorId: session.userId,
+          sourceKey,
         },
         {
           createId: prefix =>
@@ -125,23 +140,30 @@ export async function executeNileFormPromotion(
           now: () => new Date().toISOString(),
         }
       );
-      return { entityType: "SupportTicket", entityId: ticket.id, result: ticket };
+      return {
+        entityType: "SupportTicket",
+        entityId: ticket.id,
+        result: ticket,
+      };
     });
     return {
-      commandId: commandId(submission.id),
+      commandId: commandId(adapter, submission.id),
       entityType: applied.entityType,
       entityId: applied.entityId,
     };
   }
 
   if (!submission.respondentUserId) {
-    throw new Error("Attendance promotion requires an authenticated respondent.");
+    throw new Error(
+      "Attendance promotion requires an authenticated respondent."
+    );
   }
   const applied = await applyInternalCompatibilityCommand(state => {
     const student = state.students.find(
       item => item.userId === submission.respondentUserId
     );
-    if (!student) throw new Error("Attendance respondent has no student profile.");
+    if (!student)
+      throw new Error("Attendance respondent has no student profile.");
     const request = applySubmitAttendanceException(
       state,
       {
@@ -149,6 +171,7 @@ export async function executeNileFormPromotion(
         reason: answerText(submission, "reason"),
         studentId: student.id,
         actorId: submission.respondentUserId,
+        sourceKey,
       },
       {
         createId: prefix =>
@@ -163,7 +186,7 @@ export async function executeNileFormPromotion(
     };
   });
   return {
-    commandId: commandId(submission.id),
+    commandId: commandId(adapter, submission.id),
     entityType: applied.entityType,
     entityId: applied.entityId,
   };

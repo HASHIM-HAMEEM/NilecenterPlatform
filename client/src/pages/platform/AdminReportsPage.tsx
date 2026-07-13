@@ -458,6 +458,7 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
     classes: "Class status",
     "saved-views": "Saved view use",
   };
+  const reportInsightVariant = view === "overview" ? "bars" : "distribution";
 
   const overview = (
     <DataTableCard
@@ -964,7 +965,7 @@ export default function AdminReportsPage({ view }: AdminReportsPageProps) {
             }
             description="Use this compact summary to focus the next operational review."
             points={reportInsightPoints}
-            variant="bars"
+            variant={reportInsightVariant}
             tone="slate"
             testId="admin-reports-insight"
           />

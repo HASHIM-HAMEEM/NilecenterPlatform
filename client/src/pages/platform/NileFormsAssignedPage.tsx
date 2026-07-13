@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -37,6 +37,13 @@ export default function NileFormsAssignedPage({
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
+  const initialAnswers = useMemo(() => {
+    if (typeof window === "undefined") return {};
+    const attendanceRecord = new URLSearchParams(window.location.search).get(
+      "attendanceRecord"
+    );
+    return attendanceRecord ? { attendance_record: attendanceRecord } : {};
+  }, [publicationId]);
   const activePreviousSubmission = selected?.previousSubmissions.find(
     item => item.status !== "withdrawn"
   );
@@ -130,6 +137,7 @@ export default function NileFormsAssignedPage({
             <NileFormRenderer
               bundle={selected}
               mode="assigned"
+              initialAnswers={initialAnswers}
               onSubmitted={() => setReload(value => value + 1)}
             />
           </section>

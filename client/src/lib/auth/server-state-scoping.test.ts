@@ -108,6 +108,7 @@ describe("server platform state read scopes", () => {
 
     expect(ids(scoped.students)).toEqual(["stu_demo"]);
     expect(ids(scoped.users)).toEqual([
+      "usr_registrar_demo",
       "usr_registrar_online_demo",
       "usr_student_demo",
       "usr_teacher_demo",
@@ -126,6 +127,41 @@ describe("server platform state read scopes", () => {
       true
     );
     expect(scoped.auditLogs).toEqual([]);
+  });
+
+  it("returns message bodies only to their direct participants outside Super Admin", () => {
+    const state = JSON.parse(JSON.stringify(seedPlatformState));
+    state.messages = [
+      {
+        id: "msg_private_alex",
+        fromUserId: "usr_teacher_alex_demo",
+        toUserId: "usr_student_alex_demo",
+        subject: "Private Alexandria update",
+        body: "This message must not appear in another user's inbox.",
+        read: false,
+        createdAt: "2026-07-12T12:00:00.000Z",
+      },
+      ...state.messages,
+    ];
+
+    (["student", "teacher", "registrar", "headofdepartment", "branchadmin"] as const).forEach(
+      role => {
+        const scoped = scopePlatformStateForSession(state, sessionFor(role));
+        expect(
+          scoped.messages.every(
+            message =>
+              message.fromUserId === sessionFor(role).userId ||
+              message.toUserId === sessionFor(role).userId
+          )
+        ).toBe(true);
+      }
+    );
+
+    expect(
+      scopePlatformStateForSession(state, sessionFor("teacher")).messages.some(
+        message => message.id === "msg_private_alex"
+      )
+    ).toBe(false);
   });
 
   it("returns only classes, students, and assessment work assigned to the teacher", () => {

@@ -502,7 +502,7 @@ export default function HodWorkflowPage({
                 )
                 .map(run => (
                   <option key={run.id} value={run.id}>
-                    {findRunTitle(scope, run.id)}
+                    {run.term}
                   </option>
                 ))}
             </select>
@@ -1211,7 +1211,7 @@ function AssessmentsMain({
             >
               {availableRuns.map(run => (
                 <option key={run.id} value={run.id}>
-                  {findRunTitle(scope, run.id)}
+                  {run.term}
                 </option>
               ))}
             </select>

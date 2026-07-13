@@ -2,8 +2,8 @@
 
 ## SPEC
 
-Implement one approved Nile Forms slice under `ADR-006` and the current
-checkpoint in `docs/NILE_LEARN_MASTER_PLAN.md`.
+Implement one approved Nile Forms slice under `ADR-006`, `ADR-007`, and the
+current checkpoint in `docs/NILE_LEARN_MASTER_PLAN.md`.
 
 Nile Forms is a schema-driven collection module, not a free-position form
 designer, workflow canvas, quiz engine, payment surface, provider connector, or
@@ -68,5 +68,5 @@ must not contain the submission inbox or a general workflow canvas.
 
 Run focused schema/domain/server/UI tests, TypeScript, the full unit suite, build,
 the relevant local schema gates, browser QA, and `scripts/verify.sh`. Preserve
-the accepted 1,501/0 portal baseline unless an explicit reviewed count change is
+the accepted 1,598/0 portal baseline unless an explicit reviewed count change is
 approved.
