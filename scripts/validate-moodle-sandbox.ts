@@ -1,3 +1,6 @@
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
 import {
   createMoodleClientFromEnvironment,
   getMoodleServerStatus,
@@ -7,6 +10,10 @@ import {
   type MoodleErrorCode,
   type MoodleReadFunction,
 } from "../server/moodleClient";
+import {
+  parseMoodleReadResponse,
+  type MoodleProjectionFunction,
+} from "../server/moodleReadModels";
 
 type MoodleCallParameters = NonNullable<Parameters<MoodleClient["call"]>[1]>;
 type PayloadShape = "array" | "object";
@@ -49,9 +56,58 @@ type FunctionSpec = {
   count: (payload: unknown) => number | null;
 };
 
+type ReadClient = Pick<MoodleClient, "call" | "probe">;
+type ReadResponseParser = (
+  functionName: MoodleProjectionFunction,
+  payload: unknown
+) => unknown;
+type ValidationDependencies = {
+  createClient?: (env: NodeJS.ProcessEnv) => ReadClient;
+  parseResponse?: ReadResponseParser;
+};
+
+export type MoodleSandboxReadValidationResult = Readonly<{
+  exitCode: 0 | 1 | 2;
+  results: readonly FunctionSummary[];
+}>;
+
 const MAX_MOODLE_ID = 2_147_483_647;
 const MAX_SCORM_ATTEMPT_NUMBER = 10_000;
 const ENROLLED_USER_LIMIT = 100;
+export const MOODLE_PROJECTION_FUNCTIONS = MOODLE_READ_FUNCTIONS.slice(
+  1
+) as readonly MoodleProjectionFunction[];
+
+const forbiddenProjectionKeys = new Set([
+  "answer",
+  "address",
+  "city",
+  "content",
+  "correctanswer",
+  "customfields",
+  "description",
+  "email",
+  "externalurl",
+  "filename",
+  "fileurl",
+  "filepath",
+  "html",
+  "intro",
+  "overviewfiles",
+  "packageurl",
+  "parameters",
+  "password",
+  "phone1",
+  "phone2",
+  "plugins",
+  "profileimageurl",
+  "profileimageurlsmall",
+  "responsefileareas",
+  "subnet",
+  "summary",
+  "url",
+  "useranswer",
+]);
 
 const fixtureEnvironments = [
   "MOODLE_FIXTURE_CATEGORY_ID",
@@ -136,6 +192,21 @@ function scormTrackCount(payload: unknown) {
 function warningCount(payload: unknown) {
   if (!isRecord(payload) || !Array.isArray(payload.warnings)) return 0;
   return payload.warnings.length;
+}
+
+function assertSanitizedProjection(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach(assertSanitizedProjection);
+    return;
+  }
+  if (!isRecord(value)) return;
+
+  for (const [key, child] of Object.entries(value)) {
+    if (forbiddenProjectionKeys.has(key.toLowerCase())) {
+      throw new Error("Unsafe Moodle projection.");
+    }
+    assertSanitizedProjection(child);
+  }
 }
 
 const functionSpecs = {
@@ -527,19 +598,27 @@ function configurationErrorCode(env: NodeJS.ProcessEnv): SummaryErrorCode {
     : "configuration";
 }
 
-async function main() {
-  const env = process.env;
+export async function runMoodleSandboxReadValidation(
+  env: NodeJS.ProcessEnv = process.env,
+  dependencies: ValidationDependencies = {}
+): Promise<MoodleSandboxReadValidationResult> {
   if (!getMoodleServerStatus(env).configured) {
-    emit(notRunSummaries(configurationErrorCode(env)), 1);
-    return;
+    return {
+      exitCode: 1,
+      results: notRunSummaries(configurationErrorCode(env)),
+    };
   }
 
-  let client: MoodleClient;
+  let client: ReadClient;
   try {
-    client = createMoodleClientFromEnvironment(env);
+    client = (dependencies.createClient ?? createMoodleClientFromEnvironment)(
+      env
+    );
   } catch (error) {
-    emit(notRunSummaries(sanitizedErrorCode(error)), 1);
-    return;
+    return {
+      exitCode: 1,
+      results: notRunSummaries(sanitizedErrorCode(error)),
+    };
   }
 
   const results: FunctionSummary[] = [];
@@ -566,8 +645,7 @@ async function main() {
           shape: null,
         });
       }
-      emit(results, 1);
-      return;
+      return { exitCode: 1, results };
     }
   } catch (error) {
     const errorCode = sanitizedErrorCode(error);
@@ -587,15 +665,15 @@ async function main() {
         shape: null,
       });
     }
-    emit(results, 1);
-    return;
+    return { exitCode: 1, results };
   }
 
   const fixtures = parseFixtureEnvironment(env);
   let hasUnexpectedFailure = false;
   let hasFixtureFailure = false;
 
-  for (const functionName of MOODLE_READ_FUNCTIONS.slice(1)) {
+  const parseResponse = dependencies.parseResponse ?? parseMoodleReadResponse;
+  for (const functionName of MOODLE_PROJECTION_FUNCTIONS) {
     const spec = functionSpecs[functionName];
     const fixtureError = fixtureErrorCode(spec.fixtures, fixtures.issues);
     if (fixtureError) {
@@ -615,6 +693,8 @@ async function main() {
         functionName,
         spec.parameters(fixtures.values as FixtureValues)
       );
+      const projection = parseResponse(functionName, payload);
+      assertSanitizedProjection(projection);
       const shape = payloadShape(payload);
       const count = spec.count(payload);
       if (shape !== spec.expectedShape || count === null) {
@@ -658,9 +738,22 @@ async function main() {
     }
   }
 
-  emit(results, hasUnexpectedFailure ? 1 : hasFixtureFailure ? 2 : 0);
+  return {
+    exitCode: hasUnexpectedFailure ? 1 : hasFixtureFailure ? 2 : 0,
+    results,
+  };
 }
 
-void main().catch(() => {
-  emit(notRunSummaries("invalid_response"), 1);
-});
+async function main() {
+  try {
+    const result = await runMoodleSandboxReadValidation();
+    emit([...result.results], result.exitCode);
+  } catch {
+    emit(notRunSummaries("invalid_response"), 1);
+  }
+}
+
+const entry = process.argv[1];
+if (entry && pathToFileURL(resolve(entry)).href === import.meta.url) {
+  void main();
+}

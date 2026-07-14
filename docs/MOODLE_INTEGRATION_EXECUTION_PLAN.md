@@ -11,8 +11,10 @@ controlled write phase is possible without dual ownership.
 
 This plan follows `docs/decisions/ADR-003-moodle-read-projection.md`. The only
 write exception is the synthetic, CLI-only M2B proof accepted by
-`docs/decisions/ADR-008-moodle-synthetic-sandbox-write-proof.md`. It does not
-authorize production writes or bypass the sequencing in
+`docs/decisions/ADR-008-moodle-synthetic-sandbox-write-proof.md`, followed by
+the isolated M2C provider-contract campaign accepted by
+`docs/decisions/ADR-009-moodle-comprehensive-sandbox-contract-campaign.md`.
+Neither authorizes production writes or bypasses the sequencing in
 `docs/NILE_LEARN_MASTER_PLAN.md`.
 
 ## Verified Sandbox Contract
@@ -123,7 +125,7 @@ Status: accepted as a disabled local foundation on 2026-07-12.
 - Prove behavior with deterministic mocked provider fixtures.
 
 Acceptance evidence: 16 focused Moodle tests, two independent boundary reviews
-with no remaining high or medium finding, and the protected 1,598/0 portal
+with no remaining high or medium finding, and the protected 1,509/0 portal
 matrix in
 `output/playwright/moodle-read-foundation-20260712/portal-qa-summary.json`.
 No live service token or projection was used for that M1 acceptance.
@@ -191,8 +193,10 @@ course enrolment mapping after Nile Learn activation.
 
 ### M2B - Synthetic Sandbox Write Proof
 
-Status: approved for the dedicated practice sandbox only on 2026-07-13; not
-implemented or accepted until its validator and cleanup evidence pass.
+Status: accepted as dedicated-practice-sandbox evidence on 2026-07-13. The
+redacted execution and teardown record is
+`docs/moodle-m2b-write-proof-evidence-20260713.md`. This is not production
+integration acceptance.
 
 - Keep M2 read credentials and service unchanged.
 - Create a separate disabled-by-default server client and an
@@ -201,6 +205,11 @@ implemented or accepted until its validator and cleanup evidence pass.
 - Require the approved hostname, a separate token and service name, an exact
   synthetic acknowledgement, the existing synthetic course ID, and a reviewed
   Moodle learner role ID.
+- Generate a fresh canonical `NILE-M2B-*` marker by default for a one-process
+  run. If cross-process recovery is required, set
+  `MOODLE_SANDBOX_WRITE_RUN_MARKER` before the first invocation and reuse only
+  that same canonical marker after interruption so the next process can
+  reconcile the same fake user and group keys before retrying or cleaning up.
 - Create or reconcile one marker-bound fake user, update one harmless display
   field, manually enrol the user, create one marker-bound group, and add the
   user to that group.
@@ -218,6 +227,52 @@ implemented or accepted until its validator and cleanup evidence pass.
 M2B excludes course/content/activity creation, files, grades, attempts,
 submissions, messaging, attendance, calendars, role or token administration,
 production runtime wiring, normalized persistence, and real user data.
+
+### M2C - Comprehensive Synthetic Provider Contracts
+
+Status: approved and in progress on the dedicated practice sandbox. This is not
+production integration acceptance.
+
+M2C-R reached a sanitized partial result of 26 passing reads and five
+fixture-only H5P/SCORM gaps on 2026-07-13. The disposable Resource fixture,
+temporary course enrolment, service, and token were removed, and the retired
+token was rejected. The exact partial result and stop decision are recorded in
+`docs/moodle-m2c-read-closure-evidence-20260713.md`. M2C-R is not accepted, and
+later M2C lanes remain blocked until a permitted upload-capable fixture path
+allows a complete 31/31 run and repeated cleanup.
+
+Run M2C in serial, isolated lanes:
+
+1. **M2C-R read closure**: add sanitized typed models for Resource, SCORM, and
+   H5P, create disposable fixtures, and make every one of the 31 approved read
+   functions pass the same parser, privacy, boundedness, and fixture contract.
+2. **M2C-C content fixtures**: prove disposable course and content fixture
+   create/read/update/remove behavior without making an administrator token a
+   connector credential.
+3. **M2C-L learner interactions**: use separate synthetic learner services for
+   assignment submission, quiz attempt, Lesson attempt, SCORM tracking, H5P
+   attempt where supported, and manual completion.
+4. **M2C-O outcomes**: use a separate synthetic teacher/outcome service for
+   assignment grading, feedback, gradebook, completion, and report inputs.
+5. **M2C-P operations evidence**: test only bounded synthetic Moodle messaging
+   and calendar behavior whose durable side effects and cleanup can be recorded
+   honestly.
+6. **M2C-D authority denials**: prove that attendance, certificates, Nile
+   messages, Nile schedules, private student documents, and portal actions do
+   not gain Moodle write authority.
+
+Each lane has an exact service-function allowlist, separate expiring token,
+synthetic persona, marker-bound fixture set, before-state hashes, two-pass
+ensure or replay evidence where safe, timeout reconciliation, ordered cleanup,
+after-state hashes, repeated cleanup, and final invalid-token proof. Store no
+credentials or raw provider payloads. Preserve semantic ordering in hashes and
+record per-family hashes plus one combined root.
+
+M2C must not activate provider persistence, portal projections, direct portal
+writes, a runtime flag, or remote Supabase behavior. Quiz, Lesson, SCORM, H5P,
+grade history, completion events, messages, and notifications can leave durable
+provider history; use disposable fixtures and report restoration separately
+from deletion.
 
 ### M3 - Provider-Neutral Projection Persistence
 

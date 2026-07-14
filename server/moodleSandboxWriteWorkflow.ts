@@ -217,7 +217,7 @@ export async function runMoodleSandboxWriteWorkflow({
     ]);
     if (
       text(item.username) !== text(user.username) ||
-      text(item.email) !== text(user.email) ||
+      (text(item.email) !== "" && text(item.email) !== text(user.email)) ||
       !text(user.email).toLowerCase().endsWith("@example.invalid") ||
       text(item.lastName) !== text(user.lastName) ||
       text(item.marker) !== marker ||

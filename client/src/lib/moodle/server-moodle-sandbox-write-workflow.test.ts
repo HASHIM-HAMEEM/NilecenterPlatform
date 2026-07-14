@@ -44,6 +44,15 @@ type ProviderGroup = {
   idnumber: string;
 };
 
+type FakeMutation =
+  | "createUser"
+  | "deleteUser"
+  | "unenrolUser"
+  | "deleteGroup"
+  | "deleteGroupMember";
+
+type FakeUnknownOutcome = "applied_timeout" | "absent_timeout";
+
 type FakeProviderOptions = {
   users?: ProviderUser[];
   groups?: ProviderGroup[];
@@ -51,6 +60,8 @@ type FakeProviderOptions = {
   memberships?: Array<{ userId: number; groupId: number }>;
   failAddMembership?: boolean;
   retainUserOnDelete?: boolean;
+  unknownOutcomes?: Partial<Record<FakeMutation, FakeUnknownOutcome>>;
+  failReconciliationReadAfter?: FakeMutation;
 };
 
 function fakeProvider(options: FakeProviderOptions = {}) {
@@ -67,6 +78,43 @@ function fakeProvider(options: FakeProviderOptions = {}) {
   const mutations: string[] = [];
   let nextUserId = 44;
   let nextGroupId = 77;
+  const unknownOutcomes = new Map<FakeMutation, FakeUnknownOutcome>(
+    Object.entries(options.unknownOutcomes ?? {}) as Array<
+      [FakeMutation, FakeUnknownOutcome]
+    >
+  );
+  let failNextReconciliationRead = false;
+  let reconciliationReadFailureScheduled = false;
+
+  const mutation = <T>(name: FakeMutation, apply: () => T): T => {
+    mutations.push(name);
+    const unknownOutcome = unknownOutcomes.get(name);
+    unknownOutcomes.delete(name);
+
+    const scheduleReconciliationReadFailure = () => {
+      if (
+        options.failReconciliationReadAfter === name &&
+        !reconciliationReadFailureScheduled
+      ) {
+        failNextReconciliationRead = true;
+        reconciliationReadFailureScheduled = true;
+      }
+    };
+    const timeout = () =>
+      Object.assign(new Error("Injected provider timeout."), {
+        code: "timeout",
+      });
+
+    if (unknownOutcome === "absent_timeout") {
+      scheduleReconciliationReadFailure();
+      throw timeout();
+    }
+
+    const result = apply();
+    scheduleReconciliationReadFailure();
+    if (unknownOutcome === "applied_timeout") throw timeout();
+    return result;
+  };
 
   const readProbe = async () => ({
     mode: "read_only" as const,
@@ -148,6 +196,10 @@ function fakeProvider(options: FakeProviderOptions = {}) {
       };
     },
     async findUsersByMarker(requestedMarker) {
+      if (failNextReconciliationRead) {
+        failNextReconciliationRead = false;
+        throw new Error("Injected reconciliation read failure.");
+      }
       return state.users
         .filter(user => user.idnumber === requestedMarker)
         .map(user => ({
@@ -160,17 +212,18 @@ function fakeProvider(options: FakeProviderOptions = {}) {
         }));
     },
     async createUser(input) {
-      mutations.push("createUser");
-      const id = nextUserId++;
-      state.users.push({
-        id,
-        username: input.username,
-        firstname: input.firstName,
-        lastname: input.lastName,
-        email: input.email,
-        idnumber: input.marker,
+      return mutation("createUser", () => {
+        const id = nextUserId++;
+        state.users.push({
+          id,
+          username: input.username,
+          firstname: input.firstName,
+          lastname: input.lastName,
+          email: input.email,
+          idnumber: input.marker,
+        });
+        return { id, username: input.username };
       });
-      return { id, username: input.username };
     },
     async updateUser(input) {
       mutations.push("updateUser");
@@ -178,18 +231,18 @@ function fakeProvider(options: FakeProviderOptions = {}) {
       if (user) user.firstname = input.firstName;
     },
     async deleteUser(input) {
-      mutations.push("deleteUser");
-      if (!options.retainUserOnDelete) {
-        state.users = state.users.filter(user => user.id !== input.userId);
-      }
+      mutation("deleteUser", () => {
+        if (!options.retainUserOnDelete) {
+          state.users = state.users.filter(user => user.id !== input.userId);
+        }
+      });
     },
     async enrolUser(input) {
       mutations.push("enrolUser");
       state.enrolledUserIds.add(input.userId);
     },
     async unenrolUser(input) {
-      mutations.push("unenrolUser");
-      state.enrolledUserIds.delete(input.userId);
+      mutation("unenrolUser", () => state.enrolledUserIds.delete(input.userId));
     },
     async createGroup(input) {
       mutations.push("createGroup");
@@ -203,8 +256,9 @@ function fakeProvider(options: FakeProviderOptions = {}) {
       return { id, name: input.name };
     },
     async deleteGroup(input) {
-      mutations.push("deleteGroup");
-      state.groups = state.groups.filter(group => group.id !== input.groupId);
+      mutation("deleteGroup", () => {
+        state.groups = state.groups.filter(group => group.id !== input.groupId);
+      });
     },
     async addGroupMember(input) {
       mutations.push("addGroupMember");
@@ -214,8 +268,9 @@ function fakeProvider(options: FakeProviderOptions = {}) {
       state.memberships.add(`${input.groupId}:${input.userId}`);
     },
     async deleteGroupMember(input) {
-      mutations.push("deleteGroupMember");
-      state.memberships.delete(`${input.groupId}:${input.userId}`);
+      mutation("deleteGroupMember", () =>
+        state.memberships.delete(`${input.groupId}:${input.userId}`)
+      );
     },
   };
 
@@ -322,6 +377,91 @@ describe("Moodle M2B synthetic sandbox write workflow", () => {
       )
     ).toHaveLength(2);
   });
+
+  it("reconciles a mutation applied before timeout without duplicating it", async () => {
+    const provider = fakeProvider({
+      unknownOutcomes: { createUser: "applied_timeout" },
+    });
+
+    const result = await runMoodleSandboxWriteWorkflow(
+      provider.workflowOptions
+    );
+
+    expect(
+      provider.mutations.filter(item => item === "createUser")
+    ).toHaveLength(1);
+    expect(
+      result.evidence.find(
+        item => item.operation === "user_create" && item.pass === 1
+      )?.outcome
+    ).toBe("reconciled");
+  });
+
+  it("retries a timed-out absent mutation only once and verifies the retry", async () => {
+    const provider = fakeProvider({
+      unknownOutcomes: { createUser: "absent_timeout" },
+    });
+
+    const result = await runMoodleSandboxWriteWorkflow(
+      provider.workflowOptions
+    );
+
+    expect(
+      provider.mutations.filter(item => item === "createUser")
+    ).toHaveLength(2);
+    expect(
+      result.evidence.find(
+        item => item.operation === "user_create" && item.pass === 1
+      )?.outcome
+    ).toBe("created");
+    expect(result.outcome).toBe("completed");
+  });
+
+  it("fails closed when an unknown outcome cannot be reconciled", async () => {
+    const provider = fakeProvider({
+      unknownOutcomes: { createUser: "applied_timeout" },
+      failReconciliationReadAfter: "createUser",
+    });
+
+    await expect(
+      runMoodleSandboxWriteWorkflow(provider.workflowOptions)
+    ).rejects.toMatchObject({ code: "write_failed" });
+    expect(
+      provider.mutations.filter(item => item === "createUser")
+    ).toHaveLength(1);
+    expect(provider.state.users).toEqual([]);
+  });
+
+  it.each([
+    ["membership", "deleteGroupMember", "membership_cleanup"],
+    ["group", "deleteGroup", "group_cleanup"],
+    ["enrolment", "unenrolUser", "enrolment_cleanup"],
+    ["user", "deleteUser", "user_cleanup"],
+  ] as const)(
+    "verifies an applied timeout during %s cleanup",
+    async (_resource, mutationName, operation) => {
+      const provider = fakeProvider({
+        unknownOutcomes: { [mutationName]: "applied_timeout" },
+      });
+
+      const result = await runMoodleSandboxWriteWorkflow(
+        provider.workflowOptions
+      );
+
+      expect(
+        provider.mutations.filter(item => item === mutationName)
+      ).toHaveLength(1);
+      expect(
+        result.evidence.find(item => item.operation === operation)?.outcome
+      ).toBe("reconciled");
+      expect(result.cleanup).toEqual({
+        membership: "absent",
+        group: "absent",
+        enrolment: "absent",
+        user: "absent",
+      });
+    }
+  );
 
   it("refuses ambiguous marker matches before any write", async () => {
     const { user } = adoptedFixtures();

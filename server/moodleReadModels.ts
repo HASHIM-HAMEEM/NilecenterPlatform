@@ -25,10 +25,16 @@ export type MoodleProjectionFunction =
   | "mod_quiz_get_quizzes_by_courses"
   | "mod_quiz_get_user_attempts"
   | "mod_quiz_get_attempt_review"
+  | "mod_h5pactivity_get_h5pactivities_by_courses"
+  | "mod_h5pactivity_get_attempts"
+  | "mod_h5pactivity_get_results"
+  | "mod_scorm_get_scorms_by_courses"
+  | "mod_scorm_get_scorm_sco_tracks"
   | "mod_lesson_get_lessons_by_courses"
   | "mod_lesson_get_user_grade"
   | "mod_book_get_books_by_courses"
   | "mod_page_get_pages_by_courses"
+  | "mod_resource_get_resources_by_courses"
   | "mod_url_get_urls_by_courses";
 
 export type ExternalIdentityReadModel = Readonly<{
@@ -267,6 +273,90 @@ export type ExternalQuizReviewReadModel = Readonly<{
   questions: readonly ExternalQuizReviewQuestionReadModel[];
 }>;
 
+export type ExternalH5PActivityReadModel = Readonly<{
+  sourceId: string;
+  activitySourceId: string;
+  courseSourceId: string;
+  title: string;
+  maximumScore?: number;
+  trackingEnabled?: boolean;
+  createdAt?: string;
+  modifiedAt?: string;
+}>;
+
+export type ExternalH5PAttemptReadModel = Readonly<{
+  sourceId: string;
+  activityInstanceSourceId: string;
+  sourceUserId: string;
+  attempt: number;
+  score: number;
+  maximumScore: number;
+  scaledScore: number;
+  durationSeconds: number;
+  completed?: boolean;
+  successful?: boolean;
+  createdAt?: string;
+  modifiedAt?: string;
+}>;
+
+export type ExternalH5PUserAttemptsReadModel = Readonly<{
+  sourceUserId: string;
+  attempts: readonly ExternalH5PAttemptReadModel[];
+}>;
+
+export type ExternalH5PAttemptsReadModel = Readonly<{
+  activitySourceId: string;
+  users: readonly ExternalH5PUserAttemptsReadModel[];
+}>;
+
+export type ExternalH5PResultReadModel = Readonly<{
+  sourceId: string;
+  attemptSourceId: string;
+  interactionType: string;
+  score: number;
+  maximumScore: number;
+  durationSeconds?: number;
+  completed?: boolean;
+  successful?: boolean;
+  createdAt?: string;
+}>;
+
+export type ExternalH5PAttemptResultsReadModel = ExternalH5PAttemptReadModel &
+  Readonly<{
+    results: readonly ExternalH5PResultReadModel[];
+  }>;
+
+export type ExternalH5PResultsReadModel = Readonly<{
+  activitySourceId: string;
+  attempts: readonly ExternalH5PAttemptResultsReadModel[];
+}>;
+
+export type ExternalScormActivityReadModel = Readonly<{
+  sourceId: string;
+  activitySourceId: string;
+  courseSourceId: string;
+  title: string;
+  visible?: boolean;
+  version?: string;
+  maximumScore?: number;
+  maximumAttempts?: number;
+  opensAt?: string;
+  closesAt?: string;
+  revision?: number;
+  modifiedAt?: string;
+}>;
+
+export type ExternalScormTracksReadModel = Readonly<{
+  attempt: number;
+  status?: string;
+  completionStatus?: string;
+  successStatus?: string;
+  score?: number;
+  minimumScore?: number;
+  maximumScore?: number;
+  totalTime?: string;
+}>;
+
 export type ExternalLessonReadModel = Readonly<{
   sourceId: string;
   activitySourceId?: string;
@@ -290,7 +380,7 @@ export type ExternalLessonGradeReadModel = Readonly<{
 }>;
 
 export type ExternalContentActivityReadModel = Readonly<{
-  kind: "book" | "page" | "url";
+  kind: "book" | "page" | "resource" | "url";
   sourceId: string;
   activitySourceId?: string;
   courseSourceId: string;
@@ -321,10 +411,16 @@ export type MoodleReadModelResponseMap = {
   mod_quiz_get_quizzes_by_courses: readonly ExternalQuizReadModel[];
   mod_quiz_get_user_attempts: readonly ExternalQuizAttemptReadModel[];
   mod_quiz_get_attempt_review: ExternalQuizReviewReadModel;
+  mod_h5pactivity_get_h5pactivities_by_courses: readonly ExternalH5PActivityReadModel[];
+  mod_h5pactivity_get_attempts: ExternalH5PAttemptsReadModel;
+  mod_h5pactivity_get_results: ExternalH5PResultsReadModel;
+  mod_scorm_get_scorms_by_courses: readonly ExternalScormActivityReadModel[];
+  mod_scorm_get_scorm_sco_tracks: ExternalScormTracksReadModel;
   mod_lesson_get_lessons_by_courses: readonly ExternalLessonReadModel[];
   mod_lesson_get_user_grade: ExternalLessonGradeReadModel;
   mod_book_get_books_by_courses: readonly ExternalContentActivityReadModel[];
   mod_page_get_pages_by_courses: readonly ExternalContentActivityReadModel[];
+  mod_resource_get_resources_by_courses: readonly ExternalContentActivityReadModel[];
   mod_url_get_urls_by_courses: readonly ExternalContentActivityReadModel[];
 };
 
@@ -449,6 +545,23 @@ function optionalText(
   return sanitizeText(candidate, label, maxCharacters) || undefined;
 }
 
+function optionalTextOrNumber(
+  value: UnknownRecord,
+  key: string,
+  label: string,
+  maxCharacters: number = MOODLE_READ_MODEL_LIMITS.titleCharacters
+) {
+  const candidate = value[key];
+  if (candidate === undefined || candidate === null || candidate === "") {
+    return undefined;
+  }
+  if (typeof candidate === "number") {
+    if (!Number.isFinite(candidate)) return invalid(label);
+    return String(candidate);
+  }
+  return optionalText(value, key, label, maxCharacters);
+}
+
 function displayName(value: UnknownRecord, label: string) {
   const fullName = optionalText(value, "fullname", label);
   if (fullName) return fullName;
@@ -524,6 +637,11 @@ function optionalNumber(value: UnknownRecord, key: string, label: string) {
         ? Number(candidate)
         : Number.NaN;
   return Number.isFinite(parsed) ? parsed : invalid(label);
+}
+
+function requiredNumber(value: UnknownRecord, key: string, label: string) {
+  const result = optionalNumber(value, key, label);
+  return result === undefined ? invalid(label) : result;
 }
 
 function optionalTimestamp(value: UnknownRecord, key: string, label: string) {
@@ -1063,7 +1181,12 @@ export function parseMoodleQuizReviewResponse(payload: unknown) {
     : undefined;
   return {
     attempt,
-    gradeSummary: optionalText(envelope, "grade", "quiz attempt review", 160),
+    gradeSummary: optionalTextOrNumber(
+      envelope,
+      "grade",
+      "quiz attempt review",
+      160
+    ),
     questions: arrayField(
       envelope,
       "questions",
@@ -1080,10 +1203,279 @@ export function parseMoodleQuizReviewResponse(payload: unknown) {
         status: optionalText(item, "status", label, 64),
         mark: optionalNumber(item, "mark", label),
         maximumMark: optionalNumber(item, "maxmark", label),
-        blocked: optionalBoolean(item, "blocked", label),
+        blocked: Object.hasOwn(item, "blockedbyprevious")
+          ? optionalBoolean(item, "blockedbyprevious", label)
+          : optionalBoolean(item, "blocked", label),
       } satisfies ExternalQuizReviewQuestionReadModel;
     }),
   } satisfies ExternalQuizReviewReadModel;
+}
+
+function parseH5PAttempt(
+  value: unknown,
+  label: string,
+  expectedUserSourceId?: string
+): ExternalH5PAttemptReadModel {
+  const item = record(value, label);
+  const sourceUserId = sourceId(item, "userid", label);
+  if (
+    expectedUserSourceId !== undefined &&
+    sourceUserId !== expectedUserSourceId
+  ) {
+    return invalid(label);
+  }
+  return {
+    sourceId: sourceId(item, "id", label),
+    activityInstanceSourceId: sourceId(item, "h5pactivityid", label),
+    sourceUserId,
+    attempt: integer(item, "attempt", label, 1),
+    score: requiredNumber(item, "rawscore", label),
+    maximumScore: requiredNumber(item, "maxscore", label),
+    scaledScore: requiredNumber(item, "scaled", label),
+    durationSeconds: integer(item, "duration", label, 0),
+    completed: optionalBoolean(item, "completion", label),
+    successful: optionalBoolean(item, "success", label),
+    createdAt: optionalTimestamp(item, "timecreated", label),
+    modifiedAt: optionalTimestamp(item, "timemodified", label),
+  };
+}
+
+function assertConsistentH5PActivity(
+  expected: string | undefined,
+  actual: string,
+  label: string
+) {
+  if (expected !== undefined && actual !== expected) return invalid(label);
+  return actual;
+}
+
+export function parseMoodleH5PActivitiesResponse(payload: unknown) {
+  const envelope = record(payload, "H5P activity list");
+  return arrayField(envelope, "h5pactivities", "H5P activity list").map(
+    (value, index) => {
+      const label = `H5P activity item ${index}`;
+      const item = record(value, label);
+      return {
+        sourceId: sourceId(item, "id", label),
+        activitySourceId: sourceId(item, "coursemodule", label),
+        courseSourceId: sourceId(item, "course", label),
+        title: requiredText(item, "name", label),
+        maximumScore: optionalNumber(item, "grade", label),
+        trackingEnabled: optionalBoolean(item, "enabletracking", label),
+        createdAt: optionalTimestamp(item, "timecreated", label),
+        modifiedAt: optionalTimestamp(item, "timemodified", label),
+      } satisfies ExternalH5PActivityReadModel;
+    }
+  );
+}
+
+export function parseMoodleH5PAttemptsResponse(payload: unknown) {
+  const envelope = record(payload, "H5P attempt list");
+  let activityInstanceSourceId: string | undefined;
+  const users = arrayField(
+    envelope,
+    "usersattempts",
+    "H5P user attempt list"
+  ).map((value, index) => {
+    const label = `H5P user attempts item ${index}`;
+    const item = record(value, label);
+    const sourceUserId = sourceId(item, "userid", label);
+    const attempts = arrayField(
+      item,
+      "attempts",
+      `${label} attempts`,
+      MOODLE_READ_MODEL_LIMITS.nestedItems
+    ).map((attempt, attemptIndex) => {
+      const attemptLabel = `${label} attempt ${attemptIndex}`;
+      const parsed = parseH5PAttempt(attempt, attemptLabel, sourceUserId);
+      activityInstanceSourceId = assertConsistentH5PActivity(
+        activityInstanceSourceId,
+        parsed.activityInstanceSourceId,
+        attemptLabel
+      );
+      return parsed;
+    });
+    return {
+      sourceUserId,
+      attempts,
+    } satisfies ExternalH5PUserAttemptsReadModel;
+  });
+  return {
+    activitySourceId: sourceId(envelope, "activityid", "H5P attempt list"),
+    users,
+  } satisfies ExternalH5PAttemptsReadModel;
+}
+
+function parseH5PResult(
+  value: unknown,
+  attemptSourceId: string,
+  label: string
+): ExternalH5PResultReadModel {
+  const item = record(value, label);
+  if (sourceId(item, "attemptid", label) !== attemptSourceId) {
+    return invalid(label);
+  }
+  return {
+    sourceId: sourceId(item, "id", label),
+    attemptSourceId,
+    interactionType: requiredText(item, "interactiontype", label, 64),
+    score: requiredNumber(item, "rawscore", label),
+    maximumScore: requiredNumber(item, "maxscore", label),
+    durationSeconds: optionalInteger(item, "duration", label, 0),
+    completed: optionalBoolean(item, "completion", label),
+    successful: optionalBoolean(item, "success", label),
+    createdAt: optionalTimestamp(item, "timecreated", label),
+  };
+}
+
+export function parseMoodleH5PResultsResponse(payload: unknown) {
+  const envelope = record(payload, "H5P result list");
+  let activityInstanceSourceId: string | undefined;
+  const attempts = arrayField(envelope, "attempts", "H5P result list").map(
+    (value, index) => {
+      const label = `H5P result attempt ${index}`;
+      const attempt = parseH5PAttempt(value, label);
+      activityInstanceSourceId = assertConsistentH5PActivity(
+        activityInstanceSourceId,
+        attempt.activityInstanceSourceId,
+        label
+      );
+      const item = record(value, label);
+      return {
+        ...attempt,
+        results: optionalArrayField(item, "results", `${label} results`).map(
+          (result, resultIndex) =>
+            parseH5PResult(
+              result,
+              attempt.sourceId,
+              `${label} result ${resultIndex}`
+            )
+        ),
+      } satisfies ExternalH5PAttemptResultsReadModel;
+    }
+  );
+  return {
+    activitySourceId: sourceId(envelope, "activityid", "H5P result list"),
+    attempts,
+  } satisfies ExternalH5PResultsReadModel;
+}
+
+export function parseMoodleScormsResponse(payload: unknown) {
+  const envelope = record(payload, "SCORM activity list");
+  return arrayField(envelope, "scorms", "SCORM activity list").map(
+    (value, index) => {
+      const label = `SCORM activity item ${index}`;
+      const item = record(value, label);
+      return {
+        sourceId: sourceId(item, "id", label),
+        activitySourceId: sourceId(item, "coursemodule", label),
+        courseSourceId: sourceId(item, "course", label),
+        title: requiredText(item, "name", label),
+        visible: optionalBoolean(item, "visible", label),
+        version: optionalText(item, "version", label, 64),
+        maximumScore: optionalNumber(item, "maxgrade", label),
+        maximumAttempts: optionalInteger(item, "maxattempt", label, 0),
+        opensAt: optionalTimestamp(item, "timeopen", label),
+        closesAt: optionalTimestamp(item, "timeclose", label),
+        revision: optionalInteger(item, "revision", label, 0),
+        modifiedAt: optionalTimestamp(item, "timemodified", label),
+      } satisfies ExternalScormActivityReadModel;
+    }
+  );
+}
+
+function consistentMetric<T>(
+  current: T | undefined,
+  candidate: T,
+  label: string
+) {
+  if (current !== undefined && current !== candidate) return invalid(label);
+  return candidate;
+}
+
+export function parseMoodleScormTracksResponse(payload: unknown) {
+  const envelope = record(payload, "SCORM track list");
+  const data = record(envelope.data, "SCORM track list");
+  let status: string | undefined;
+  let completionStatus: string | undefined;
+  let successStatus: string | undefined;
+  let score: number | undefined;
+  let minimumScore: number | undefined;
+  let maximumScore: number | undefined;
+  let totalTime: string | undefined;
+
+  arrayField(data, "tracks", "SCORM tracks").forEach((value, index) => {
+    const label = `SCORM track item ${index}`;
+    const item = record(value, label);
+    const element = requiredText(item, "element", label, 128).toLowerCase();
+    const rawTrackValue = item.value;
+    if (
+      typeof rawTrackValue !== "string" ||
+      rawTrackValue.length > MOODLE_READ_MODEL_LIMITS.textCharacters * 8
+    ) {
+      return invalid(label);
+    }
+    const safeTrackValue = () =>
+      sanitizeText(rawTrackValue, label, 160) || invalid(label);
+    switch (element) {
+      case "cmi.core.lesson_status":
+        status = consistentMetric(status, safeTrackValue(), label);
+        break;
+      case "cmi.completion_status":
+        completionStatus = consistentMetric(
+          completionStatus,
+          safeTrackValue(),
+          label
+        );
+        break;
+      case "cmi.success_status":
+        successStatus = consistentMetric(
+          successStatus,
+          safeTrackValue(),
+          label
+        );
+        break;
+      case "cmi.core.score.raw":
+      case "cmi.score.raw":
+        score = consistentMetric(
+          score,
+          requiredNumber(item, "value", label),
+          label
+        );
+        break;
+      case "cmi.core.score.min":
+      case "cmi.score.min":
+        minimumScore = consistentMetric(
+          minimumScore,
+          requiredNumber(item, "value", label),
+          label
+        );
+        break;
+      case "cmi.core.score.max":
+      case "cmi.score.max":
+        maximumScore = consistentMetric(
+          maximumScore,
+          requiredNumber(item, "value", label),
+          label
+        );
+        break;
+      case "cmi.core.total_time":
+      case "cmi.total_time":
+        totalTime = consistentMetric(totalTime, safeTrackValue(), label);
+        break;
+    }
+  });
+
+  return {
+    attempt: integer(data, "attempt", "SCORM track list", 1),
+    status,
+    completionStatus,
+    successStatus,
+    score,
+    minimumScore,
+    maximumScore,
+    totalTime,
+  } satisfies ExternalScormTracksReadModel;
 }
 
 function parseLesson(value: unknown, label: string): ExternalLessonReadModel {
@@ -1139,7 +1531,7 @@ export function parseMoodleLessonGradeResponse(payload: unknown) {
 
 function parseContentActivities(
   payload: unknown,
-  collectionKey: "books" | "pages" | "urls",
+  collectionKey: "books" | "pages" | "resources" | "urls",
   kind: ExternalContentActivityReadModel["kind"]
 ) {
   const label = `${kind} list`;
@@ -1173,6 +1565,10 @@ export function parseMoodlePagesResponse(payload: unknown) {
   return parseContentActivities(payload, "pages", "page");
 }
 
+export function parseMoodleResourcesResponse(payload: unknown) {
+  return parseContentActivities(payload, "resources", "resource");
+}
+
 export function parseMoodleUrlsResponse(payload: unknown) {
   return parseContentActivities(payload, "urls", "url");
 }
@@ -1199,10 +1595,17 @@ const responseParsers = {
   mod_quiz_get_quizzes_by_courses: parseMoodleQuizzesResponse,
   mod_quiz_get_user_attempts: parseMoodleQuizAttemptsResponse,
   mod_quiz_get_attempt_review: parseMoodleQuizReviewResponse,
+  mod_h5pactivity_get_h5pactivities_by_courses:
+    parseMoodleH5PActivitiesResponse,
+  mod_h5pactivity_get_attempts: parseMoodleH5PAttemptsResponse,
+  mod_h5pactivity_get_results: parseMoodleH5PResultsResponse,
+  mod_scorm_get_scorms_by_courses: parseMoodleScormsResponse,
+  mod_scorm_get_scorm_sco_tracks: parseMoodleScormTracksResponse,
   mod_lesson_get_lessons_by_courses: parseMoodleLessonsResponse,
   mod_lesson_get_user_grade: parseMoodleLessonGradeResponse,
   mod_book_get_books_by_courses: parseMoodleBooksResponse,
   mod_page_get_pages_by_courses: parseMoodlePagesResponse,
+  mod_resource_get_resources_by_courses: parseMoodleResourcesResponse,
   mod_url_get_urls_by_courses: parseMoodleUrlsResponse,
 } satisfies Record<MoodleProjectionFunction, (payload: unknown) => unknown>;
 

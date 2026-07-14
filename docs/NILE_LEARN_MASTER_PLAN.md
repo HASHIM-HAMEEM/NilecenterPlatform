@@ -965,3 +965,38 @@ M2B is provider-contract evidence, not Phase 10 acceptance. Production Moodle
 writes remain blocked on normalized mappings, durable command/audit/outbox
 transactions, worker leases and retry behavior, reconciliation approval, RLS,
 and a separate production threat review.
+
+The bounded M2B proof completed on 2026-07-13. The final run preserved an
+identical M2 read-projection hash, adopted the same synthetic records on its
+second ensure pass, removed every created record, and ended with a rejected
+write token after provider teardown. The redacted evidence is recorded in
+`docs/moodle-m2b-write-proof-evidence-20260713.md`.
+
+The product owner's 2026-07-13 follow-up instruction approves **M2C
+comprehensive synthetic Moodle provider-contract testing** on the same dedicated
+practice host. ADR-009 owns this approval. M2C must run as separate
+minimum-privilege lanes for read closure, disposable content fixtures, learner
+interactions, outcomes, limited operations evidence, and authority denials.
+Every lane requires a distinct expiring token, exact function allowlist,
+deterministic fake-only marker, before and after fingerprints, reconciliation,
+idempotent cleanup, and credential teardown. It may not use real identities,
+student documents, production content, a shared broad token, portal actions,
+normalized persistence, Supabase changes, or a runtime provider flag.
+
+M2C is sandbox provider evidence only. Attendance, Nile scheduling, internal
+messaging, certificates, admissions documents, and audit remain Nile Learn
+authorities even when a similar Moodle API exists. The first M2C implementation
+slice is read-contract closure: add sanitized provider-neutral models for the
+six approved H5P, SCORM, and Resource functions, route every live read-validator
+response through its model, then create the missing disposable fixtures and
+re-run all 31 reads. Broader learner and outcome writes begin only after that
+slice is green and its credential teardown is recorded.
+
+The 2026-07-13 M2C-R run is partial: 26/31 reads passed, including the newly
+created Resource fixture, while five H5P/SCORM reads remain fixture-blocked.
+The Resource, temporary course enrolment, disposable service, and token were
+removed, and the retired token was rejected. The evidence and exact stop
+condition are recorded in
+`docs/moodle-m2c-read-closure-evidence-20260713.md`. No later M2C lane may start
+until an approved upload-capable fixture path enables 31/31 and repeated
+cleanup.

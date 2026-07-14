@@ -51,6 +51,19 @@ function configuredClient(fetchImpl: typeof fetch) {
   });
 }
 
+function markedUser(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 44,
+    username: syntheticUsername,
+    firstname: "Practice",
+    lastname: "Learner",
+    email: syntheticEmail,
+    idnumber: marker,
+    deleted: false,
+    ...overrides,
+  };
+}
+
 async function verifiedClient(fetchImpl: typeof fetch) {
   const client = configuredClient(fetchImpl);
   await client.probe();
@@ -221,6 +234,21 @@ describe("server-only Moodle sandbox write client", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects the stale user lookup function in the service allowlist", async () => {
+    const staleFunctions = MOODLE_SANDBOX_WRITE_FUNCTIONS.map(name =>
+      name === "core_user_get_users" ? "core_user_get_users_by_field" : name
+    );
+    const client = configuredClient(
+      vi.fn<typeof fetch>(async () => jsonResponse(siteInfo(staleFunctions)))
+    );
+
+    await expect(client.probe()).resolves.toMatchObject({
+      missingApprovedFunctions: ["core_user_get_users"],
+      unexpectedFunctions: ["core_user_get_users_by_field"],
+      minimumPrivilegeVerified: false,
+    });
+  });
+
   it("rejects reserved protocol fields at any nesting depth", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse(siteInfo()));
     const client = await verifiedClient(fetchImpl);
@@ -291,6 +319,113 @@ describe("server-only Moodle sandbox write client", () => {
       )
     ).rejects.toMatchObject({ code: "guard" });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("serializes the exact marker lookup and rejects broader request shapes", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (_input, init) => {
+      const body = new URLSearchParams(String(init?.body));
+      if (body.get("wsfunction") === "core_webservice_get_site_info") {
+        return jsonResponse(siteInfo());
+      }
+      expect(body.get("criteria[0][key]")).toBe("idnumber");
+      expect(body.get("criteria[0][value]")).toBe(marker);
+      expect(body.has("criteria[1][key]")).toBe(false);
+      return jsonResponse({ users: [], warnings: [] });
+    });
+    const client = await verifiedClient(fetchImpl);
+
+    await expect(client.findUsersByMarker(marker)).resolves.toEqual([]);
+    await expect(
+      client.call(
+        "core_user_get_users",
+        { criteria: [{ key: "idnumber", value: `${marker}-wrong` }] },
+        { marker }
+      )
+    ).rejects.toMatchObject({ code: "guard" });
+    await expect(
+      client.call(
+        "core_user_get_users",
+        {
+          criteria: [
+            { key: "idnumber", value: marker },
+            { key: "username", value: syntheticUsername },
+          ],
+        },
+        { marker }
+      )
+    ).rejects.toMatchObject({ code: "guard" });
+    await expect(
+      client.call(
+        "core_user_get_users",
+        { criteria: [{ key: "idnumber", value: marker }], limit: 1 },
+        { marker }
+      )
+    ).rejects.toMatchObject({ code: "guard" });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("accepts empty marker results and users without an email", async () => {
+    const responses = [
+      { users: [], warnings: [] },
+      {
+        users: [markedUser({ email: undefined })],
+        warnings: [],
+      },
+    ];
+    const fetchImpl = vi.fn<typeof fetch>(async (_input, init) => {
+      const functionName = new URLSearchParams(String(init?.body)).get(
+        "wsfunction"
+      );
+      return jsonResponse(
+        functionName === "core_webservice_get_site_info"
+          ? siteInfo()
+          : responses.shift()
+      );
+    });
+    const client = await verifiedClient(fetchImpl);
+
+    await expect(client.findUsersByMarker(marker)).resolves.toEqual([]);
+    await expect(client.findUsersByMarker(marker)).resolves.toEqual([
+      {
+        id: 44,
+        username: syntheticUsername,
+        firstName: "Practice",
+        lastName: "Learner",
+        marker,
+      },
+    ]);
+  });
+
+  it.each([
+    ["legacy array", []],
+    ["missing warnings", { users: [] }],
+    ["non-empty warnings", { users: [], warnings: [{ warningcode: "x" }] }],
+    ["deleted user", { users: [markedUser({ deleted: true })], warnings: [] }],
+    [
+      "mismatched marker",
+      { users: [markedUser({ idnumber: `${marker}-wrong` })], warnings: [] },
+    ],
+    [
+      "mismatched deterministic username",
+      {
+        users: [markedUser({ username: `${syntheticUsername}-wrong` })],
+        warnings: [],
+      },
+    ],
+  ])("rejects %s marker lookup responses", async (_label, payload) => {
+    const fetchImpl = vi.fn<typeof fetch>(async (_input, init) => {
+      const functionName = new URLSearchParams(String(init?.body)).get(
+        "wsfunction"
+      );
+      return jsonResponse(
+        functionName === "core_webservice_get_site_info" ? siteInfo() : payload
+      );
+    });
+    const client = await verifiedClient(fetchImpl);
+
+    await expect(client.findUsersByMarker(marker)).rejects.toMatchObject({
+      code: "invalid_response",
+    });
   });
 
   it("keeps the token out of the URL and emits one canonical Moodle item", async () => {
@@ -384,6 +519,7 @@ describe("server-only Moodle sandbox write client", () => {
               firstname: "Practice",
               lastname: "Learner",
               email: syntheticEmail,
+              idnumber: marker,
               deleted: false,
             },
           ],

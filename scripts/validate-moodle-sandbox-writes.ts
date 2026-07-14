@@ -11,6 +11,7 @@ import {
 import {
   createMoodleSandboxWriteClientFromEnvironment,
   getMoodleSandboxWriteServerStatus,
+  isMoodleSandboxMarker,
   MOODLE_SANDBOX_WRITE_ACK,
   MOODLE_SANDBOX_WRITE_HOST,
   MoodleSandboxWriteError,
@@ -133,6 +134,7 @@ export function validateMoodleSandboxWriteEnvironment(env: NodeJS.ProcessEnv) {
     .filter(Boolean);
   const courseId = parsePositiveId(env.MOODLE_SANDBOX_WRITE_COURSE_ID);
   const roleId = parsePositiveId(env.MOODLE_SANDBOX_WRITE_ROLE_ID);
+  const runMarker = clean(env.MOODLE_SANDBOX_WRITE_RUN_MARKER);
 
   requireSandboxUrl(env.MOODLE_BASE_URL);
   requireSandboxUrl(env.MOODLE_SANDBOX_WRITE_BASE_URL);
@@ -149,27 +151,28 @@ export function validateMoodleSandboxWriteEnvironment(env: NodeJS.ProcessEnv) {
     !writeToken ||
     readToken === writeToken ||
     !courseId ||
-    !roleId
+    !roleId ||
+    (runMarker !== "" && !isMoodleSandboxMarker(runMarker))
   ) {
     throw new MoodleSandboxWriteValidationError("configuration");
   }
 
-  return { courseId, roleId };
+  return {
+    courseId,
+    roleId,
+    ...(runMarker ? { runMarker } : {}),
+  };
 }
 
-function canonicalize(value: unknown): unknown {
+function canonicalizeOrdered(value: unknown): unknown {
   if (Array.isArray(value)) {
-    return value
-      .map(canonicalize)
-      .sort((left, right) =>
-        JSON.stringify(left).localeCompare(JSON.stringify(right))
-      );
+    return value.map(canonicalizeOrdered);
   }
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, child]) => [key, canonicalize(child)])
+        .map(([key, child]) => [key, canonicalizeOrdered(child)])
     );
   }
   if (
@@ -183,10 +186,41 @@ function canonicalize(value: unknown): unknown {
   return null;
 }
 
-export async function createMoodleReadProjectionFingerprint(
+function sortProviderSet(value: unknown, keys: readonly string[]): unknown {
+  if (!Array.isArray(value)) return value;
+  return [...value].sort((left, right) => {
+    if (!left || typeof left !== "object") return -1;
+    if (!right || typeof right !== "object") return 1;
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    const leftKey = keys.map(key => String(leftRecord[key] ?? "")).join(":");
+    const rightKey = keys.map(key => String(rightRecord[key] ?? "")).join(":");
+    return leftKey.localeCompare(rightKey);
+  });
+}
+
+function hashProjection(value: unknown) {
+  return createHash("sha256")
+    .update(JSON.stringify(canonicalizeOrdered(value)), "utf8")
+    .digest("hex");
+}
+
+export type MoodleReadProjectionFingerprints = Readonly<{
+  families: Readonly<{
+    probe: string;
+    course: string;
+    contents: string;
+    enrolledUsers: string;
+    groups: string;
+    groupings: string;
+  }>;
+  root: string;
+}>;
+
+export async function createMoodleReadProjectionFingerprints(
   readClient: ReadClient,
   courseId: number
-) {
+): Promise<MoodleReadProjectionFingerprints> {
   try {
     const probe = await readClient.probe();
     if (
@@ -222,35 +256,51 @@ export async function createMoodleReadProjectionFingerprint(
         }),
       ]);
 
-    const projection = canonicalize({
-      probe: {
+    const families = {
+      probe: hashProjection({
         mode: probe.mode,
         site: probe.site,
         availableFunctionCount: probe.availableFunctionCount,
         approvedFunctionCount: probe.approvedFunctionCount,
-        missingApprovedFunctions: probe.missingApprovedFunctions,
-        unexpectedFunctions: probe.unexpectedFunctions,
+        missingApprovedFunctions: [...probe.missingApprovedFunctions].sort(),
+        unexpectedFunctions: [...probe.unexpectedFunctions].sort(),
         minimumPrivilegeVerified: probe.minimumPrivilegeVerified,
-      },
-      course,
-      contents,
-      enrolledUsers,
-      groups,
-      groupings,
-    });
+      }),
+      course: hashProjection({
+        ...(course as Record<string, unknown>),
+        courses: sortProviderSet((course as Record<string, unknown>).courses, [
+          "id",
+        ]),
+      }),
+      // Sections and modules are semantically ordered in Moodle.
+      contents: hashProjection(contents),
+      enrolledUsers: hashProjection(sortProviderSet(enrolledUsers, ["id"])),
+      groups: hashProjection(sortProviderSet(groups, ["id"])),
+      groupings: hashProjection(sortProviderSet(groupings, ["id"])),
+    };
 
-    return createHash("sha256")
-      .update(JSON.stringify(projection), "utf8")
-      .digest("hex");
+    return {
+      families,
+      root: hashProjection(families),
+    };
   } catch (error) {
     if (error instanceof MoodleSandboxWriteValidationError) throw error;
     throw new MoodleSandboxWriteValidationError("read_projection_failed");
   }
 }
 
+export async function createMoodleReadProjectionFingerprint(
+  readClient: ReadClient,
+  courseId: number
+) {
+  return (await createMoodleReadProjectionFingerprints(readClient, courseId))
+    .root;
+}
+
 export function createMoodleSandboxSyntheticRun(
   now: Date,
-  randomBytesImpl: (size: number) => Buffer = randomBytes
+  randomBytesImpl: (size: number) => Buffer = randomBytes,
+  runMarker?: string
 ) {
   if (Number.isNaN(now.getTime())) {
     throw new MoodleSandboxWriteValidationError("configuration");
@@ -259,11 +309,15 @@ export function createMoodleSandboxSyntheticRun(
     .toISOString()
     .replace(/[-:]/g, "")
     .replace(/\.\d{3}Z$/, "Z");
-  const suffix = randomBytesImpl(4).toString("hex");
-  if (!/^[0-9a-f]{8}$/.test(suffix)) {
+  const suffix = runMarker ? "" : randomBytesImpl(4).toString("hex");
+  const marker = runMarker || `NILE-M2B-${timestamp}-${suffix}`;
+  if (
+    (!runMarker && !/^[0-9a-f]{8}$/.test(suffix)) ||
+    !isMoodleSandboxMarker(marker)
+  ) {
     throw new MoodleSandboxWriteValidationError("configuration");
   }
-  const marker = `NILE-M2B-${timestamp}-${suffix}`;
+  const identityKey = marker.slice("NILE-M2B-".length).toLowerCase();
   const passwordEntropy = randomBytesImpl(24).toString("base64url");
   if (!passwordEntropy) {
     throw new MoodleSandboxWriteValidationError("configuration");
@@ -273,11 +327,11 @@ export function createMoodleSandboxSyntheticRun(
     marker,
     user: {
       marker,
-      username: `nile-m2b-${timestamp.toLowerCase()}-${suffix}`,
+      username: `nile-m2b-${identityKey}`,
       firstName: "Nile M2B",
       updatedFirstName: "Nile M2B Verified",
       lastName: "Synthetic Learner",
-      email: `nile-m2b-${timestamp.toLowerCase()}-${suffix}@example.invalid`,
+      email: `nile-m2b-${identityKey}@example.invalid`,
       password: `Nile!M2B#${passwordEntropy}`,
     },
     groupName: `Nile Learn M2B ${marker}`,
@@ -288,12 +342,14 @@ export async function runMoodleSandboxWriteValidation(
   env: NodeJS.ProcessEnv = process.env,
   dependencies: ValidationDependencies = {}
 ): Promise<MoodleSandboxWriteValidationResult> {
-  const { courseId, roleId } = validateMoodleSandboxWriteEnvironment(env);
+  const { courseId, roleId, runMarker } =
+    validateMoodleSandboxWriteEnvironment(env);
   const now = dependencies.now ?? (() => new Date());
   const startedAt = now();
   const syntheticRun = createMoodleSandboxSyntheticRun(
     startedAt,
-    dependencies.randomBytes
+    dependencies.randomBytes,
+    runMarker
   );
   const readClient = (
     dependencies.createReadClient ?? createMoodleClientFromEnvironment

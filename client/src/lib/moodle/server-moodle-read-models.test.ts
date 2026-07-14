@@ -10,17 +10,22 @@ const privateUrl = "https://private.example.test/profile";
 const privateAddress = "12 Private Street";
 
 const forbiddenProjectionKeys = new Set([
+  "answer",
   "address",
   "city",
   "content",
+  "correctanswer",
   "customfields",
   "description",
   "email",
   "externalurl",
+  "filename",
   "fileurl",
+  "filepath",
   "html",
   "intro",
   "overviewfiles",
+  "packageurl",
   "parameters",
   "password",
   "phone1",
@@ -32,6 +37,7 @@ const forbiddenProjectionKeys = new Set([
   "subnet",
   "summary",
   "url",
+  "useranswer",
 ]);
 
 function projectionKeys(value: unknown): string[] {
@@ -668,6 +674,343 @@ describe("Moodle provider-neutral read models", () => {
     expectSanitizedProjection([quizzes, attempts, review]);
   });
 
+  it("accepts Moodle 4.5 numeric quiz grades and blocked-by-previous flags", () => {
+    const review = readModels.parseMoodleQuizReviewResponse({
+      grade: 10,
+      attempt: {
+        id: 401,
+        quiz: 102,
+        userid: 17,
+        attempt: 1,
+        state: "finished",
+      },
+      questions: [
+        {
+          slot: 1,
+          type: "multichoice",
+          page: 0,
+          state: "gradedright",
+          status: "Correct",
+          mark: "1.0",
+          maxmark: 1,
+          blockedbyprevious: true,
+          html: `<div>${privateEmail}</div>`,
+        },
+      ],
+      additionaldata: [],
+      warnings: [],
+    });
+
+    expect(review).toEqual({
+      attempt: {
+        sourceId: "401",
+        quizSourceId: "102",
+        sourceUserId: "17",
+        attempt: 1,
+        state: "finished",
+        preview: undefined,
+        score: undefined,
+        startedAt: undefined,
+        finishedAt: undefined,
+        modifiedAt: undefined,
+      },
+      gradeSummary: "10",
+      questions: [
+        {
+          slot: 1,
+          type: "multichoice",
+          page: 0,
+          state: "gradedright",
+          status: "Correct",
+          mark: 1,
+          maximumMark: 1,
+          blocked: true,
+        },
+      ],
+    });
+    expectSanitizedProjection(review);
+  });
+
+  it("projects H5P activities, attempts, and result metrics without content or answers", () => {
+    const activities = readModels.parseMoodleReadResponse(
+      "mod_h5pactivity_get_h5pactivities_by_courses",
+      {
+        h5pactivities: [
+          {
+            id: 107,
+            coursemodule: 87,
+            course: 42,
+            name: "<b>Interactive vocabulary</b>",
+            grade: 20,
+            enabletracking: 1,
+            timecreated: observedAt,
+            timemodified: observedAt,
+            intro: `<p>${privateEmail} ${privateAddress}</p>`,
+            contenthash: "provider-content-hash",
+            package: [{ filename: "private.h5p", fileurl: privateUrl }],
+            deployedfile: {
+              filename: "private.h5p",
+              filepath: "/private/",
+              fileurl: privateUrl,
+            },
+          },
+        ],
+        h5pglobalsettings: { enablesavestate: true, savestatefreq: 30 },
+        warnings: [],
+      }
+    );
+    const rawAttempt = {
+      id: 701,
+      h5pactivityid: 107,
+      userid: 17,
+      timecreated: observedAt,
+      timemodified: observedAt,
+      attempt: 1,
+      rawscore: 18,
+      maxscore: 20,
+      duration: 95,
+      completion: 1,
+      success: 1,
+      scaled: 0.9,
+      profileimageurl: privateUrl,
+    };
+    const attempts = readModels.parseMoodleReadResponse(
+      "mod_h5pactivity_get_attempts",
+      {
+        activityid: 87,
+        usersattempts: [
+          {
+            userid: 17,
+            fullname: `${privateEmail} ${privatePhone}`,
+            attempts: [rawAttempt],
+            scored: {
+              title: `<b>Best attempt</b> ${privateEmail}`,
+              grademethod: "highest",
+              attempts: [rawAttempt],
+            },
+          },
+        ],
+        warnings: [],
+      }
+    );
+    const results = readModels.parseMoodleReadResponse(
+      "mod_h5pactivity_get_results",
+      {
+        activityid: 87,
+        attempts: [
+          {
+            ...rawAttempt,
+            results: [
+              {
+                id: 801,
+                attemptid: 701,
+                subcontent: "question-1",
+                timecreated: observedAt,
+                interactiontype: "choice",
+                description: `<p>${privateAddress} ${privateEmail}</p>`,
+                content: `<script>private</script>${privateUrl}`,
+                rawscore: 1,
+                maxscore: 1,
+                duration: 8,
+                completion: 1,
+                success: 1,
+                answerlabel: "Learner answer",
+                correctlabel: "Correct answer",
+                options: [
+                  {
+                    description: privateAddress,
+                    correctanswer: { answer: privateEmail, correct: true },
+                    useranswer: { answer: privatePhone, incorrect: true },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        warnings: [],
+      }
+    );
+
+    expect(activities).toEqual([
+      {
+        sourceId: "107",
+        activitySourceId: "87",
+        courseSourceId: "42",
+        title: "Interactive vocabulary",
+        maximumScore: 20,
+        trackingEnabled: true,
+        createdAt: observedAtIso,
+        modifiedAt: observedAtIso,
+      },
+    ]);
+    expect(attempts).toEqual({
+      activitySourceId: "87",
+      users: [
+        {
+          sourceUserId: "17",
+          attempts: [
+            {
+              sourceId: "701",
+              activityInstanceSourceId: "107",
+              sourceUserId: "17",
+              attempt: 1,
+              score: 18,
+              maximumScore: 20,
+              scaledScore: 0.9,
+              durationSeconds: 95,
+              completed: true,
+              successful: true,
+              createdAt: observedAtIso,
+              modifiedAt: observedAtIso,
+            },
+          ],
+        },
+      ],
+    });
+    expect(results).toEqual({
+      activitySourceId: "87",
+      attempts: [
+        {
+          ...attempts.users[0].attempts[0],
+          results: [
+            {
+              sourceId: "801",
+              attemptSourceId: "701",
+              interactionType: "choice",
+              score: 1,
+              maximumScore: 1,
+              durationSeconds: 8,
+              completed: true,
+              successful: true,
+              createdAt: observedAtIso,
+            },
+          ],
+        },
+      ],
+    });
+    expectSanitizedProjection([activities, attempts, results]);
+  });
+
+  it("projects SCORM progress and resource metadata without packages, files, or learner state", () => {
+    const scorms = readModels.parseMoodleReadResponse(
+      "mod_scorm_get_scorms_by_courses",
+      {
+        scorms: [
+          {
+            id: 108,
+            coursemodule: 88,
+            course: 42,
+            name: "<b>Pronunciation package</b>",
+            visible: 1,
+            version: "SCORM_12",
+            maxgrade: 100,
+            maxattempt: 3,
+            timeopen: observedAt,
+            timeclose: 0,
+            revision: 4,
+            timemodified: observedAt,
+            intro: `<p>${privateEmail}</p>`,
+            packageurl: `${privateUrl}?token=secret-token`,
+            reference: "private-package.zip",
+            sha1hash: "private-provider-hash",
+          },
+        ],
+        options: [{ name: "private", value: privateAddress }],
+        warnings: [],
+      }
+    );
+    const tracks = readModels.parseMoodleReadResponse(
+      "mod_scorm_get_scorm_sco_tracks",
+      {
+        data: {
+          attempt: 2,
+          tracks: [
+            { element: "cmi.core.lesson_status", value: "completed" },
+            { element: "cmi.core.score.raw", value: "88.5" },
+            { element: "cmi.core.score.min", value: "0" },
+            { element: "cmi.core.score.max", value: "100" },
+            { element: "cmi.core.total_time", value: "01:05:00" },
+            { element: "cmi.suspend_data", value: privateUrl },
+            {
+              element: "cmi.interactions.0.student_response",
+              value: `${privateEmail} ${privatePhone} ${privateAddress}`,
+            },
+            { element: "cmi.core.lesson_location", value: "private-page" },
+          ],
+        },
+        warnings: [],
+      }
+    );
+    const resources = readModels.parseMoodleReadResponse(
+      "mod_resource_get_resources_by_courses",
+      {
+        resources: [
+          {
+            id: 109,
+            coursemodule: 89,
+            course: 42,
+            name: "<b>Class handout</b>",
+            visible: 1,
+            revision: 5,
+            timemodified: observedAt,
+            intro: `<p>${privateAddress}</p>`,
+            contentfiles: [
+              {
+                filename: "learner-list.pdf",
+                filepath: "/private/",
+                fileurl: `${privateUrl}?token=secret-token`,
+                author: privateEmail,
+              },
+            ],
+            displayoptions: privatePhone,
+          },
+        ],
+        warnings: [],
+      }
+    );
+
+    expect(scorms).toEqual([
+      {
+        sourceId: "108",
+        activitySourceId: "88",
+        courseSourceId: "42",
+        title: "Pronunciation package",
+        visible: true,
+        version: "SCORM_12",
+        maximumScore: 100,
+        maximumAttempts: 3,
+        opensAt: observedAtIso,
+        closesAt: undefined,
+        revision: 4,
+        modifiedAt: observedAtIso,
+      },
+    ]);
+    expect(tracks).toEqual({
+      attempt: 2,
+      status: "completed",
+      completionStatus: undefined,
+      successStatus: undefined,
+      score: 88.5,
+      minimumScore: 0,
+      maximumScore: 100,
+      totalTime: "01:05:00",
+    });
+    expect(resources).toEqual([
+      {
+        kind: "resource",
+        sourceId: "109",
+        activitySourceId: "89",
+        courseSourceId: "42",
+        title: "Class handout",
+        visible: true,
+        revision: 5,
+        createdAt: undefined,
+        modifiedAt: observedAtIso,
+      },
+    ]);
+    expectSanitizedProjection([scorms, tracks, resources]);
+  });
+
   it("projects lessons, lesson grades, books, pages, and URL activities as metadata only", () => {
     const lessons = readModels.parseMoodleLessonsResponse({
       lessons: [
@@ -794,6 +1137,89 @@ describe("Moodle provider-neutral read models", () => {
     ]);
   });
 
+  it("rejects inconsistent H5P relationships and conflicting SCORM metrics", () => {
+    const attempt = {
+      id: 701,
+      h5pactivityid: 107,
+      userid: 17,
+      attempt: 1,
+      rawscore: 18,
+      maxscore: 20,
+      scaled: 0.9,
+      duration: 95,
+    };
+
+    expect(() =>
+      readModels.parseMoodleH5PAttemptsResponse({
+        activityid: 87,
+        usersattempts: [{ userid: 18, attempts: [attempt] }],
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+
+    expect(() =>
+      readModels.parseMoodleH5PAttemptsResponse({
+        activityid: 87,
+        usersattempts: [
+          {
+            userid: 17,
+            attempts: [attempt, { ...attempt, id: 702, h5pactivityid: 999 }],
+          },
+        ],
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+
+    expect(() =>
+      readModels.parseMoodleH5PResultsResponse({
+        activityid: 87,
+        attempts: [
+          {
+            ...attempt,
+            results: [
+              {
+                id: 801,
+                attemptid: 999,
+                interactiontype: "choice",
+                rawscore: 1,
+                maxscore: 1,
+              },
+            ],
+          },
+        ],
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+
+    expect(() =>
+      readModels.parseMoodleH5PResultsResponse({
+        activityid: 87,
+        attempts: [
+          {
+            ...attempt,
+            results: [
+              {
+                id: 801,
+                interactiontype: "choice",
+                rawscore: 1,
+                maxscore: 1,
+              },
+            ],
+          },
+        ],
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+
+    expect(() =>
+      readModels.parseMoodleScormTracksResponse({
+        data: {
+          attempt: 1,
+          tracks: [
+            { element: "cmi.core.score.raw", value: "80" },
+            { element: "cmi.score.raw", value: "90" },
+          ],
+        },
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+  });
+
   it("fails closed for malformed envelopes and bounded collection or text violations", () => {
     const malformedTopLevels = [
       () => readModels.parseMoodleIdentityResponse({}),
@@ -815,10 +1241,16 @@ describe("Moodle provider-neutral read models", () => {
       () => readModels.parseMoodleQuizzesResponse([]),
       () => readModels.parseMoodleQuizAttemptsResponse([]),
       () => readModels.parseMoodleQuizReviewResponse([]),
+      () => readModels.parseMoodleH5PActivitiesResponse([]),
+      () => readModels.parseMoodleH5PAttemptsResponse([]),
+      () => readModels.parseMoodleH5PResultsResponse([]),
+      () => readModels.parseMoodleScormsResponse([]),
+      () => readModels.parseMoodleScormTracksResponse([]),
       () => readModels.parseMoodleLessonsResponse([]),
       () => readModels.parseMoodleLessonGradeResponse([]),
       () => readModels.parseMoodleBooksResponse([]),
       () => readModels.parseMoodlePagesResponse([]),
+      () => readModels.parseMoodleResourcesResponse([]),
       () => readModels.parseMoodleUrlsResponse([]),
     ];
 
@@ -886,6 +1318,95 @@ describe("Moodle provider-neutral read models", () => {
                 grade: 88,
               },
             ],
+          },
+        ],
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+
+    expect(() =>
+      readModels.parseMoodleH5PActivitiesResponse({
+        h5pactivities: Array.from(
+          { length: readModels.MOODLE_READ_MODEL_LIMITS.collectionItems + 1 },
+          () => ({ id: 107, coursemodule: 87, course: 42, name: "H5P" })
+        ),
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+
+    expect(() =>
+      readModels.parseMoodleH5PAttemptsResponse({
+        activityid: 87,
+        usersattempts: [
+          {
+            userid: 17,
+            attempts: Array.from(
+              { length: readModels.MOODLE_READ_MODEL_LIMITS.nestedItems + 1 },
+              () => ({})
+            ),
+          },
+        ],
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+
+    expect(() =>
+      readModels.parseMoodleH5PResultsResponse({
+        activityid: 87,
+        attempts: [
+          {
+            id: 701,
+            h5pactivityid: 107,
+            userid: 17,
+            attempt: 1,
+            rawscore: 18,
+            maxscore: 20,
+            scaled: 0.9,
+            duration: 95,
+            results: Array.from(
+              { length: readModels.MOODLE_READ_MODEL_LIMITS.nestedItems + 1 },
+              () => ({})
+            ),
+          },
+        ],
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+
+    expect(() =>
+      readModels.parseMoodleScormTracksResponse({
+        data: {
+          attempt: 1,
+          tracks: Array.from(
+            { length: readModels.MOODLE_READ_MODEL_LIMITS.collectionItems + 1 },
+            () => ({ element: "cmi.core.lesson_status", value: "complete" })
+          ),
+        },
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+
+    expect(() =>
+      readModels.parseMoodleScormTracksResponse({
+        data: {
+          attempt: 1,
+          tracks: [
+            {
+              element: "cmi.suspend_data",
+              value: "x".repeat(
+                readModels.MOODLE_READ_MODEL_LIMITS.textCharacters * 8 + 1
+              ),
+            },
+          ],
+        },
+      })
+    ).toThrow(readModels.MoodleReadModelError);
+
+    expect(() =>
+      readModels.parseMoodleResourcesResponse({
+        resources: [
+          {
+            id: 109,
+            coursemodule: 89,
+            course: 42,
+            name: "x".repeat(
+              readModels.MOODLE_READ_MODEL_LIMITS.titleCharacters + 1
+            ),
           },
         ],
       })

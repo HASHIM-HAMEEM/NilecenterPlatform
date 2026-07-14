@@ -11,6 +11,7 @@ import {
 } from "../../../../server/moodleSandboxWriteClient";
 import {
   createMoodleReadProjectionFingerprint,
+  createMoodleReadProjectionFingerprints,
   createMoodleSandboxSyntheticRun,
   runMoodleSandboxWriteValidation,
   toSafeMoodleSandboxWriteFailure,
@@ -34,7 +35,10 @@ function validEnvironment(): NodeJS.ProcessEnv {
   };
 }
 
-function fakeReadClient(reverse = false): Pick<MoodleClient, "call" | "probe"> {
+function fakeReadClient(options?: {
+  reverseSets?: boolean;
+  reverseSections?: boolean;
+}): Pick<MoodleClient, "call" | "probe"> {
   const call: Pick<MoodleClient, "call">["call"] = async <T>(
     functionName: MoodleReadFunction
   ) => {
@@ -49,14 +53,16 @@ function fakeReadClient(reverse = false): Pick<MoodleClient, "call" | "probe"> {
         { id: 2, name: "Second" },
         { id: 1, name: "First" },
       ];
-      return (reverse ? [...sections].reverse() : sections) as T;
+      return (
+        options?.reverseSections ? [...sections].reverse() : sections
+      ) as T;
     }
     if (functionName === "core_enrol_get_enrolled_users") {
       const users = [
         { id: 2, roles: [{ roleid: 5 }] },
         { id: 1, roles: [{ roleid: 5 }] },
       ];
-      return (reverse ? [...users].reverse() : users) as T;
+      return (options?.reverseSets ? [...users].reverse() : users) as T;
     }
     if (functionName === "core_group_get_course_groups") return [] as T;
     if (functionName === "core_group_get_course_groupings") return [] as T;
@@ -68,7 +74,7 @@ function fakeReadClient(reverse = false): Pick<MoodleClient, "call" | "probe"> {
     async probe() {
       return {
         mode: "read_only",
-        verifiedAt: reverse
+        verifiedAt: options?.reverseSets
           ? "2026-07-13T12:01:00.000Z"
           : "2026-07-13T12:00:00.000Z",
         site: {
@@ -126,11 +132,78 @@ describe("Moodle M2B validation CLI", () => {
     expect(generated.user.password.length).toBeGreaterThanOrEqual(24);
   });
 
-  it("creates a stable fingerprint independent of response order and probe time", async () => {
+  it("accepts only a canonical explicit marker for interrupted-run recovery", () => {
+    const recoveryMarker = "NILE-M2B-20260713T120000Z-a1b2c3d4";
+    const environment = {
+      ...validEnvironment(),
+      MOODLE_SANDBOX_WRITE_RUN_MARKER: recoveryMarker,
+    };
+
+    expect(validateMoodleSandboxWriteEnvironment(environment)).toEqual({
+      courseId: 42,
+      roleId: 5,
+      runMarker: recoveryMarker,
+    });
+    expect(
+      createMoodleSandboxSyntheticRun(
+        new Date("2026-07-13T12:30:00.000Z"),
+        size => Buffer.alloc(size, 0xcd),
+        recoveryMarker
+      )
+    ).toMatchObject({
+      marker: recoveryMarker,
+      user: {
+        marker: recoveryMarker,
+        username: "nile-m2b-20260713t120000z-a1b2c3d4",
+        email: "nile-m2b-20260713t120000z-a1b2c3d4@example.invalid",
+      },
+      groupName: `Nile Learn M2B ${recoveryMarker}`,
+    });
+    expect(() =>
+      validateMoodleSandboxWriteEnvironment({
+        ...environment,
+        MOODLE_SANDBOX_WRITE_RUN_MARKER: "NILE-M2B-not-canonical",
+      })
+    ).toThrow("validation failed (configuration)");
+  });
+
+  it("keeps true sets stable while preserving semantic Moodle section order", async () => {
     await expect(
       createMoodleReadProjectionFingerprint(fakeReadClient(), 42)
     ).resolves.toBe(
-      await createMoodleReadProjectionFingerprint(fakeReadClient(true), 42)
+      await createMoodleReadProjectionFingerprint(
+        fakeReadClient({ reverseSets: true }),
+        42
+      )
+    );
+
+    await expect(
+      createMoodleReadProjectionFingerprint(fakeReadClient(), 42)
+    ).resolves.not.toBe(
+      await createMoodleReadProjectionFingerprint(
+        fakeReadClient({ reverseSections: true }),
+        42
+      )
+    );
+  });
+
+  it("records per-family hashes and a combined root", async () => {
+    const fingerprints = await createMoodleReadProjectionFingerprints(
+      fakeReadClient(),
+      42
+    );
+
+    expect(Object.keys(fingerprints.families).sort()).toEqual([
+      "contents",
+      "course",
+      "enrolledUsers",
+      "groupings",
+      "groups",
+      "probe",
+    ]);
+    expect(fingerprints.root).toMatch(/^[0-9a-f]{64}$/);
+    Object.values(fingerprints.families).forEach(hash =>
+      expect(hash).toMatch(/^[0-9a-f]{64}$/)
     );
   });
 

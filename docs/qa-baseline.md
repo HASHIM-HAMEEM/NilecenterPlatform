@@ -32,6 +32,43 @@ checks passed:
 This is the current protected baseline. The previous 1,509/0 evidence remains
 below as historical acceptance for the earlier route matrix.
 
+## Moodle M2B Preservation Evidence
+
+The synthetic Moodle sandbox write proof did not replace the accepted
+single-run `1,598/0` baseline. After all non-browser verification gates passed,
+an external process `SIGTERM` interrupted the first browser run and the QA
+runner correctly recorded the interruption as a failure. The same complete
+coverage was then partitioned with the runner's existing role filter across
+isolated servers and data directories:
+
+- Public Nile Forms and role denials: 20 checks, 0 failures.
+- Student: 363 checks, 0 failures.
+- Teacher: 349 checks, 0 failures.
+- Registrar and HOD: 591 checks, 0 failures.
+- Branch Admin and Super Admin: 696 checks, 0 failures.
+
+The 2,019 executed checks include repeated common public, authentication, and
+shell assertions in each shard. The evidence therefore preserves, but does not
+renumber, the official baseline. Exact artifacts and provider cleanup evidence
+are recorded in `docs/moodle-m2b-write-proof-evidence-20260713.md`.
+
+## Moodle M2C-R Preservation Evidence
+
+The partial M2C-R provider-contract run did not change the accepted application
+baseline. After sandbox cleanup and credential teardown, the full repository
+gate completed in one run:
+
+- QA summary artifact:
+  `output/playwright/moodle-m2c-read-partial-20260713/portal-qa-summary.json`.
+- Portal QA: 1,598 checks, 0 failures.
+- Supporting validation: all static and portable PostgreSQL, session, and Nile
+  Forms gates passed; 572 unit tests passed across 50 files; TypeScript and the
+  production build passed.
+
+The provider result remains partial at 26/31 because H5P and SCORM fixtures are
+not available. The exact provider boundary, cleanup, and stop decision are
+recorded in `docs/moodle-m2c-read-closure-evidence-20260713.md`.
+
 ## Previous 1,509 Preservation Evidence
 
 The previous accepted count was expanded after Nile Forms online, registered promotion,

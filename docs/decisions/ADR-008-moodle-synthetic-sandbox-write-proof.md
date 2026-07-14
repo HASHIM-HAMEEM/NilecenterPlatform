@@ -47,9 +47,9 @@ constraints:
 The exact write-service function surface is:
 
 - `core_webservice_get_site_info`
-- `core_user_get_users` (restricted by the client to the deterministic fake
-  username derived from the exact run marker for unknown-outcome
-  reconciliation)
+- `core_user_get_users` (restricted by the client to the exact run marker;
+  the returned marker and deterministic fake username must both match for
+  unknown-outcome reconciliation)
 - `core_user_create_users`
 - `core_user_update_users`
 - `core_user_delete_users`
@@ -59,6 +59,15 @@ The exact write-service function surface is:
 - `core_group_delete_groups`
 - `core_group_add_group_members`
 - `core_group_delete_group_members`
+
+The validator creates a fresh canonical `NILE-M2B-*` run marker by default for
+one-process execution. When cross-process recovery may be required, an operator
+must set `MOODLE_SANDBOX_WRITE_RUN_MARKER` before the first invocation and reuse
+that exact marker after interruption. This optional recovery input is validated
+before any network call and derives the same fake username, email, group name,
+and reconciliation keys. A marker generated inside an interrupted process is
+not recoverable from the redacted result. The marker is not a credential and
+must never identify a real person.
 
 Course creation, course deletion, activity/content writes, grades, attempts,
 submissions, messages, attendance, calendars, role administration, token

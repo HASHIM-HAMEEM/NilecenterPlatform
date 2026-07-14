@@ -119,7 +119,7 @@ export type MoodleSandboxFoundUser = {
   username: string;
   firstName: string;
   lastName: string;
-  email: string;
+  email?: string;
   marker: string;
 };
 
@@ -589,13 +589,12 @@ function validateWriteParameters(
         "user search criterion"
       );
       assertExactKeys(criterion, ["key", "value"], "user search criterion");
-      const expectedUsername = syntheticUsernameForMarker(marker);
-      if (criterion.key !== "username") {
+      if (criterion.key !== "idnumber") {
         guardError(
           "Moodle sandbox user lookup is restricted to the run marker."
         );
       }
-      if (criterion.value !== expectedUsername) {
+      if (criterion.value !== marker) {
         guardError(
           "Moodle sandbox user lookup marker does not match the run marker."
         );
@@ -885,15 +884,16 @@ function parseFoundUsers(
       item.deleted === true || item.deleted === 1 || item.deleted === "1";
     if (
       deleted ||
-      criterion.key !== "username" ||
-      criterion.value !== expectedUsername ||
+      criterion.key !== "idnumber" ||
+      criterion.value !== marker ||
+      idnumber !== marker ||
       username !== expectedUsername ||
       username.length > MOODLE_SANDBOX_WRITE_LIMITS.usernameCharacters ||
       !firstName ||
       firstName.length > MOODLE_SANDBOX_WRITE_LIMITS.nameCharacters ||
       !lastName ||
       lastName.length > MOODLE_SANDBOX_WRITE_LIMITS.nameCharacters ||
-      email !== `${expectedUsername}@example.invalid` ||
+      (email !== "" && email !== `${expectedUsername}@example.invalid`) ||
       email.length > MOODLE_SANDBOX_WRITE_LIMITS.emailCharacters
     ) {
       invalidResponse("marked user");
@@ -904,7 +904,7 @@ function parseFoundUsers(
       username,
       firstName,
       lastName,
-      email,
+      ...(email ? { email } : {}),
       marker,
     } satisfies MoodleSandboxFoundUser;
   });
@@ -1271,9 +1271,7 @@ export function createMoodleSandboxWriteClient({
       return call<MoodleSandboxFoundUser[]>(
         "core_user_get_users",
         {
-          criteria: [
-            { key: "username", value: syntheticUsernameForMarker(marker) },
-          ],
+          criteria: [{ key: "idnumber", value: marker }],
         },
         { marker }
       );
