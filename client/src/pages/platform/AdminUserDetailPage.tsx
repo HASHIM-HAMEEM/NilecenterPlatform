@@ -312,7 +312,11 @@ export default function AdminUserDetailPage({
     { id: "overview", label: "Overview", href: baseUserPath },
     { id: "access", label: "Access", href: `${baseUserPath}/access` },
     { id: "activity", label: "Activity", href: `${baseUserPath}/activity` },
-    { id: "related", label: "Related records", href: `${baseUserPath}/related` },
+    {
+      id: "related",
+      label: "Related records",
+      href: `${baseUserPath}/related`,
+    },
   ];
 
   if (isTeacherAccount) {
@@ -325,29 +329,31 @@ export default function AdminUserDetailPage({
 
   const activeView =
     view === "assignment" && !isTeacherAccount ? "related" : view;
-  const tabMeta: Record<UserDetailView, { title: string; description: string }> =
-    {
-      overview: {
-        title: "Account overview",
-        description: "Read identity, contact, role, and school scope.",
-      },
-      access: {
-        title: "Access settings",
-        description: "Update this user's role, branch, department, or status.",
-      },
-      activity: {
-        title: "Account activity",
-        description: "Review recent changes for this account.",
-      },
-      related: {
-        title: "Related records",
-        description: "Review assigned classes and connected work.",
-      },
-      assignment: {
-        title: "Teacher assignment",
-        description: "Assign this teacher to one course run.",
-      },
-    };
+  const tabMeta: Record<
+    UserDetailView,
+    { title: string; description: string }
+  > = {
+    overview: {
+      title: "Account overview",
+      description: "Read identity, contact, role, and school scope.",
+    },
+    access: {
+      title: "Access settings",
+      description: "Update this user's role, branch, department, or status.",
+    },
+    activity: {
+      title: "Account activity",
+      description: "Review recent changes for this account.",
+    },
+    related: {
+      title: "Related records",
+      description: "Review assigned classes and connected work.",
+    },
+    assignment: {
+      title: "Teacher assignment",
+      description: "Assign this teacher to one course run.",
+    },
+  };
 
   const headerActions =
     activeView === "access" ? (
@@ -371,7 +377,10 @@ export default function AdminUserDetailPage({
       </>
     ) : (
       <>
-        <Link className="platform-primary-button" href={`${baseUserPath}/access`}>
+        <Link
+          className="platform-primary-button"
+          href={`${baseUserPath}/access`}
+        >
           <Edit3 size={15} />
           Edit access
         </Link>
@@ -398,18 +407,36 @@ export default function AdminUserDetailPage({
             <ArrowLeft size={14} />
             Users
           </Link>
-          <h1>{user.name}</h1>
+          <h2>{user.name}</h2>
           <p>
             {role.label} · {branch?.name ?? "No branch"} ·{" "}
             {department?.name ?? "No department"}
           </p>
         </div>
       </div>
-      <div className="admin-user-detail-status">
-        <StatusBadge tone={statusTone(user.status)}>{user.status}</StatusBadge>
-        <span>{user.email}</span>
-      </div>
       <div className="admin-user-detail-actions">{headerActions}</div>
+      <dl className="admin-user-detail-facts">
+        <div>
+          <dt>Status</dt>
+          <dd>
+            <StatusBadge tone={statusTone(user.status)}>
+              {user.status}
+            </StatusBadge>
+          </dd>
+        </div>
+        <div>
+          <dt>Email</dt>
+          <dd>{user.email}</dd>
+        </div>
+        <div>
+          <dt>Branch</dt>
+          <dd>{branch?.name ?? "No branch"}</dd>
+        </div>
+        <div>
+          <dt>Department</dt>
+          <dd>{department?.name ?? "No department"}</dd>
+        </div>
+      </dl>
     </section>
   );
 
@@ -428,8 +455,8 @@ export default function AdminUserDetailPage({
   );
 
   const overview = (
-    <div className="admin-user-detail-grid">
-      <section className="admin-user-detail-section">
+    <section className="admin-user-detail-overview">
+      <section className="admin-user-detail-overview-section">
         <h2>Contact information</h2>
         <dl className="admin-user-detail-list">
           <div>
@@ -446,7 +473,7 @@ export default function AdminUserDetailPage({
           </div>
         </dl>
       </section>
-      <section className="admin-user-detail-section">
+      <section className="admin-user-detail-overview-section">
         <h2>Role summary</h2>
         <dl className="admin-user-detail-list">
           <div>
@@ -463,7 +490,7 @@ export default function AdminUserDetailPage({
           </div>
         </dl>
       </section>
-      <section className="admin-user-detail-section">
+      <section className="admin-user-detail-overview-section">
         <h2>School scope</h2>
         <dl className="admin-user-detail-list">
           <div>
@@ -482,7 +509,7 @@ export default function AdminUserDetailPage({
           </div>
         </dl>
       </section>
-    </div>
+    </section>
   );
 
   const access = (
@@ -840,10 +867,6 @@ export default function AdminUserDetailPage({
           <>
             {header}
             {nav}
-            <section className="admin-user-detail-tab-heading">
-              <strong>{tabMeta[activeView].title}</strong>
-              <span>{tabMeta[activeView].description}</span>
-            </section>
             <div className="admin-user-detail-tab-panel">
               {contentByView[activeView]}
             </div>

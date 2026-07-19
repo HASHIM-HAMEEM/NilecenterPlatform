@@ -637,72 +637,100 @@ export default function AdminUsersPage({ mode = "list" }: AdminUsersPageProps) {
       subtitle={`${visibleUsers.length} people`}
       className="admin-users-simple-card"
     >
-      <div className="admin-record-list admin-user-record-list">
-        {visibleUsers.map(user => {
-          const branch = state.branches.find(item => item.id === user.branchId);
-          const department = state.departments.find(
-            item => item.id === user.departmentId
-          );
-          const userMeta = roleMeta[safeRole(user.activeRole)];
-          return (
-            <article key={user.id} data-testid={`admin-user-row-${user.id}`}>
-              <Link
-                className="admin-user-record-copy"
-                href={`/app/admin/users/${user.id}`}
-                aria-label={`Open ${user.name}`}
-              >
-                <span
-                  className="admin-user-record-avatar"
-                  style={{
-                    background: userMeta.tint,
-                    color: userMeta.color,
-                  }}
-                >
-                  {roleInitials(safeRole(user.activeRole))}
-                </span>
-                <span className="admin-record-list-copy">
-                  <span>{userMeta.label}</span>
-                  <strong>{user.name}</strong>
-                  <p title={user.email}>{compactEmail(user.email)}</p>
-                </span>
-              </Link>
-              <dl className="admin-record-list-facts">
-                <div>
-                  <dt>Branch</dt>
-                  <dd>{branch?.name ?? "Not set"}</dd>
-                </div>
-                <div>
-                  <dt>Department</dt>
-                  <dd>{department?.name ?? "Not set"}</dd>
-                </div>
-                <div>
-                  <dt>Last activity</dt>
-                  <dd>{formatActivity(activityByUser.get(user.id))}</dd>
-                </div>
-              </dl>
-              <div className="admin-record-list-meta">
-                <StatusBadge tone={statusTone(user.status)}>
-                  {user.status}
-                </StatusBadge>
-                <Link
-                  className="simple-portal-row-action"
-                  href={`/app/admin/users/${user.id}`}
-                  aria-label={`Open ${user.name}`}
-                >
-                  Open
-                  <ArrowRight size={14} aria-hidden="true" />
-                </Link>
-              </div>
-            </article>
-          );
-        })}
-        {!visibleUsers.length ? (
-          <div className="platform-empty-state">
-            <strong>No users found</strong>
-            <span>Try a different search or clear one of the filters.</span>
-          </div>
-        ) : null}
-      </div>
+      {visibleUsers.length ? (
+        <div className="admin-users-simple-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th className="admin-users-col-name" scope="col">
+                  User
+                </th>
+                <th className="admin-users-col-role" scope="col">
+                  Role
+                </th>
+                <th className="admin-users-col-branch" scope="col">
+                  Branch
+                </th>
+                <th className="admin-users-col-department" scope="col">
+                  Department
+                </th>
+                <th className="admin-users-col-status" scope="col">
+                  Status
+                </th>
+                <th className="admin-users-col-activity" scope="col">
+                  Last activity
+                </th>
+                <th className="admin-users-col-actions" scope="col">
+                  <span className="platform-sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleUsers.map(user => {
+                const branch = state.branches.find(
+                  item => item.id === user.branchId
+                );
+                const department = state.departments.find(
+                  item => item.id === user.departmentId
+                );
+                const userMeta = roleMeta[safeRole(user.activeRole)];
+                return (
+                  <tr key={user.id} data-testid={`admin-user-row-${user.id}`}>
+                    <td>
+                      <Link
+                        className="admin-users-simple-person"
+                        href={`/app/admin/users/${user.id}`}
+                        aria-label={`Open ${user.name}`}
+                      >
+                        <span
+                          style={{
+                            background: userMeta.tint,
+                            color: userMeta.color,
+                          }}
+                        >
+                          {roleInitials(safeRole(user.activeRole))}
+                        </span>
+                        <span>
+                          <strong>{user.name}</strong>
+                          <small title={user.email}>
+                            {compactEmail(user.email)}
+                          </small>
+                        </span>
+                      </Link>
+                    </td>
+                    <td>{userMeta.label}</td>
+                    <td>{branch?.name ?? "Not set"}</td>
+                    <td>{department?.name ?? "Not set"}</td>
+                    <td>
+                      <StatusBadge tone={statusTone(user.status)}>
+                        {user.status}
+                      </StatusBadge>
+                    </td>
+                    <td>{formatActivity(activityByUser.get(user.id))}</td>
+                    <td>
+                      <div className="platform-row-actions">
+                        <Link
+                          className="simple-portal-row-action admin-users-open-link"
+                          href={`/app/admin/users/${user.id}`}
+                          aria-label={`Open ${user.name}`}
+                        >
+                          <span>Open</span>
+                          <ArrowRight size={14} aria-hidden="true" />
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="platform-empty-state">
+          <strong>No users found</strong>
+          <span>Try a different search or clear one of the filters.</span>
+        </div>
+      )}
     </DataTableCard>
   );
 

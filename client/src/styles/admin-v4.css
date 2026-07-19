@@ -220,26 +220,224 @@
   box-shadow: none;
 }
 
-.platform-shell[data-role="superadmin"] .admin-user-detail-tabs {
-  width: fit-content;
-  max-width: 100%;
-  min-height: 50px;
-  padding: 4px;
-  border-color: color-mix(in srgb, var(--border) 88%, var(--foreground));
-  border-radius: 999px;
+.platform-shell[data-role="superadmin"]
+  .admin-users-simple-toolbar
+  :is(input, select) {
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.platform-shell[data-role="superadmin"] .admin-users-simple-card {
+  background: var(--card);
+  box-shadow: none;
+}
+
+.platform-shell[data-role="superadmin"] .admin-users-simple-card:hover {
+  transform: none;
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+.platform-shell[data-role="superadmin"]
+  .admin-users-simple-card
+  > .platform-card-title {
+  min-height: 58px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--card) 96%, var(--muted));
 }
 
+.platform-shell[data-role="superadmin"] .admin-users-simple-table-wrap thead {
+  background: color-mix(in srgb, var(--muted) 58%, var(--card));
+}
+
+.platform-shell[data-role="superadmin"] .admin-users-simple-table-wrap th {
+  padding-block: 11px;
+  color: color-mix(in srgb, var(--muted-foreground) 88%, var(--foreground));
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.platform-shell[data-role="superadmin"] .admin-users-simple-table-wrap td {
+  height: 62px;
+  padding-block: 10px;
+  color: color-mix(in srgb, var(--foreground) 88%, var(--muted-foreground));
+  font-size: 12px;
+}
+
+.platform-shell[data-role="superadmin"]
+  .admin-users-simple-table-wrap
+  tbody
+  tr {
+  transition: background 150ms ease;
+}
+
+.platform-shell[data-role="superadmin"]
+  .admin-users-simple-table-wrap
+  tbody
+  tr:hover {
+  background: color-mix(in srgb, var(--role-tint) 20%, var(--card));
+}
+
+.platform-shell[data-role="superadmin"]
+  .admin-users-simple-table-wrap
+  tbody
+  tr:last-child
+  td {
+  border-bottom: 0;
+}
+
+.platform-shell[data-role="superadmin"] .admin-users-simple-person strong {
+  font-size: 12.5px;
+}
+
+.platform-shell[data-role="superadmin"] .admin-users-simple-person small {
+  font-size: 10.5px;
+}
+
+.platform-shell[data-role="superadmin"] .admin-users-open-link {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+}
+
+.platform-shell[data-role="superadmin"] .admin-users-open-link span {
+  display: none;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 18px;
+  padding: 18px;
+  background: var(--card);
+  box-shadow: none;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-identity > span {
+  border-radius: 8px;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-identity h2 {
+  margin: 4px 0 2px;
+  color: var(--foreground);
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-facts {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-facts > div {
+  min-width: 0;
+  padding-inline: 14px;
+  border-inline-start: 1px solid var(--border);
+  display: grid;
+  gap: 5px;
+}
+
+.platform-shell[data-role="superadmin"]
+  .admin-user-detail-facts
+  > div:first-child {
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-facts dt {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-facts dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-overview {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-overview-section {
+  min-width: 0;
+  padding: 17px 18px;
+  border-inline-start: 1px solid var(--border);
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.platform-shell[data-role="superadmin"]
+  .admin-user-detail-overview-section:first-child {
+  border-inline-start: 0;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-overview-section h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.platform-shell[data-role="superadmin"]
+  :is(
+    .admin-user-detail-section,
+    .admin-user-detail-activity,
+    .admin-user-detail-related-list article,
+    .admin-user-detail-activity-list article,
+    .admin-user-detail-edit-placeholder,
+    .admin-user-detail-assignment-summary,
+    .admin-user-detail-form input,
+    .admin-user-detail-form select,
+    .admin-user-detail-form textarea,
+    .admin-user-detail-form-actions a,
+    .admin-user-detail-form-actions button
+  ) {
+  border-radius: 8px;
+}
+
+.platform-shell[data-role="superadmin"] .admin-user-detail-tabs {
+  width: 100%;
+  max-width: 100%;
+  min-height: 46px;
+  margin-bottom: 12px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  gap: 18px;
+}
+
 .platform-shell[data-role="superadmin"] .admin-user-detail-tabs a {
-  min-height: 40px;
-  border-radius: 999px;
-  padding-inline: 15px;
+  min-height: 46px;
+  border-radius: 0;
+  padding-inline: 2px;
   font-weight: 760;
 }
 
 .platform-shell[data-role="superadmin"] .admin-user-detail-tabs a.active {
-  background: var(--role-color);
-  color: white;
+  border-color: var(--foreground);
+  background: transparent;
+  color: var(--foreground);
 }
 
 @media (min-width: 1600px) {
@@ -264,6 +462,51 @@
 @media (max-width: 980px) {
   .platform-shell[data-role="superadmin"] .platform-v2-admin-main {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1180px) {
+  .platform-shell[data-role="superadmin"] .admin-user-detail-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 0;
+  }
+
+  .platform-shell[data-role="superadmin"]
+    .admin-user-detail-facts
+    > div:nth-child(odd) {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+
+  .platform-shell[data-role="superadmin"] .admin-user-detail-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-shell[data-role="superadmin"] .admin-user-detail-overview-section {
+    border-inline-start: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .platform-shell[data-role="superadmin"]
+    .admin-user-detail-overview-section:first-child {
+    border-top: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .platform-shell[data-role="superadmin"] .admin-user-detail-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-shell[data-role="superadmin"] .admin-user-detail-actions {
+    justify-content: flex-start;
+  }
+
+  .platform-shell[data-role="superadmin"]
+    :is(.admin-user-detail-actions, .admin-user-detail-form-actions)
+    > * {
+    flex: 0 0 auto;
+    min-height: 40px;
   }
 }
 
@@ -313,6 +556,70 @@
   .platform-shell[data-role="superadmin"] .admin-user-detail-tabs {
     width: 100%;
     overflow-x: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .platform-shell[data-role="superadmin"]
+    .admin-users-simple-table-wrap
+    :is(td:nth-child(4), td:nth-child(6)) {
+    display: grid;
+  }
+
+  .platform-shell[data-role="superadmin"] .admin-users-simple-table-wrap td {
+    height: auto;
+  }
+
+  .platform-shell[data-role="superadmin"]
+    .admin-users-simple-table-wrap
+    tbody
+    tr:hover {
+    background: var(--card);
+  }
+
+  .platform-shell[data-role="superadmin"] .admin-users-open-link {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 11px;
+    justify-content: space-between;
+  }
+
+  .platform-shell[data-role="superadmin"] .admin-users-open-link span {
+    display: inline;
+  }
+}
+
+@media (max-width: 520px) {
+  .platform-shell[data-role="superadmin"] .admin-user-detail-hero {
+    padding: 14px;
+  }
+
+  .platform-shell[data-role="superadmin"] .admin-user-detail-facts {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .platform-shell[data-role="superadmin"] .admin-user-detail-facts > div {
+    padding: 10px 0;
+    border-inline-start: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .platform-shell[data-role="superadmin"]
+    .admin-user-detail-facts
+    > div:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .platform-shell[data-role="superadmin"] .admin-user-detail-actions {
+    width: 100%;
+  }
+
+  .platform-shell[data-role="superadmin"]
+    :is(.admin-user-detail-actions, .admin-user-detail-form-actions)
+    > * {
+    width: 100%;
   }
 }
 
