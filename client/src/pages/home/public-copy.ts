@@ -94,13 +94,14 @@ const en = {
     ages: ["Child", "Teen", "Adult", "A group or organisation"],
     levels: ["Complete beginner", "Can read a little", "Intermediate", "Advanced"],
     branches: [
-      { value: "Cairo B1", label: "Nasr City campus" },
-      { value: "Online", label: "Online" },
+      { value: "campus", label: "Nasr City campus" },
+      { value: "online", label: "Online" },
     ],
     submit: "Send request",
     sending: "Sending",
     invalid: "Fill in your name, a valid email, your phone and the other required choices.",
     failed: "We could not send your request. Try again, or message us on WhatsApp.",
+    unavailable: "Online booking is not available right now. Message us on WhatsApp and we will book it for you.",
     success: "Thank you. Your request is with our admissions team.",
   },
   faq: {
@@ -270,13 +271,14 @@ const ar: PublicCopy = {
     ages: ["طفل", "مراهق", "بالغ", "مجموعة أو مؤسسة"],
     levels: ["مبتدئ تمامًا", "أقرأ قليلًا", "متوسط", "متقدم"],
     branches: [
-      { value: "Cairo B1", label: "مقر مدينة نصر" },
-      { value: "Online", label: "أونلاين" },
+      { value: "campus", label: "مقر مدينة نصر" },
+      { value: "online", label: "أونلاين" },
     ],
     submit: "إرسال الطلب",
     sending: "جارٍ الإرسال",
     invalid: "أدخل اسمك وبريدًا صحيحًا وهاتفك وبقية الاختيارات المطلوبة.",
     failed: "تعذر إرسال طلبك. حاول مرة أخرى أو راسلنا على واتساب.",
+    unavailable: "الحجز عبر الإنترنت غير متاح الآن. راسلنا عبر واتساب وسنحجز لك.",
     success: "شكرًا لك. وصل طلبك إلى فريق القبول.",
   },
   faq: {
@@ -444,13 +446,14 @@ const tr: PublicCopy = {
     ages: ["Çocuk", "Genç", "Yetişkin", "Bir grup veya kurum"],
     levels: ["Tam başlangıç", "Biraz okuyabiliyorum", "Orta", "İleri"],
     branches: [
-      { value: "Cairo B1", label: "Nasr City kampüsü" },
-      { value: "Online", label: "Çevrim içi" },
+      { value: "campus", label: "Nasr City kampüsü" },
+      { value: "online", label: "Çevrim içi" },
     ],
     submit: "Talebi gönder",
     sending: "Gönderiliyor",
     invalid: "Adınızı, geçerli bir e-postayı, telefonunuzu ve diğer zorunlu seçimleri doldurun.",
     failed: "Talebiniz gönderilemedi. Tekrar deneyin veya WhatsApp’tan yazın.",
+    unavailable: "Çevrim içi randevu şu anda kullanılamıyor. Bize WhatsApp'tan yazın, randevunuzu biz oluşturalım.",
     success: "Teşekkürler. Talebiniz kabul ekibimize ulaştı.",
   },
   faq: {
@@ -710,11 +713,11 @@ const zh: PublicCopy = {
     ],
     branches: [
       {
-        value: "Cairo B1",
+        value: "campus",
         label: "纳斯尔城校区"
       },
       {
-        value: "Online",
+        value: "online",
         label: "线上"
       }
     ],
@@ -722,6 +725,7 @@ const zh: PublicCopy = {
     sending: "正在发送",
     invalid: "请填写姓名、有效的电子邮箱、电话以及其他必选项。",
     failed: "无法发送你的请求。请重试，或通过 WhatsApp 联系我们。",
+    unavailable: "在线预约暂时无法使用。请通过 WhatsApp 联系我们，我们会为你预约。",
     success: "谢谢。你的请求已提交给我们的招生团队。"
   },
   faq: {
@@ -1037,11 +1041,11 @@ const ru: PublicCopy = {
     ],
     branches: [
       {
-        value: "Cairo B1",
+        value: "campus",
         label: "Филиал в Наср-Сити"
       },
       {
-        value: "Online",
+        value: "online",
         label: "Онлайн"
       }
     ],
@@ -1049,6 +1053,7 @@ const ru: PublicCopy = {
     sending: "Отправка",
     invalid: "Укажите имя, корректную эл. почту, телефон и другие обязательные пункты.",
     failed: "Не удалось отправить заявку. Повторите попытку или напишите нам в WhatsApp.",
+    unavailable: "Онлайн-запись сейчас недоступна. Напишите нам в WhatsApp, и мы запишем вас.",
     success: "Спасибо. Ваша заявка передана нашей команде приёма."
   },
   faq: {
@@ -1364,11 +1369,11 @@ const ur: PublicCopy = {
     ],
     branches: [
       {
-        value: "Cairo B1",
+        value: "campus",
         label: "نصر سٹی کیمپس"
       },
       {
-        value: "Online",
+        value: "online",
         label: "آن لائن"
       }
     ],
@@ -1376,6 +1381,7 @@ const ur: PublicCopy = {
     sending: "بھیجی جا رہی ہے",
     invalid: "اپنا نام، درست ای میل، فون اور دیگر لازمی انتخاب پُر کریں۔",
     failed: "آپ کی درخواست نہیں بھیجی جا سکی۔ دوبارہ کوشش کریں، یا واٹس ایپ پر پیغام بھیجیں۔",
+    unavailable: "آن لائن بکنگ ابھی دستیاب نہیں۔ واٹس ایپ پر پیغام بھیجیں، ہم آپ کی بکنگ کر دیں گے۔",
     success: "شکریہ۔ آپ کی درخواست ہماری داخلہ ٹیم کو مل گئی ہے۔"
   },
   faq: {

@@ -208,22 +208,30 @@ function FieldCard({
               </li>
             ))}
           </ul>
-          <button
-            type="button"
-            className="staff-btn w-fit"
-            data-size="sm"
-            onClick={() =>
-              onChange({
-                options: [
-                  ...options,
-                  { id: uid("opt"), label: { en: `Option ${options.length + 1}`, ar: `الخيار ${options.length + 1}` } },
-                ],
-              })
-            }
-          >
-            <Plus strokeWidth={1.75} aria-hidden />
-            {F.addOption}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="staff-btn w-fit"
+              data-size="sm"
+              onClick={() =>
+                onChange({
+                  options: [
+                    ...options,
+                    { id: uid("opt"), label: { en: `Option ${options.length + 1}`, ar: `الخيار ${options.length + 1}` } },
+                  ],
+                })
+              }
+            >
+              <Plus strokeWidth={1.75} aria-hidden />
+              {F.addOption}
+            </button>
+            {/* Branch-list answers file each response under that EMS branch. */}
+            {field.type === "single_choice" && branches.active.length ? (
+              <button type="button" className="staff-btn w-fit" data-size="sm" onClick={() => onChange({ options: branchChoices(branches.active) })}>
+                {F.useBranchList}
+              </button>
+            ) : null}
+          </div>
         </fieldset>
       ) : null}
       {!display ? (

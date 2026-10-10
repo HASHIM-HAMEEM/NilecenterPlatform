@@ -21,6 +21,8 @@ export const formFieldTypes = [
 
 export type FormFieldType = (typeof formFieldTypes)[number];
 export const formLocales = ["en", "ar", "tr"] as const;
+/** Choice ids for EMS branches: "br:<uuid>" satisfies the form id rules. */
+export const BRANCH_CHOICE_PREFIX = "br:";
 export type FormLocale = (typeof formLocales)[number];
 export type FormOwnerRole =
   | "registrar"

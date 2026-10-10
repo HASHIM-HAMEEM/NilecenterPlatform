@@ -9,6 +9,7 @@ import {
 } from "./nileFormsCompatibilityRepository.js";
 import { getPlatformStateRepository } from "./platformRepository.js";
 import {
+  BRANCH_CHOICE_PREFIX,
   formContentHasRecordLinks,
   formLocales,
   getOfflineEligibility,
@@ -968,7 +969,19 @@ function submissionScopeFromAnswers(
     field =>
       field.type === "entity_reference" && field.entityType === "department"
   );
-  const answerBranch = branchField ? answers[branchField.id] : undefined;
+  // A branch-list question ("Use our branch list" in the builder) stores the
+  // EMS branch as a choice id; validation already limited it to the
+  // published options, so it can file the response under that branch.
+  const branchChoice = fields
+    .filter(field => field.type === "single_choice")
+    .map(field => answers[field.id])
+    .find(
+      (value): value is string =>
+        typeof value === "string" && value.startsWith(BRANCH_CHOICE_PREFIX)
+    );
+  const answerBranch = branchField
+    ? answers[branchField.id]
+    : branchChoice?.slice(BRANCH_CHOICE_PREFIX.length);
   const answerDepartment = departmentField
     ? answers[departmentField.id]
     : undefined;

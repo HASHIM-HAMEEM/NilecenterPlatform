@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link } from "wouter";
 import {
   ArrowRight,
@@ -16,8 +16,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { NileRosette } from "@/components/brand/NileLogo";
-import { saveBackendRecord, verifyPublicCertificateRequest, type PublicCertificateVerificationDto } from "@/lib/backend/api";
+import { verifyPublicCertificateRequest, type PublicCertificateVerificationDto } from "@/lib/backend/api";
+import { fetchPublicForm, submitPublicFormRequest } from "@/lib/forms/api";
 import { leadFormSchema, placementFormSchema } from "@/lib/validators/platform";
+import { BRANCH_CHOICE_PREFIX, getLocalizedText, type FormField, type FormLocale } from "@shared/nileForms";
 import { LANDING_COPY, type LandingLocale } from "../home/landing-copy";
 import { OFFICIAL_PRIVACY, OFFICIAL_TERMS, PUBLIC_COPY } from "../home/public-copy";
 import {
@@ -452,36 +454,154 @@ function CertificateVerification({ locale }: PageProps) {
   );
 }
 
-/* ---------------- Booking (used when Nile Forms is not live) ---------- */
+/* ---------------- Booking: sent into the published Nile Form ---------- */
 
+// Choice ids used by the published booking forms; labels follow the page language.
+const LANGUAGE_IDS = ["english", "arabic", "turkish", "french"];
+const AGE_IDS = ["child", "teen", "adult", "organisation"];
+const LEVEL_IDS = ["beginner", "some_reading", "intermediate", "advanced"];
+const CHOICE_TYPES = new Set(["single_choice", "multiple_choice"]);
+
+type Choice = { value: string; label: string; english: string };
+// Form question id, value, English label, English display value.
+type Entry = [string, string | undefined, string, string?];
+
+function newSubmissionId() {
+  const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return `booking:${id}`;
+}
+
+/**
+ * The booking pages keep their own design and six languages but submit into
+ * the published Nile Form, so every request reaches Forms > Responses. A
+ * branch-list question in that form files each request under its branch.
+ * Answers the current form has no question for go into its notes.
+ */
 function BookingForm({ type, locale }: PageProps & { type: "trial" | "placement" }) {
   const t = PUBLIC_COPY[locale].booking;
-  const programmes = LANDING_COPY[locale].programmes.items;
+  const EN = PUBLIC_COPY.en.booking;
+  const slug = type === "trial" ? "free-trial-enquiry" : "placement-request";
+  const formLocale: FormLocale = locale === "ar" || locale === "tr" ? locale : "en";
+  const [fields, setFields] = useState<FormField[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const schema = type === "trial" ? leadFormSchema : placementFormSchema;
-  const set = (key: string) => (event: { target: { value: string } }) =>
+  // One id per set of answers, so a retry after a lost response is not a duplicate.
+  const submissionId = useRef<string | null>(null);
+  const set = (key: string) => (event: { target: { value: string } }) => {
+    submissionId.current = null;
     setValues(previous => ({ ...previous, [key]: event.target.value }));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchPublicForm(slug).then(response => {
+      if (cancelled) return;
+      if (response.ok && response.data) {
+        setFields(response.data.version.content.pages.flatMap(page => page.fields));
+        setStatus("ready");
+      } else {
+        setStatus("unavailable");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  const byId = new Map(fields.map(item => [item.id, item]));
+  const branchField = fields.find(
+    item => item.type === "single_choice" && item.options?.some(option => option.id.startsWith(BRANCH_CHOICE_PREFIX))
+  );
+  const programmeName = (lang: LandingLocale, id: string) =>
+    LANDING_COPY[lang].programmes.items.find(item => item.slug.replace(/-/g, "_") === id)?.name;
+  const courseOptions = byId.get("course_interest")?.options ?? [];
+  const subjects: Choice[] = courseOptions.length
+    ? courseOptions.map(option => ({
+        value: option.id,
+        label: programmeName(locale, option.id) ?? getLocalizedText(option.label, formLocale),
+        english: programmeName("en", option.id) ?? option.label.en,
+      }))
+    : LANDING_COPY.en.programmes.items.slice(0, 6).map((item, i) => ({
+        value: item.slug.replace(/-/g, "_"),
+        label: LANDING_COPY[locale].programmes.items[i].name,
+        english: item.name,
+      }));
+  const paired = (labels: string[], ids: string[], english: string[]): Choice[] =>
+    labels.map((label, i) => ({ label, value: ids[i], english: english[i] }));
+  const languages = paired(t.languages, LANGUAGE_IDS, EN.languages);
+  const ages = paired(t.ages, AGE_IDS, EN.ages);
+  const levels = paired(t.levels, LEVEL_IDS, EN.levels);
+  const modes = paired(
+    t.branches.map(mode => mode.label),
+    t.branches.map(mode => mode.value),
+    EN.branches.map(mode => mode.label)
+  );
+  const branchOptions: Choice[] =
+    branchField?.options?.map(option => ({
+      value: option.id,
+      label: getLocalizedText(option.label, formLocale),
+      english: option.label.en,
+    })) ?? [];
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const result = schema.safeParse(values);
-    if (!result.success) {
+    const result = (type === "trial" ? leadFormSchema : placementFormSchema).safeParse(values);
+    if (!result.success || (branchField?.required && !values.branchChoice)) {
       setError(t.invalid);
       return;
     }
+    const shown = (options: Choice[], value?: string) => options.find(option => option.value === value)?.english;
+    const entries: Entry[] = [
+      ["full_name", values.fullName, EN.fullName],
+      ["email", values.email, EN.email],
+      ["phone", values.phone, EN.phone],
+      ["course_interest", values.subject, EN.subject, shown(subjects, values.subject)],
+    ];
+    if (type === "trial") {
+      entries.push(
+        ["country", values.country, EN.country],
+        ["preferred_language", values.preferredLanguage, EN.language, shown(languages, values.preferredLanguage)],
+        ["age_group", values.ageGroup, EN.ageGroup, shown(ages, values.ageGroup)],
+        ["preferred_schedule", values.preferredSchedule, EN.schedule]
+      );
+    } else {
+      entries.push(
+        ["study_mode", values.branch, EN.branch, shown(modes, values.branch)],
+        ["preferred_date", values.preferredDate, EN.date],
+        ["current_level", values.currentLevel, EN.level, shown(levels, values.currentLevel)]
+      );
+    }
+    if (branchField) {
+      entries.push([branchField.id, values.branchChoice, branchField.label.en, shown(branchOptions, values.branchChoice)]);
+    }
+    const answers: Record<string, unknown> = {};
+    const extras: string[] = [];
+    for (const [id, raw, label, display] of entries) {
+      const value = raw?.trim();
+      if (!value) continue;
+      const question = byId.get(id);
+      if (question && (!CHOICE_TYPES.has(question.type) || question.options?.some(option => option.id === value))) {
+        answers[id] = value;
+      } else {
+        extras.push(`${label}: ${display ?? value}`);
+      }
+    }
+    const notes = [values.notes?.trim(), ...extras].filter(Boolean).join("\n");
+    if (notes && byId.has("notes")) answers.notes = notes;
+
     setSaving(true);
-    const backend =
-      type === "trial"
-        ? await saveBackendRecord("lead", { ...result.data, source: "trial_form" })
-        : await saveBackendRecord("placement", {
-            ...result.data,
-            branchId: mapBranchToId((result.data as { branch?: string }).branch ?? ""),
-          });
+    submissionId.current ??= newSubmissionId();
+    const response = await submitPublicFormRequest(slug, {
+      answers,
+      clientSubmissionId: submissionId.current,
+      clientSubmittedAt: new Date().toISOString(),
+      locale: formLocale,
+    });
     setSaving(false);
-    if (!backend.ok) {
+    if (!response.ok) {
       setError(t.failed);
       return;
     }
@@ -506,10 +626,6 @@ function BookingForm({ type, locale }: PageProps & { type: "trial" | "placement"
       ))}
     </select>
   );
-  // The schema expects the English values; the labels follow the page language.
-  const EN = PUBLIC_COPY.en.booking;
-  const paired = (labels: string[], values: string[]) => labels.map((label, i) => ({ label, value: values[i] }));
-  const subjects = programmes.slice(0, 5).map((item, i) => ({ label: item.name, value: LANDING_COPY.en.programmes.items[i].name }));
 
   return (
     <>
@@ -529,30 +645,37 @@ function BookingForm({ type, locale }: PageProps & { type: "trial" | "placement"
                 {PUBLIC_COPY[locale].notFound.home}
               </Link>
             </div>
+          ) : status === "unavailable" ? (
+            <div className="pp-card pp-success" role="status">
+              <MessageCircle aria-hidden="true" />
+              <h2>{t.unavailable}</h2>
+              <a href={whatsapp(PHONE_ONSITE)} target="_blank" rel="noreferrer" className="lp-btn" data-variant="primary">
+                {PUBLIC_COPY[locale].faq.whatsapp}
+              </a>
+            </div>
           ) : (
-            <form className="pp-card pp-form" onSubmit={submit} noValidate>
+            <form className="pp-card pp-form" onSubmit={submit} noValidate aria-busy={status === "loading" || undefined}>
               {field("fullName", t.fullName, <input autoComplete="name" value={values.fullName ?? ""} onChange={set("fullName")} />)}
               {field("email", t.email, <input type="email" autoComplete="email" dir="ltr" value={values.email ?? ""} onChange={set("email")} />)}
               {field("phone", t.phone, <input type="tel" autoComplete="tel" dir="ltr" value={values.phone ?? ""} onChange={set("phone")} />)}
               {type === "trial" ? field("country", t.country, <input autoComplete="country-name" value={values.country ?? ""} onChange={set("country")} />) : null}
-              {type === "trial" ? field("preferredLanguage", t.language, select("preferredLanguage", paired(t.languages, EN.languages))) : null}
+              {type === "trial" ? field("preferredLanguage", t.language, select("preferredLanguage", languages)) : null}
               {field("subject", t.subject, select("subject", subjects))}
-              {type === "trial" ? field("ageGroup", t.ageGroup, select("ageGroup", paired(t.ages, ["Child", "Teen", "Adult", "Organization group"]))) : null}
+              {type === "trial" ? field("ageGroup", t.ageGroup, select("ageGroup", ages)) : null}
               {type === "trial"
                 ? field("preferredSchedule", t.schedule, <input placeholder={t.schedulePlaceholder} value={values.preferredSchedule ?? ""} onChange={set("preferredSchedule")} />)
                 : null}
-              {type === "placement" ? field("branch", t.branch, select("branch", t.branches)) : null}
+              {type === "placement" ? field("branch", t.branch, select("branch", modes)) : null}
+              {branchField ? field("branchChoice", getLocalizedText(branchField.label, formLocale), select("branchChoice", branchOptions)) : null}
               {type === "placement" ? field("preferredDate", t.date, <input type="date" value={values.preferredDate ?? ""} onChange={set("preferredDate")} />) : null}
-              {type === "placement"
-                ? field("currentLevel", t.level, select("currentLevel", paired(t.levels, ["New beginner", "Some reading ability", "Intermediate", "Advanced"])))
-                : null}
+              {type === "placement" ? field("currentLevel", t.level, select("currentLevel", levels)) : null}
               {field("notes", t.notes, <textarea rows={4} value={values.notes ?? ""} onChange={set("notes")} />, true)}
               {error ? (
                 <p className="pp-error" role="alert" data-full>
                   {error}
                 </p>
               ) : null}
-              <button type="submit" className="lp-btn" data-variant="primary" data-size="lg" disabled={saving} data-full>
+              <button type="submit" className="lp-btn" data-variant="primary" data-size="lg" disabled={saving || status !== "ready"} data-full>
                 <Send aria-hidden="true" />
                 {saving ? t.sending : t.submit}
               </button>
@@ -562,12 +685,6 @@ function BookingForm({ type, locale }: PageProps & { type: "trial" | "placement"
       </section>
     </>
   );
-}
-
-function mapBranchToId(branch: string) {
-  if (branch === "Cairo B1") return "br_cairo";
-  if (branch === "Alexandria B2") return "br_alex";
-  return "br_online";
 }
 
 /* ---------------- Questions, contact, about, legal -------------------- */

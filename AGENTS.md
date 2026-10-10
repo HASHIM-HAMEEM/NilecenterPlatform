@@ -301,6 +301,15 @@ Use the commands that exist in `package.json`:
   ur status = اسٹیٹس, yesterday/tomorrow = گزشتہ کل / آئندہ کل. "SSA" and
   `booking.branches[].value` stay untranslated. Quran verses use established
   translations (Ma Jian for Chinese, Kuliev for Russian).
+- The public booking pages (`/book-free-trial`, `/book-placement-test`) keep
+  their own six-language design but submit into the published Nile Forms
+  `free-trial-enquiry` and `placement-request`, so requests appear in staff
+  Forms › Responses with "Create lead". Their question and choice ids are a
+  contract with `BookingForm`; republish them with
+  `npx tsx scripts/staff-ui/publish-booking-forms.mts` (`STAFF_UI_BASE` picks
+  the site). A single-choice question built with "Use our branch list" files
+  each request under that EMS branch for its registrars. Never post public
+  requests to `/api/platform/records`: production stores it under `/tmp`.
 - Nile Forms in the unified staff app (`/app/forms`) needs
   `NILE_FORMS_NCC_WRITES_ENABLED=1` for NCC staff writes (author, publish,
   review, fill). Reads work without it. The compatibility forms store is

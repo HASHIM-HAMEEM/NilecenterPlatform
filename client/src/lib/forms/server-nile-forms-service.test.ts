@@ -1299,6 +1299,54 @@ describe("Nile Forms server authority", () => {
     });
   });
 
+  it("files a public response under the branch picked from a branch-list question", async () => {
+    const service = createService();
+    const draft = await service.createDraftVersion(superAdmin, "form_enquiry");
+    const content = structuredClone(draft.content);
+    for (const field of content.pages.flatMap(page => page.fields)) {
+      if (field.type !== "entity_reference") continue;
+      field.type = "single_choice";
+      field.entityType = undefined;
+      field.options = [
+        { id: "br:br_cairo", label: { en: "Cairo", ar: "القاهرة", tr: "Kahire" } },
+        { id: "br:br_online", label: { en: "Online", ar: "عن بُعد", tr: "Çevrim içi" } },
+      ];
+    }
+    await service.updateDraftVersion(superAdmin, "form_enquiry", draft.id, {
+      expectedRevision: 1,
+      content,
+    });
+    await service.publishVersion(superAdmin, "form_enquiry", draft.id, {
+      slug: "free-trial-enquiry",
+      audience: "public",
+      allowDrafts: true,
+    });
+    const { publication } = await service.getPublicForm("free-trial-enquiry");
+
+    const { submission } = await service.submit({
+      publicationId: publication.id,
+      clientSubmissionId: "branch-choice-0001",
+      answers: {
+        full_name: "Online Applicant",
+        email: "online@example.test",
+        phone: "+20 100 000 0002",
+        preferred_branch: "br:br_online",
+        course_interest: "arabic",
+        preferred_contact: "email",
+      },
+    });
+    expect(submission.branchId).toBe("br_online");
+
+    const onlineRegistrar = session("registrar", "usr_registrar_online_demo", {
+      branchIds: ["br_online"],
+    });
+    const ids = async (reader: ServerSession) =>
+      (await service.listSubmissions(reader)).map(item => item.submission.id);
+    expect(await ids(onlineRegistrar)).toContain(submission.id);
+    expect(await ids(registrar)).not.toContain(submission.id);
+    expect(await ids(superAdmin)).toContain(submission.id);
+  });
+
   it("replays an identical review command without another mutation", async () => {
     const repository = createMemoryNileFormsCompatibilityRepository();
     testRepository = repository;

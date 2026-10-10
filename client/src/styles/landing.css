@@ -32,6 +32,7 @@
   --green: #41714c;
   --green-rgb: 65 113 76;
   --red-rgb: 195 93 68;
+  --red-ink: #8a3622;
   --line-strong: #d6cdbd;
   --line-mid: #d9d0c0;
   --line-dash: #cfc5b4;
@@ -1690,7 +1691,7 @@
   padding: 0.875rem 1rem;
   border-radius: 0.875rem;
   background: rgb(var(--red-rgb) / 0.1);
-  color: #8a3622;
+  color: var(--red-ink);
   font-weight: 500;
 }
 
@@ -3095,6 +3096,7 @@ html[data-theme="dark"] .lp {
   --green: #80c698;
   --green-rgb: 128 198 152;
   --red-rgb: 242 130 108;
+  --red-ink: #f5a08c;
   --paper-rgb: 21 20 18;
   --tint-rgb: 243 239 231;
   --shadow-rgb: 0 0 0;

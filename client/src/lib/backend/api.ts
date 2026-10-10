@@ -2792,20 +2792,6 @@ export function acceptUserInvitationRequest(input: {
   });
 }
 
-export function saveBackendRecord(
-  type: "lead" | "placement" | "operational",
-  payload: Record<string, unknown>,
-  actorId?: string
-) {
-  return apiJson<{ id: string; type: string; createdAt: string }>(
-    "/api/platform/records",
-    {
-      method: "POST",
-      body: JSON.stringify({ type, payload, actorId }),
-    }
-  );
-}
-
 export type PlatformStateDto = {
   state: PlatformState;
   persistence: "supabase" | "local";

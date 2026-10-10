@@ -1,9 +1,10 @@
-import type {
-  FormField,
-  FormFieldType,
-  FormLocale,
-  FormVersionContent,
-  LocalizedText,
+import {
+  BRANCH_CHOICE_PREFIX,
+  type FormField,
+  type FormFieldType,
+  type FormLocale,
+  type FormVersionContent,
+  type LocalizedText,
 } from "@shared/nileForms";
 import type { Role } from "@/lib/platformData";
 import type { StaffLocale } from "../i18n";
@@ -174,8 +175,7 @@ export function contactFromAnswers(
   return { firstName, lastName: rest.join(" "), email, phone };
 }
 
-/** Choice ids for EMS branches: "br:<uuid>" satisfies the form id rules. */
-export const BRANCH_CHOICE_PREFIX = "br:";
+export { BRANCH_CHOICE_PREFIX };
 
 export function branchChoices(branches: Array<{ id: string; name: string }>) {
   return branches.map(branch => ({
