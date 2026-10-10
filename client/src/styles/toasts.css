@@ -53,3 +53,13 @@
 [data-sonner-toaster] [data-sonner-toast][data-type="warning"] [data-icon] {
   color: #f2c46b;
 }
+
+/* Dark theme: the pill lifts off the dark canvas with a lighter surface and
+   a fine edge, so it never melts into the page behind it. */
+html[data-theme="dark"] [data-sonner-toaster] [data-sonner-toast][data-styled="true"] {
+  border-color: rgb(255 255 255 / 0.14);
+  background: #2c2a26;
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.4),
+    0 12px 32px -8px rgb(0 0 0 / 0.6);
+}

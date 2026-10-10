@@ -383,9 +383,9 @@
 }
 
 .nile-form-status:is(.is-active, .is-open, .is-accepted, .is-promoted) {
-  border-color: color-mix(in srgb, #16845b 32%, var(--border));
-  background: color-mix(in srgb, #dff7ed 76%, var(--card));
-  color: #0a6543;
+  border-color: color-mix(in srgb, var(--nf-green, #16845b) 32%, var(--border));
+  background: color-mix(in srgb, var(--nf-green-tint, #dff7ed) 76%, var(--card));
+  color: var(--nf-green, #0a6543);
 }
 
 .nile-form-status:is(
@@ -394,15 +394,15 @@
   .is-under_review,
   .is-scheduled
 ) {
-  border-color: color-mix(in srgb, #b77800 30%, var(--border));
-  background: color-mix(in srgb, #fff1c7 78%, var(--card));
-  color: #7a5100;
+  border-color: color-mix(in srgb, var(--nf-amber, #b77800) 30%, var(--border));
+  background: color-mix(in srgb, var(--nf-amber-tint, #fff1c7) 78%, var(--card));
+  color: var(--nf-amber, #7a5100);
 }
 
 .nile-form-status:is(.is-rejected, .is-quarantined) {
-  border-color: color-mix(in srgb, #c54545 34%, var(--border));
-  background: color-mix(in srgb, #fee8e8 78%, var(--card));
-  color: #9e3030;
+  border-color: color-mix(in srgb, var(--nf-red, #c54545) 34%, var(--border));
+  background: color-mix(in srgb, var(--nf-red-tint, #fee8e8) 78%, var(--card));
+  color: var(--nf-red, #9e3030);
 }
 
 .nile-form-status:is(.is-retired, .is-closed, .is-withdrawn) {
@@ -517,13 +517,13 @@
 
 .nile-form-notice.is-error,
 .nile-form-field-error {
-  color: #a52d2d;
+  color: var(--nf-red, #a52d2d);
 }
 
 .nile-form-notice.is-error {
   margin-bottom: 14px;
-  border-color: color-mix(in srgb, #c54545 36%, var(--border));
-  background: color-mix(in srgb, #fee8e8 76%, var(--card));
+  border-color: color-mix(in srgb, var(--nf-red, #c54545) 36%, var(--border));
+  background: color-mix(in srgb, var(--nf-red-tint, #fee8e8) 76%, var(--card));
 }
 
 /* Renderer */
@@ -724,7 +724,7 @@
 
 .nile-form-field-label > span {
   margin-inline-start: 3px;
-  color: #b63838;
+  color: var(--nf-red, #b63838);
 }
 
 .nile-form-field-label > small {
@@ -732,7 +732,7 @@
   margin-inline-start: 7px;
   padding: 2px 5px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--role-color, var(--primary)) 10%, white);
+  background: color-mix(in srgb, var(--role-color, var(--primary)) 10%, var(--card, white));
   color: var(--role-color, var(--primary));
   font-size: 9px;
   font-weight: 800;
@@ -834,6 +834,12 @@
   line-height: 1.45;
 }
 
+/* The consent row is also a field's first label; keep its row layout. */
+.nile-form-field > label.nile-form-consent-row:first-child {
+  display: flex;
+  margin-bottom: 0;
+}
+
 .nile-form-choice-row input,
 .nile-form-consent-row input,
 .nile-form-toggle-list input {
@@ -864,9 +870,9 @@
 
 .nile-form-instructions-field {
   padding: 13px 14px;
-  border: 1px solid color-mix(in srgb, #267a9c 26%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--nf-blue, #267a9c) 26%, var(--border));
   border-radius: 6px;
-  background: color-mix(in srgb, #e5f4f8 62%, var(--card));
+  background: color-mix(in srgb, var(--nf-blue-tint, #e5f4f8) 62%, var(--card));
 }
 
 .nile-form-actions {
@@ -896,13 +902,13 @@
   width: min(100%, 720px);
   margin-inline: auto;
   padding: 28px;
-  border: 1px solid color-mix(in srgb, #16845b 34%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--nf-green, #16845b) 34%, var(--border));
   border-radius: 8px;
-  background: color-mix(in srgb, #e1f7ed 70%, var(--card));
+  background: color-mix(in srgb, var(--nf-green-tint, #e1f7ed) 70%, var(--card));
 }
 
 .nile-form-success > span {
-  color: #16845b;
+  color: var(--nf-green, #16845b);
 }
 
 .nile-form-success h2 {
@@ -926,13 +932,13 @@
   gap: 13px;
   margin-bottom: 14px;
   padding: 14px 17px;
-  border: 1px solid color-mix(in srgb, #16845b 30%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--nf-green, #16845b) 30%, var(--border));
   border-radius: 8px;
-  background: color-mix(in srgb, #e1f7ed 66%, var(--card));
+  background: color-mix(in srgb, var(--nf-green-tint, #e1f7ed) 66%, var(--card));
 }
 
 .nile-form-response-summary > svg {
-  color: #16845b;
+  color: var(--nf-green, #16845b);
 }
 
 .nile-form-response-summary > div {
@@ -943,11 +949,11 @@
 .nile-form-response-summary > div:last-child {
   min-width: 74px;
   padding-inline-start: 14px;
-  border-inline-start: 1px solid color-mix(in srgb, #16845b 22%, var(--border));
+  border-inline-start: 1px solid color-mix(in srgb, var(--nf-green, #16845b) 22%, var(--border));
 }
 
 .nile-form-response-summary span {
-  color: #397561;
+  color: var(--nf-green, #397561);
   font-size: 10px;
   font-weight: 760;
   text-transform: uppercase;
@@ -1759,9 +1765,9 @@
 
 .nile-form-validation-ok {
   padding: 14px;
-  border: 1px solid color-mix(in srgb, #16845b 30%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--nf-green, #16845b) 30%, var(--border));
   border-radius: 7px;
-  background: color-mix(in srgb, #e1f7ed 70%, var(--card));
+  background: color-mix(in srgb, var(--nf-green-tint, #e1f7ed) 70%, var(--card));
 }
 
 .nile-form-validation-ok > span {
@@ -1778,7 +1784,7 @@
 
 .nile-form-validation-ok p {
   margin: 5px 0 0;
-  color: #356b58;
+  color: var(--nf-green, #356b58);
   font-size: 10px;
   line-height: 1.45;
 }
@@ -1796,10 +1802,10 @@
   align-items: flex-start;
   gap: 7px;
   padding: 9px;
-  border: 1px solid color-mix(in srgb, #c54545 24%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--nf-red, #c54545) 24%, var(--border));
   border-radius: 6px;
-  background: color-mix(in srgb, #fee8e8 62%, var(--card));
-  color: #8d3333;
+  background: color-mix(in srgb, var(--nf-red-tint, #fee8e8) 62%, var(--card));
+  color: var(--nf-red, #8d3333);
 }
 
 .nile-form-validation-list li span,
@@ -1899,10 +1905,10 @@
   align-items: flex-start;
   gap: 8px;
   padding: 11px;
-  border: 1px solid color-mix(in srgb, #267a9c 24%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--nf-blue, #267a9c) 24%, var(--border));
   border-radius: 6px;
-  background: color-mix(in srgb, #e5f4f8 62%, var(--card));
-  color: #285f73;
+  background: color-mix(in srgb, var(--nf-blue-tint, #e5f4f8) 62%, var(--card));
+  color: var(--nf-blue, #285f73);
 }
 
 .nile-form-publish-boundary p {
@@ -1922,8 +1928,8 @@
   align-items: center;
   gap: 13px;
   padding: 16px 18px;
-  border-color: color-mix(in srgb, #16845b 30%, var(--border));
-  background: color-mix(in srgb, #e1f7ed 52%, var(--card));
+  border-color: color-mix(in srgb, var(--nf-green, #16845b) 30%, var(--border));
+  background: color-mix(in srgb, var(--nf-green-tint, #e1f7ed) 52%, var(--card));
 }
 
 .nile-form-published-result > div {
@@ -2097,10 +2103,10 @@
   min-height: 50px;
   margin-bottom: 14px;
   padding: 10px 14px;
-  border: 1px solid color-mix(in srgb, #b77800 30%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--nf-amber, #b77800) 30%, var(--border));
   border-radius: 7px;
-  background: color-mix(in srgb, #fff4d6 62%, var(--card));
-  color: #72500c;
+  background: color-mix(in srgb, var(--nf-amber-tint, #fff4d6) 62%, var(--card));
+  color: var(--nf-amber, #72500c);
 }
 
 .nile-form-review-authority svg {
@@ -2228,14 +2234,14 @@
 }
 
 .platform-secondary-button.is-danger {
-  border-color: color-mix(in srgb, #c54545 34%, var(--border));
-  color: #a52d2d;
+  border-color: color-mix(in srgb, var(--nf-red, #c54545) 34%, var(--border));
+  color: var(--nf-red, #a52d2d);
 }
 
 .nile-form-review-actions.is-complete {
   display: flex;
   align-items: flex-start;
-  color: #16845b;
+  color: var(--nf-green, #16845b);
 }
 
 .nile-form-review-actions.is-complete h2,
@@ -2407,7 +2413,7 @@
   --background: #fff;
   --card: #fff;
   --muted: #f3eee4;
-  --muted-foreground: #776f63;
+  --muted-foreground: #6b645a;
   --border: #e7e0d4;
   --role-color: #1d4a6c;
   --role-tint: #e3edf5;
@@ -2811,7 +2817,7 @@
     grid-column: 2;
     padding-top: 9px;
     padding-inline-start: 0;
-    border-top: 1px solid color-mix(in srgb, #16845b 22%, var(--border));
+    border-top: 1px solid color-mix(in srgb, var(--nf-green, #16845b) 22%, var(--border));
     border-inline-start: 0;
   }
 
@@ -3026,13 +3032,13 @@
 }
 
 .nile-migration-connection.is-ready {
-  border-color: color-mix(in srgb, #147a56 34%, var(--border));
-  color: #147a56;
+  border-color: color-mix(in srgb, var(--nf-green, #147a56) 34%, var(--border));
+  color: var(--nf-green, #147a56);
 }
 
 .nile-migration-connection.is-blocked {
-  border-color: color-mix(in srgb, #b64040 32%, var(--border));
-  color: #a52d2d;
+  border-color: color-mix(in srgb, var(--nf-red, #b64040) 32%, var(--border));
+  color: var(--nf-red, #a52d2d);
 }
 
 .nile-migration-not-configured {
@@ -3046,7 +3052,7 @@
 }
 
 .nile-migration-not-configured > svg {
-  color: #a76512;
+  color: var(--nf-amber, #a76512);
 }
 
 .nile-migration-not-configured h2 {
@@ -3323,7 +3329,7 @@
 }
 
 .nile-migration-field-state.is-required {
-  color: #a76512;
+  color: var(--nf-amber, #a76512);
 }
 
 .nile-migration-preview-action,
@@ -3346,7 +3352,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  color: #147a56;
+  color: var(--nf-green, #147a56);
 }
 
 .nile-migration-preview-action p,
@@ -3490,13 +3496,13 @@
 
 .nile-migration-run-icon.is-reconciled,
 .nile-migration-record-icon.is-matched {
-  background: color-mix(in srgb, #e4f5ed 72%, var(--card));
-  color: #147a56;
+  background: color-mix(in srgb, var(--nf-green-tint, #e4f5ed) 72%, var(--card));
+  color: var(--nf-green, #147a56);
 }
 
 .nile-migration-record-icon.is-exception {
-  background: color-mix(in srgb, #fff1d9 64%, var(--card));
-  color: #a76512;
+  background: color-mix(in srgb, var(--nf-amber-tint, #fff1d9) 64%, var(--card));
+  color: var(--nf-amber, #a76512);
 }
 
 .nile-migration-history-layout > aside button > div {
@@ -3588,7 +3594,7 @@
 
 .nile-migration-record-list p {
   margin: 2px 0 0;
-  color: #a52d2d;
+  color: var(--nf-red, #a52d2d);
   font-size: 9px;
 }
 
@@ -3607,15 +3613,15 @@
 
 .nile-form-status.is-reconciled,
 .nile-form-status.is-matched {
-  border-color: color-mix(in srgb, #147a56 26%, var(--border));
-  background: color-mix(in srgb, #e4f5ed 62%, var(--card));
-  color: #147a56;
+  border-color: color-mix(in srgb, var(--nf-green, #147a56) 26%, var(--border));
+  background: color-mix(in srgb, var(--nf-green-tint, #e4f5ed) 62%, var(--card));
+  color: var(--nf-green, #147a56);
 }
 
 .nile-form-status.is-exception {
-  border-color: color-mix(in srgb, #a76512 26%, var(--border));
-  background: color-mix(in srgb, #fff1d9 54%, var(--card));
-  color: #a76512;
+  border-color: color-mix(in srgb, var(--nf-amber, #a76512) 26%, var(--border));
+  background: color-mix(in srgb, var(--nf-amber-tint, #fff1d9) 54%, var(--card));
+  color: var(--nf-amber, #a76512);
 }
 
 @media (max-width: 1100px) {
@@ -3792,8 +3798,8 @@
 
 /* Offline staff capture */
 .nile-forms-offline-page {
-  --offline-green: #147a56;
-  --offline-amber: #a76512;
+  --offline-green: var(--nf-green, #147a56);
+  --offline-amber: var(--nf-amber, #a76512);
 }
 
 .nile-offline-network {
@@ -4032,7 +4038,7 @@
   padding: 13px 15px;
   border: 1px solid color-mix(in srgb, var(--offline-amber) 36%, var(--border));
   border-radius: 7px;
-  background: color-mix(in srgb, #fff1d9 55%, var(--card));
+  background: color-mix(in srgb, var(--nf-amber-tint, #fff1d9) 55%, var(--card));
   color: var(--offline-amber);
 }
 
@@ -4054,7 +4060,7 @@
 .nile-form-notice.is-success {
   margin-bottom: 14px;
   border-color: color-mix(in srgb, var(--offline-green) 34%, var(--border));
-  background: color-mix(in srgb, #e4f5ed 68%, var(--card));
+  background: color-mix(in srgb, var(--nf-green-tint, #e4f5ed) 68%, var(--card));
   color: var(--offline-green);
 }
 
@@ -4223,8 +4229,8 @@
 }
 
 .nile-offline-queue-state.is-rejected {
-  background: color-mix(in srgb, #fee8e8 76%, var(--card));
-  color: #a52d2d;
+  background: color-mix(in srgb, var(--nf-red-tint, #fee8e8) 76%, var(--card));
+  color: var(--nf-red, #a52d2d);
 }
 
 .nile-offline-queue-list article > div {
@@ -4247,19 +4253,19 @@
 
 .nile-offline-queue-list p {
   margin: 2px 0 0;
-  color: #a52d2d;
+  color: var(--nf-red, #a52d2d);
   font-size: 10px;
   text-transform: capitalize;
 }
 
 .nile-form-status.is-pending {
   border-color: color-mix(in srgb, var(--offline-amber) 26%, var(--border));
-  background: color-mix(in srgb, #fff1d9 48%, var(--card));
+  background: color-mix(in srgb, var(--nf-amber-tint, #fff1d9) 48%, var(--card));
   color: var(--offline-amber);
 }
 
 .nile-form-status.is-rejected {
-  color: #a52d2d;
+  color: var(--nf-red, #a52d2d);
 }
 
 .nile-offline-receipts {
@@ -4329,9 +4335,9 @@
   align-items: center;
   gap: 9px;
   padding: 14px;
-  border: 1px solid color-mix(in srgb, #c54545 28%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--nf-red, #c54545) 28%, var(--border));
   border-radius: 7px;
-  background: color-mix(in srgb, #fee8e8 46%, var(--card));
+  background: color-mix(in srgb, var(--nf-red-tint, #fee8e8) 46%, var(--card));
 }
 
 .nile-offline-reset-zone strong {
@@ -4546,4 +4552,88 @@
   .nile-offline-form-list > article {
     transition: none;
   }
+}
+
+/* ---------- Dark theme --------------------------------------------------- */
+/* Status colours are tokens with their light value as fallback, so only the
+   dark set is declared here: lighter text, deep tinted fills. */
+html.staff-ui[data-theme="dark"],
+html[data-theme="dark"] .nile-public-form-page {
+  --nf-green: #7fcfa6;
+  --nf-green-tint: #163126;
+  --nf-red: #f49c8d;
+  --nf-red-tint: #3a1c18;
+  --nf-amber: #e8b562;
+  --nf-amber-tint: #382a13;
+  --nf-blue: #93c8de;
+  --nf-blue-tint: #142e38;
+}
+
+html[data-theme="dark"] .nile-public-form-page {
+  color-scheme: dark;
+  background:
+    radial-gradient(50rem 24rem at 90% -10%, rgb(128 180 215 / 0.08), transparent 60%),
+    #151412;
+  color: #f3efe7;
+}
+
+html[data-theme="dark"]:has(.nile-public-form-page) {
+  background: #151412;
+}
+
+html[data-theme="dark"] .nile-public-form-header {
+  border-bottom-color: #322f2a;
+  background: rgb(21 20 18 / 0.9);
+}
+
+html[data-theme="dark"] .nile-public-form-back {
+  border-color: #3f3b35;
+  color: #d0c9bc;
+}
+
+html[data-theme="dark"] :is(.nile-public-form-context p, .nile-public-form-promises) {
+  color: #d0c9bc;
+}
+
+html[data-theme="dark"] .nile-public-form-promises {
+  border-top-color: #322f2a;
+}
+
+html[data-theme="dark"] .nile-public-form-context .nile-forms-eyebrow {
+  color: #f6a56f;
+}
+
+html[data-theme="dark"] .nile-public-form-promises svg {
+  color: #9cc4e6;
+}
+
+html[data-theme="dark"] .nile-public-form-page .nile-form-renderer {
+  --foreground: #f3efe7;
+  --background: #1f1d1a;
+  --card: #1f1d1a;
+  --muted: #2a2824;
+  --muted-foreground: #aaa294;
+  --border: #3a3631;
+  --input: #7a7369;
+  --primary: #9cc4e6;
+  --primary-foreground: #0c1a25;
+  --role-color: #9cc4e6;
+  --role-tint: #1c2a35;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 18px 40px -18px rgb(0 0 0 / 0.6);
+}
+
+html[data-theme="dark"] .nile-public-form-state {
+  border-color: #3a3631;
+  background: #1f1d1a;
+}
+
+/* Shared older buttons and step marks used inside forms. */
+html[data-theme="dark"] .nile-public-form-page .platform-secondary-button {
+  background: var(--card);
+  color: var(--foreground);
+}
+
+html.staff-ui[data-theme="dark"] :is(.nile-form-progress button.is-active > span, .nile-form-progress button.is-done > span),
+html[data-theme="dark"] .nile-public-form-page :is(.platform-primary-button, .nile-form-progress button.is-active > span, .nile-form-progress button.is-done > span) {
+  color: var(--primary-foreground);
 }

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Runs the staff browser suites sequentially (staging EMS is shared — no
 // parallelism) and always cleans up form-test leads after the forms suite.
-// The responsive gate runs once per staff language.
+// The responsive gate runs once per staff language; the contrast gate (light
+// and dark themes) runs in English and Arabic.
 // Usage: npm run qa:staff   ·   QA_STAFF_ONLY=forms,teaching npm run qa:staff
 //        QA_STAFF_ONLY=responsive-ar,public-languages npm run qa:staff
 import { spawnSync } from "node:child_process";
@@ -14,6 +15,9 @@ const SCRIPTS = new Map([
   ...["admissions", "students", "teaching", "week", "forms", "forms-people", "reports", "shell", "public", "fix-verify",
     "sidebar", "back-navigation", "date-picker", "date-of-birth", "landing", "public-languages"].map(name => [name, { script: `${name}.mjs` }]),
   ...LANGUAGES.map(lang => [`responsive-${lang}`, { script: "responsive.mjs", env: { STAFF_UI_LANG: lang } }]),
+  // Colour contrast in light and dark. Colours don't change with language, so
+  // one left-to-right and one right-to-left language cover every layout.
+  ...["en", "ar"].map(lang => [`contrast-${lang}`, { script: "contrast.mjs", env: { STAFF_UI_LANG: lang } }]),
 ]);
 const SUITES = [...SCRIPTS.keys()];
 

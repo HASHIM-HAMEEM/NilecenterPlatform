@@ -1188,6 +1188,22 @@ const uiLabels: Record<string, Record<Locale, string>> = {
     ur: "اس نے قلم کے ذریعے سکھایا۔",
     tr: "Kalemle öğretti.",
   },
+  "Switch to dark theme": {
+    en: "Switch to dark theme",
+    ar: "التبديل إلى المظهر الداكن",
+    zh: "切换到深色主题",
+    ru: "Включить тёмную тему",
+    ur: "گہری تھیم پر جائیں",
+    tr: "Koyu temaya geç",
+  },
+  "Switch to light theme": {
+    en: "Switch to light theme",
+    ar: "التبديل إلى المظهر الفاتح",
+    zh: "切换到浅色主题",
+    ru: "Включить светлую тему",
+    ur: "روشن تھیم پر جائیں",
+    tr: "Açık temaya geç",
+  },
   Language: {
     en: "Language",
     ar: "اللغة",

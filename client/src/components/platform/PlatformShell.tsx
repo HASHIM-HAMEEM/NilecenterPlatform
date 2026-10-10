@@ -735,6 +735,7 @@ export default function PlatformShell({ role, children, title }: ShellProps) {
     return (
       <main
         className="platform-route-loading"
+        data-theme="light"
         data-testid="portal-role-styles-loading"
         aria-live="polite"
       >

@@ -17,6 +17,15 @@
   --auth-green: #1d4a6c;
   --auth-blue: #1d4a6c;
   --auth-gold: #c4a35a;
+  --auth-blue-rgb: 29 74 108;
+  --auth-blue-hover: #235a83;
+  --auth-icon-bg: #eef4ea;
+  --auth-error-bg: #fbefec;
+  --auth-error-ink: #8e3025;
+  --auth-error-line: rgba(164, 61, 47, 0.22);
+  --auth-success-bg: #edf5ef;
+  --auth-shadow-rgb: 30 28 23;
+  color-scheme: light;
   min-height: 100vh;
   min-height: 100svh;
   display: grid;
@@ -122,7 +131,7 @@
 }
 
 .auth-v2-brand-light small {
-  color: rgba(255, 253, 247, 0.72);
+  color: rgba(255, 253, 247, 0.88);
 }
 
 .auth-v2-brand-dark {
@@ -162,14 +171,14 @@
 
 .auth-v2-calligraphy span {
   margin-top: 8px;
-  color: rgba(255, 253, 247, 0.78);
+  color: rgba(255, 253, 247, 0.9);
   font-size: 14px;
   line-height: 1.55;
 }
 
 .auth-v2-visual-note {
   margin: 0;
-  color: rgba(255, 253, 247, 0.72);
+  color: rgba(255, 253, 247, 0.88);
   font-size: 11px;
   font-weight: 700;
 }
@@ -199,6 +208,43 @@
   position: relative;
 }
 
+.auth-v2-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Theme switch: a round twin of the language pill beside it. */
+.auth-v2-theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  padding: 0;
+  border: 1px solid var(--auth-line);
+  border-radius: 999px;
+  background: var(--auth-paper);
+  color: var(--auth-ink);
+  cursor: pointer;
+}
+
+.auth-v2-theme-toggle > svg {
+  inline-size: 18px;
+  block-size: 18px;
+}
+
+@media (hover: hover) {
+  .auth-v2-theme-toggle:hover {
+    border-color: var(--auth-line-strong);
+  }
+}
+
+.auth-v2-theme-toggle:focus-visible {
+  outline: 3px solid rgb(var(--auth-blue-rgb) / 0.22);
+  outline-offset: 2px;
+  border-color: var(--auth-green);
+}
+
 .auth-v2-language summary {
   min-width: 132px;
   min-height: 44px;
@@ -224,7 +270,7 @@
 .auth-v2-language[open] summary,
 .auth-v2-language summary:focus-visible {
   border-color: var(--auth-green);
-  outline: 3px solid rgba(29, 74, 108, 0.13);
+  outline: 3px solid rgb(var(--auth-blue-rgb) / 0.13);
   outline-offset: 2px;
 }
 
@@ -241,7 +287,7 @@
   border-radius: 8px;
   padding: 6px;
   background: var(--auth-paper);
-  box-shadow: 0 20px 50px rgba(30, 28, 23, 0.14);
+  box-shadow: 0 20px 50px rgb(var(--auth-shadow-rgb) / 0.14);
   display: grid;
   gap: 2px;
 }
@@ -353,7 +399,7 @@
 }
 
 .auth-v2-portal-option:hover {
-  border-color: rgba(29, 74, 108, 0.55);
+  border-color: rgb(var(--auth-blue-rgb) / 0.55);
   background: var(--auth-soft);
   transform: translateY(-1px);
 }
@@ -363,7 +409,7 @@
 .auth-v2-route-switch a:focus-visible,
 .auth-v2-secondary-action:focus-visible,
 .auth-v2-role-list button:focus-visible {
-  outline: 3px solid rgba(29, 74, 108, 0.2);
+  outline: 3px solid rgb(var(--auth-blue-rgb) / 0.2);
   outline-offset: 3px;
 }
 
@@ -375,7 +421,7 @@
   display: inline-grid;
   place-items: center;
   background: var(--auth-green);
-  color: white;
+  color: var(--auth-paper);
 }
 
 .auth-v2-portal-option > span:nth-child(2) {
@@ -407,9 +453,9 @@
 
 .auth-v2-heading-icon {
   margin-bottom: 4px;
-  border: 1px solid rgba(29, 74, 108, 0.2);
+  border: 1px solid rgb(var(--auth-blue-rgb) / 0.2);
   border-radius: 50%;
-  background: #eef4ea;
+  background: var(--auth-icon-bg);
   color: var(--auth-green);
 }
 
@@ -459,7 +505,7 @@
 .auth-v2-field input:focus,
 .auth-v2-field select:focus {
   border-color: var(--auth-green);
-  box-shadow: 0 0 0 3px rgba(29, 74, 108, 0.12);
+  box-shadow: 0 0 0 3px rgb(var(--auth-blue-rgb) / 0.12);
 }
 
 .auth-v2-field small {
@@ -558,13 +604,13 @@
 }
 
 .auth-v2-submit:hover:not(:disabled) {
-  background: #235a83;
-  border-color: #235a83;
+  background: var(--auth-blue-hover);
+  border-color: var(--auth-blue-hover);
   transform: translateY(-1px);
 }
 
 .auth-v2-submit:focus-visible {
-  outline: 3px solid rgba(29, 74, 108, 0.22);
+  outline: 3px solid rgb(var(--auth-blue-rgb) / 0.22);
   outline-offset: 3px;
 }
 
@@ -615,14 +661,14 @@
 }
 
 .auth-v2-status.error {
-  border-color: rgba(164, 61, 47, 0.22);
-  background: #fbefec;
-  color: #8e3025;
+  border-color: var(--auth-error-line);
+  background: var(--auth-error-bg);
+  color: var(--auth-error-ink);
 }
 
 .auth-v2-status.success {
-  border-color: rgba(29, 74, 108, 0.2);
-  background: #edf5ef;
+  border-color: rgb(var(--auth-blue-rgb) / 0.2);
+  background: var(--auth-success-bg);
   color: var(--auth-green);
 }
 
@@ -630,14 +676,15 @@
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
-  border: 2px solid rgba(255, 255, 255, 0.42);
-  border-top-color: white;
+  /* Follows the button text, so it shows on either theme's button. */
+  border: 2px solid color-mix(in srgb, currentColor 42%, transparent);
+  border-top-color: currentColor;
   border-radius: 50%;
   animation: auth-v2-spin 720ms linear infinite;
 }
 
 .auth-v2-spinner.dark {
-  border-color: rgba(29, 74, 108, 0.2);
+  border-color: rgb(var(--auth-blue-rgb) / 0.2);
   border-top-color: var(--auth-green);
 }
 
@@ -663,7 +710,7 @@
 }
 
 .auth-v2-role-list button:hover {
-  border-color: rgba(29, 74, 108, 0.55);
+  border-color: rgb(var(--auth-blue-rgb) / 0.55);
   background: var(--auth-soft);
 }
 
@@ -993,4 +1040,38 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.auth-v2-page :is(input, textarea)::placeholder {
+  color: var(--auth-muted);
+  opacity: 1;
+}
+
+/* ---------- Dark theme --------------------------------------------------- */
+/* The photo panel keeps its own colours; the form side turns charcoal. */
+html[data-theme="dark"] .auth-v2-page {
+  color-scheme: dark;
+  --auth-canvas: #151412;
+  --auth-paper: #1f1d1a;
+  --auth-ink: #f3efe7;
+  --auth-muted: #aaa294;
+  --auth-taupe: #b7a894;
+  --auth-line: #34312c;
+  --auth-line-strong: #7a7369;
+  --auth-soft: #2a2824;
+  --auth-green: #9cc4e6;
+  --auth-blue: #9cc4e6;
+  --auth-gold: #d1b06a;
+  --auth-blue-rgb: 156 196 230;
+  --auth-blue-hover: #b9d6ee;
+  --auth-icon-bg: #1c2a35;
+  --auth-error-bg: #3a1d17;
+  --auth-error-ink: #f6a592;
+  --auth-error-line: rgb(242 130 108 / 0.35);
+  --auth-success-bg: #18281e;
+  --auth-shadow-rgb: 0 0 0;
+}
+
+html[data-theme="dark"]:has(.auth-v2-page) {
+  background: #151412;
 }

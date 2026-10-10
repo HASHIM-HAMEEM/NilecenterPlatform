@@ -18,6 +18,8 @@ const en = {
     menu: "Menu",
     close: "Close menu",
     language: "Language",
+    themeDark: "Switch to dark theme",
+    themeLight: "Switch to light theme",
     skip: "Skip to content",
   },
   hero: {
@@ -159,6 +161,8 @@ const ar: LandingCopy = {
     menu: "القائمة",
     close: "إغلاق القائمة",
     language: "اللغة",
+    themeDark: "التبديل إلى المظهر الداكن",
+    themeLight: "التبديل إلى المظهر الفاتح",
     skip: "تخطَّ إلى المحتوى",
   },
   hero: {
@@ -298,6 +302,8 @@ const tr: LandingCopy = {
     menu: "Menü",
     close: "Menüyü kapat",
     language: "Dil",
+    themeDark: "Koyu temaya geç",
+    themeLight: "Açık temaya geç",
     skip: "İçeriğe geç",
   },
   hero: {
@@ -437,6 +443,8 @@ const zh: LandingCopy = {
     menu: "菜单",
     close: "关闭菜单",
     language: "语言",
+    themeDark: "切换到深色主题",
+    themeLight: "切换到浅色主题",
     skip: "跳到主要内容"
   },
   hero: {
@@ -693,6 +701,8 @@ const ru: LandingCopy = {
     menu: "Меню",
     close: "Закрыть меню",
     language: "Язык",
+    themeDark: "Включить тёмную тему",
+    themeLight: "Включить светлую тему",
     skip: "Перейти к содержанию"
   },
   hero: {
@@ -949,6 +959,8 @@ const ur: LandingCopy = {
     menu: "مینو",
     close: "مینو بند کریں",
     language: "زبان",
+    themeDark: "گہری تھیم پر جائیں",
+    themeLight: "روشن تھیم پر جائیں",
     skip: "مواد پر جائیں"
   },
   hero: {

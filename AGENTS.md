@@ -65,9 +65,9 @@ Do not duplicate or infer that status in companion files.
 Current QA baseline:
 
 - Portal QA: 375 checks, 0 failures.
-- Staff browser suites (`npm run qa:staff`): 22 suites, 0 failures. That is
-  16 functional suites plus the responsive gate in each of the six languages
-  (en, ar, tr, zh, ru, ur).
+- Staff browser suites (`npm run qa:staff`): 24 suites, 0 failures. That is
+  16 functional suites, the responsive gate in each of the six languages
+  (en, ar, tr, zh, ru, ur), and the light/dark contrast gate in en and ar.
 - This baseline must not be broken.
 
 ### Frontend And Backend Team Boundary
@@ -282,6 +282,11 @@ Use the commands that exist in `package.json`:
   app responsive gate (every page, 320 to 3840 px, touch emulated below
   1280). Set `STAFF_UI_LANG` to check one language; `npm run qa:staff` runs
   it for all six.
+- `node --env-file=.env.local scripts/staff-ui/contrast.mjs` is the colour
+  contrast gate for the staff app, public site and sign-in pages in light and
+  dark themes (WCAG 2.2: 4.5:1 text, 3:1 large text, icons and field edges).
+  Narrow it with `STAFF_UI_THEME`, `STAFF_UI_LANG`, `STAFF_UI_SCOPE`
+  (`public,auth,staff`) and `STAFF_UI_WIDTHS`.
 - Staff app languages: en (source), ar, tr, zh, ru, ur in
   `client/src/staff/copy*.ts`; public site: `client/src/pages/home/landing-copy.ts`
   and `public-copy.ts`. TypeScript and `copy.test.ts` reject missing keys,

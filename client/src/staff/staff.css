@@ -87,6 +87,25 @@ html.staff-ui {
     0 0 0 1px rgb(27 26 23 / 0.08),
     0 2px 6px rgb(27 26 23 / 0.08),
     0 12px 32px -8px rgb(27 26 23 / 0.22);
+  /* Tints and overlays, as RGB channels so alpha stays per use. */
+  --tint-rgb: 27 26 23;
+  --shadow-rgb: 26 26 26;
+  --gold-rgb: 196 163 90;
+  --backdrop: rgb(27 26 23 / 0.32);
+  /* Controls */
+  --btn-border: #ddd6cb;
+  --primary-hover: #333333;
+  --critical-hover: #86301d;
+  --on-tone: #ffffff;
+  --gold-ink: #6f5520;
+  /* Avatars and charts */
+  --avatar-gold: #8a6a28;
+  --avatar-olive: #5c6a3a;
+  --avatar-clay: #8a5a3c;
+  --avatar-slate: #4f5d66;
+  --chart-caution: #c08a3e;
+  --chart-neutral: #c3b9ab;
+  color-scheme: light;
   /* Motion: exact values from the motion guide */
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --ease-out: ease-out;
@@ -134,6 +153,62 @@ html.staff-ui {
   --border: var(--line);
   --input: var(--line-input);
   --ring: var(--river);
+  /* Role colour for shared renderer pieces (form progress, buttons). */
+  --role-color: var(--primary);
+  --role-tint: var(--paper-sunk);
+}
+
+/* ---------- Dark theme --------------------------------------------------- */
+/* Warm charcoal surfaces, lighter as they rise (canvas < card < menu), so
+   depth still reads without heavy shadows. Every text and icon pairing is
+   checked by scripts/staff-ui/contrast.mjs. */
+html.staff-ui[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #161513;
+  --paper-raised: #23211e;
+  --paper-card: #1e1d1a;
+  --paper-sunk: #111010;
+  --paper-deep: #2c2a26;
+  --paper-head: #1b1a17;
+  --ink: #f3f0ea;
+  --ink-2: #cdc7bc;
+  --ink-3: #a59e92;
+  --line: #2e2c28;
+  --line-strong: #3d3a35;
+  --line-input: #7a7369;
+  --gold: #d1b06a;
+  --river: #dcbc75;
+  --river-ink: #1a1407;
+  --positive: #74c48d;
+  --caution: #e0ad55;
+  --critical: #f2826c;
+  --neutral: #a59e92;
+  --shadow-ring: 0 0 0 1px rgb(255 255 255 / 0.08);
+  --shadow-raised:
+    0 0 0 1px rgb(255 255 255 / 0.07),
+    0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-card:
+    0 0 0 1px rgb(255 255 255 / 0.06),
+    0 1px 3px rgb(0 0 0 / 0.35);
+  --shadow-overlay:
+    0 0 0 1px rgb(255 255 255 / 0.09),
+    0 2px 6px rgb(0 0 0 / 0.4),
+    0 16px 40px -8px rgb(0 0 0 / 0.65);
+  --tint-rgb: 243 240 234;
+  --shadow-rgb: 0 0 0;
+  --gold-rgb: 209 176 106;
+  --backdrop: rgb(0 0 0 / 0.62);
+  --btn-border: #3d3a35;
+  --primary-hover: #ffffff;
+  --critical-hover: #ff9a86;
+  --on-tone: #14130f;
+  --gold-ink: #e3c47f;
+  --avatar-gold: #dcbc75;
+  --avatar-olive: #b3c27f;
+  --avatar-clay: #e0a582;
+  --avatar-slate: #a9bcc8;
+  --chart-caution: #e0ad55;
+  --chart-neutral: #6d675f;
 }
 
 /* ---------- Base ------------------------------------------------------- */
@@ -193,6 +268,30 @@ html.staff-ui button {
   font: inherit;
   color: inherit;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Shared form-renderer buttons (index.css, layered) lose to the reset above,
+   so the staff app restyles them with its own tokens. */
+html.staff-ui .platform-primary-button {
+  border-color: transparent;
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+html.staff-ui .platform-secondary-button {
+  border-color: var(--btn-border);
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+
+@media (hover: hover) {
+  html.staff-ui .platform-primary-button:not(:disabled):hover {
+    background: var(--primary-hover);
+  }
+
+  html.staff-ui .platform-secondary-button:not(:disabled):hover {
+    border-color: var(--line-input);
+  }
 }
 
 html.staff-ui .text-xs {
@@ -280,7 +379,7 @@ html.staff-ui .sr-only {
 @media (hover: hover) {
   .staff-sidebar-toggle:hover,
   .staff-rail-btn:hover {
-    background: rgb(27 26 23 / 0.06);
+    background: rgb(var(--tint-rgb) / 0.06);
     color: var(--ink);
   }
 }
@@ -479,7 +578,7 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-brand-sub {
 
 @media (hover: hover) {
   .staff-nav-group-label:hover {
-    background: rgb(27 26 23 / 0.04);
+    background: rgb(var(--tint-rgb) / 0.04);
     color: var(--ink-2);
   }
 }
@@ -496,7 +595,7 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-brand-sub {
   min-inline-size: 1.25rem;
   padding-inline: 0.3125rem;
   border-radius: 999px;
-  background: rgb(27 26 23 / 0.06);
+  background: rgb(var(--tint-rgb) / 0.06);
   font-size: 0.6875rem;
   font-variant-numeric: tabular-nums;
   line-height: 1.125rem;
@@ -508,14 +607,7 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-brand-sub {
   inline-size: 0.875rem;
   block-size: 0.875rem;
   flex-shrink: 0;
-  opacity: 0.6;
   transition: rotate 200ms var(--ease);
-}
-
-@media (hover: hover) {
-  .staff-nav-group-label:hover .staff-nav-group-caret {
-    opacity: 1;
-  }
 }
 
 .staff-nav-group[data-folded] .staff-nav-group-caret {
@@ -596,7 +688,7 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-nav-group-label {
 
 @media (hover: hover) {
   .staff-nav-link:hover {
-    background: rgb(27 26 23 / 0.05);
+    background: rgb(var(--tint-rgb) / 0.05);
     color: var(--ink);
   }
 }
@@ -634,7 +726,7 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-nav-group-label {
 }
 
 .staff-nav-link[data-active="true"] .staff-nav-icon {
-  color: var(--gold);
+  color: var(--river);
 }
 
 /* The main column is an inset canvas on the sunk paper. */
@@ -734,7 +826,7 @@ html[dir="rtl"] .staff-topbar[data-compact] .staff-topbar-title {
 
 @media (hover: hover) {
   .staff-menu-toggle:hover {
-    background: rgb(27 26 23 / 0.05);
+    background: rgb(var(--tint-rgb) / 0.05);
     color: var(--ink);
   }
 }
@@ -852,13 +944,13 @@ html[dir="rtl"] .staff-topbar[data-compact] .staff-topbar-title {
 
 @media (hover: hover) {
   .staff-bell:hover {
-    background: rgb(27 26 23 / 0.05);
+    background: rgb(var(--tint-rgb) / 0.05);
     color: var(--ink);
   }
 }
 
 .staff-bell[data-open="true"] {
-  background: rgb(27 26 23 / 0.05);
+  background: rgb(var(--tint-rgb) / 0.05);
 }
 
 .staff-count {
@@ -895,7 +987,7 @@ html[dir="rtl"] .staff-topbar[data-compact] .staff-topbar-title {
 
 @media (hover: hover) {
   .staff-user-trigger:hover {
-    background: rgb(27 26 23 / 0.05);
+    background: rgb(var(--tint-rgb) / 0.05);
   }
 }
 
@@ -913,7 +1005,7 @@ html[dir="rtl"] .staff-topbar[data-compact] .staff-topbar-title {
   flex-shrink: 0;
   border-radius: 50%;
   background: color-mix(in oklab, var(--avatar-tone, var(--ink)) 14%, transparent);
-  color: var(--avatar-tone, var(--ink));
+  color: color-mix(in oklab, var(--avatar-tone, var(--ink)) 80%, var(--ink));
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -921,19 +1013,19 @@ html[dir="rtl"] .staff-topbar[data-compact] .staff-topbar-title {
 
 /* Avatar tones are warm identity colours, never status colours. */
 .staff-avatar[data-tone="river"] {
-  --avatar-tone: #8a6a28;
+  --avatar-tone: var(--avatar-gold);
 }
 
 .staff-avatar[data-tone="positive"] {
-  --avatar-tone: #5c6a3a;
+  --avatar-tone: var(--avatar-olive);
 }
 
 .staff-avatar[data-tone="caution"] {
-  --avatar-tone: #8a5a3c;
+  --avatar-tone: var(--avatar-clay);
 }
 
 .staff-avatar[data-tone="critical"] {
-  --avatar-tone: #4f5d66;
+  --avatar-tone: var(--avatar-slate);
 }
 
 .staff-avatar[data-tone="neutral"] {
@@ -1098,7 +1190,7 @@ html[dir="rtl"].staff-ui input[type="tel"] {
   gap: 0.5rem;
   block-size: var(--control);
   padding-inline: 0.875rem;
-  border: 1px solid #ddd6cb;
+  border: 1px solid var(--btn-border);
   border-radius: var(--r-md);
   background: var(--paper-card);
   color: var(--ink);
@@ -1137,9 +1229,10 @@ html[dir="rtl"].staff-ui input[type="tel"] {
   }
 }
 
+/* Faded but still readable (3:1, checked by contrast.mjs in both themes). */
 .staff-btn:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 0.6;
 }
 
 /* A disabled destructive action reads as unavailable, not as a faded alarm. */
@@ -1168,8 +1261,8 @@ html[dir="rtl"].staff-ui input[type="tel"] {
 
 @media (hover: hover) {
   .staff-btn[data-variant="primary"]:not(:disabled):hover {
-    background: #333;
-    border-color: #333;
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
   }
 }
 
@@ -1181,8 +1274,8 @@ html[dir="rtl"].staff-ui input[type="tel"] {
 
 @media (hover: hover) {
   .staff-btn[data-variant="destructive"]:not(:disabled):hover {
-    background: #86301d;
-    border-color: #86301d;
+    background: var(--critical-hover);
+    border-color: var(--critical-hover);
   }
 }
 
@@ -1491,7 +1584,8 @@ html.staff-ui input[type="radio"] {
   font-size: 0.75rem;
   font-weight: 500;
   line-height: 1;
-  color: var(--badge-ink, var(--ink-2));
+  /* A touch of ink keeps tinted text above 4.5:1 in both themes. */
+  color: color-mix(in oklab, var(--badge-ink, var(--ink-2)) 85%, var(--ink));
   white-space: nowrap;
 }
 
@@ -1712,8 +1806,8 @@ html.staff-ui input[type="radio"] {
   border-radius: 7px;
   background: var(--paper-card);
   box-shadow:
-    0 0 0 1px rgb(27 26 23 / 0.06),
-    0 1px 3px rgb(27 26 23 / 0.1);
+    0 0 0 1px rgb(var(--tint-rgb) / 0.06),
+    0 1px 3px rgb(var(--shadow-rgb) / 0.1);
 }
 
 .staff-segment-count {
@@ -2523,7 +2617,7 @@ html[dir="rtl"] .staff-rtl-flip {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgb(27 26 23 / 0.32);
+  background: var(--backdrop);
 }
 
 .ui-layer {
@@ -2678,6 +2772,11 @@ html[dir="rtl"] .ui-menu-sub-glyph {
   font-size: 1.25rem;
   letter-spacing: -0.01em;
   outline: none;
+}
+
+.ui-command-input::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
 }
 
 .ui-command-search > svg {
@@ -3005,7 +3104,7 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-detail-name {
 
 @media (hover: hover) {
   .staff-copy-btn:hover {
-    background: rgb(27 26 23 / 0.05);
+    background: rgb(var(--tint-rgb) / 0.05);
     color: var(--ink);
   }
 }
@@ -4189,8 +4288,8 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-report-title {
 @media (hover: hover) {
   .staff-tile[data-link]:hover {
     box-shadow:
-      0 0 0 1px rgb(26 26 26 / 0.1),
-      0 2px 8px rgb(26 26 26 / 0.06);
+      0 0 0 1px rgb(var(--shadow-rgb) / 0.1),
+      0 2px 8px rgb(var(--shadow-rgb) / 0.06);
   }
 }
 
@@ -4365,7 +4464,7 @@ a.staff-agenda-name:hover {
   padding-inline: 0.5rem;
   border-radius: 999px;
   background: color-mix(in oklab, var(--gold) 18%, transparent);
-  color: #6f5520;
+  color: var(--gold-ink);
   font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.5rem;
@@ -4756,7 +4855,7 @@ a.staff-agenda-name:hover {
 .staff-roll-chip[data-on] {
   border-color: var(--chip-tone);
   background: var(--chip-tone);
-  color: #fff;
+  color: var(--on-tone);
 }
 
 @media (hover: hover) {
@@ -5204,7 +5303,7 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .nile-form-renderer-header h1 {
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: #6f5520;
+  color: var(--gold-ink);
   font: inherit;
   font-size: 0.8125rem;
   cursor: pointer;
@@ -5237,7 +5336,7 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .nile-form-renderer-header h1 {
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #6f5520;
+  color: var(--gold-ink);
   cursor: pointer;
 }
 
@@ -5301,7 +5400,7 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .nile-form-renderer-header h1 {
 
 @media (hover: hover) {
   .staff-roleview-role:not([data-on]):hover {
-    background: rgb(27 26 23 / 0.04);
+    background: rgb(var(--tint-rgb) / 0.04);
   }
 }
 
@@ -5419,9 +5518,9 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .nile-form-renderer-header h1 {
 [data-tone="ink"] { --tone: var(--ink); }
 [data-tone="gold"] { --tone: var(--gold); }
 [data-tone="positive"] { --tone: var(--positive); }
-[data-tone="caution"] { --tone: #c08a3e; }
+[data-tone="caution"] { --tone: var(--chart-caution); }
 [data-tone="critical"] { --tone: var(--critical); }
-[data-tone="neutral"] { --tone: #c3b9ab; }
+[data-tone="neutral"] { --tone: var(--chart-neutral); }
 
 .staff-legend {
   display: flex;
@@ -6095,7 +6194,7 @@ fieldset.staff-dob {
 
 @media (hover: hover) {
   .staff-log-row:hover {
-    background: rgb(27 26 23 / 0.025);
+    background: rgb(var(--tint-rgb) / 0.025);
   }
 }
 
@@ -6148,7 +6247,7 @@ fieldset.staff-dob {
 .staff-log-stream {
   padding: 0.125rem 0.5rem;
   border-radius: 999px;
-  background: rgb(27 26 23 / 0.05);
+  background: rgb(var(--tint-rgb) / 0.05);
   font-size: 0.75rem;
   white-space: nowrap;
   color: var(--ink-3);
@@ -6287,7 +6386,7 @@ fieldset.staff-dob {
 @media (hover: hover) {
   .staff-dp-nav:not(:disabled):hover,
   .staff-dp-title:hover {
-    background: rgb(27 26 23 / 0.06);
+    background: rgb(var(--tint-rgb) / 0.06);
   }
 }
 
@@ -6320,7 +6419,7 @@ fieldset.staff-dob {
 .staff-dp-cell[data-between],
 .staff-dp-cell[data-edge-start],
 .staff-dp-cell[data-edge-end] {
-  background: rgb(196 163 90 / 0.16);
+  background: rgb(var(--gold-rgb) / 0.16);
 }
 
 .staff-dp-cell[data-edge-start] {
@@ -6354,12 +6453,11 @@ fieldset.staff-dob {
 
 .staff-dp-day[data-outside] {
   color: var(--ink-3);
-  opacity: 0.55;
 }
 
 @media (hover: hover) {
   .staff-dp-day:not([aria-disabled]):not([data-selected]):hover {
-    background: rgb(27 26 23 / 0.07);
+    background: rgb(var(--tint-rgb) / 0.07);
   }
 }
 
@@ -6385,7 +6483,7 @@ fieldset.staff-dob {
 }
 
 .staff-dp-day[data-edge] {
-  background: rgb(196 163 90 / 0.32);
+  background: rgb(var(--gold-rgb) / 0.32);
 }
 
 .staff-dp-day[data-selected] {
@@ -6482,7 +6580,7 @@ fieldset.staff-dob {
 
 @media (hover: hover) {
   .staff-dp-month:not(:disabled):not([data-current]):hover {
-    background: rgb(27 26 23 / 0.07);
+    background: rgb(var(--tint-rgb) / 0.07);
   }
 }
 
@@ -6544,7 +6642,7 @@ fieldset.staff-dob {
 
 @media (hover: hover) {
   .staff-back:hover {
-    background: rgb(27 26 23 / 0.06);
+    background: rgb(var(--tint-rgb) / 0.06);
   }
 }
 

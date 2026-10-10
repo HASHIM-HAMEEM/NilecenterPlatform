@@ -76,7 +76,16 @@ export function NileLogo({ height = 36, className }: { height?: number; classNam
   return (
     <span className={["nile-logo", className].filter(Boolean).join(" ")}>
       <NileRosette size={height} />
-      <img src="/brand/nile-wordmark.svg" alt="Nile Center" style={{ blockSize: height, inlineSize: "auto" }} />
+      <img className="nile-wordmark" src="/brand/nile-wordmark.svg" alt="Nile Center" style={{ blockSize: height, inlineSize: "auto" }} />
+      {/* Reversed wordmark for dark surfaces (brand.css picks one). */}
+      <img
+        className="nile-wordmark nile-wordmark-dark"
+        src="/brand/nile-wordmark-dark.svg"
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        style={{ blockSize: height, inlineSize: "auto" }}
+      />
     </span>
   );
 }

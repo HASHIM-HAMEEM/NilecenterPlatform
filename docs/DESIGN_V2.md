@@ -170,6 +170,26 @@ Do not:
 - use gradients, blobs, or decorative color fields that are not part of the Nile Learn language;
 - rely on color alone for status.
 
+Light and dark themes:
+
+- The staff app, public site, public forms and sign-in pages have a light and
+  a dark theme. Staff choose Match device, Light or Dark in the user menu;
+  visitors use the sun/moon switch beside the language menu. The choice is
+  stored per device (`nilelearn.theme`, `client/src/lib/theme.ts`) and the
+  boot script in `client/index.html` applies it before first paint. The
+  Student portal stays light.
+- Write colours as tokens, never as fixed values, so both themes follow. Use
+  `rgb(var(--tint-rgb) / a)` for hover and pressed tints and
+  `rgb(var(--shadow-rgb) / a)` for shadows. Dark surfaces get lighter as they
+  rise (canvas, then card, then menu).
+- Coloured text (status, petal, avatar) mixes in some ink, for example
+  `color-mix(in oklab, var(--tone) 85%, var(--ink))`, so it stays readable on
+  either canvas.
+- Text needs 4.5:1 (3:1 for large text). Icons inside controls, form-field
+  edges and disabled controls need 3:1. `scripts/staff-ui/contrast.mjs`
+  measures every visible text node, icon and field edge in both themes and
+  fails below these ratios.
+
 ## 7. Background Rules
 
 The background must support work, not compete with it.

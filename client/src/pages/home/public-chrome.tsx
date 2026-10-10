@@ -1,5 +1,6 @@
 import "@/styles/landing.css";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Link } from "wouter";
 import { ArrowRight, Check, ChevronDown, Globe2, Menu, X } from "lucide-react";
 import { NileLogo } from "@/components/brand/NileLogo";
@@ -69,7 +70,7 @@ export function Lattice({ className, scale = 1.9 }: { className?: string; scale?
 
 export function Petal({ colour, className }: { colour: string; className?: string }) {
   return (
-    <svg viewBox="40 -1 20 31" className={className} aria-hidden="true" focusable="false">
+    <svg viewBox="40 -1 20 31" className={className} aria-hidden="true" focusable="false" data-petal="">
       <polygon points={PETAL} fill={colour} />
     </svg>
   );
@@ -266,7 +267,10 @@ export function PublicChrome({
             <span>{t.notice}</span>
             <ArrowRight className="lp-flip" aria-hidden="true" />
           </Link>
-          <LanguageMenu locale={locale} onChange={onLocaleChange} label={t.nav.language} />
+          <div className="lp-notice-tools">
+            <ThemeToggle className="lp-theme-toggle" toDark={t.nav.themeDark} toLight={t.nav.themeLight} />
+            <LanguageMenu locale={locale} onChange={onLocaleChange} label={t.nav.language} />
+          </div>
         </div>
       </div>
 

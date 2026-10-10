@@ -10,6 +10,20 @@
   display: block;
 }
 
+/* The navy wordmark disappears on dark surfaces; themed areas switch to the
+   reversed one. The Student portal keeps its light design and the original. */
+.nile-logo > .nile-wordmark-dark {
+  display: none;
+}
+
+html[data-theme="dark"]:is(.staff-ui, :has(.lp, .auth-v2-page, .nile-public-form-page)) .nile-logo > .nile-wordmark {
+  display: none;
+}
+
+html[data-theme="dark"]:is(.staff-ui, :has(.lp, .auth-v2-page, .nile-public-form-page)) .nile-logo > .nile-wordmark-dark {
+  display: block;
+}
+
 .nile-rosette {
   display: block;
   flex-shrink: 0;

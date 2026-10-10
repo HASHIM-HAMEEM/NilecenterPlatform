@@ -64,6 +64,10 @@ const en = {
     displayStandard: "Standard",
     displayLarge: "Large",
     displayXLarge: "Extra large",
+    theme: "Theme",
+    themeSystem: "Match device",
+    themeLight: "Light",
+    themeDark: "Dark",
     workspace: "Workspace",
     chooseWorkspace: "Choose a branch",
     workspaceHint:

@@ -1,5 +1,6 @@
 import {
   createContext,
+  Suspense,
   useContext,
   useEffect,
   useRef,
@@ -35,7 +36,7 @@ import { runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { ConfirmDialog } from "../ui/confirm-dialog";
 import { GlyphCheck } from "../ui/glyphs";
-import { Avatar } from "../ui/primitives";
+import { Avatar, LoadingCenter } from "../ui/primitives";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,6 +66,7 @@ import {
   useFoldedGroups,
   useSidebarCollapsed,
 } from "./sidebar-state";
+import { THEME_PREFERENCES, setThemePreference, useThemePreference } from "@/lib/theme";
 import { StaffCommandMenu } from "./command-menu";
 import {
   installNavHistory,
@@ -339,6 +341,7 @@ function UserMenu({ session, compact = false }: { session: AuthSessionDto; compa
   const { signOut, signOutEverywhere, switchRole } = useStaffSession();
   const locale = useStaffLocale();
   const displaySize = useDisplaySize();
+  const themePreference = useThemePreference();
   const [confirmOutAll, setConfirmOutAll] = useState(false);
   const ncc = session.ncc;
   if (!ncc) return null;
@@ -417,6 +420,26 @@ function UserMenu({ session, compact = false }: { session: AuthSessionDto; compa
                 >
                   <MenuCheck on={size === displaySize} />
                   {displayLabel(size)}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>{copy.shell.theme}</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {THEME_PREFERENCES.map(option => (
+                <DropdownMenuItem
+                  key={option}
+                  onSelect={() => setThemePreference(option)}
+                  aria-checked={option === themePreference}
+                  role="menuitemradio"
+                >
+                  <MenuCheck on={option === themePreference} />
+                  {option === "system"
+                    ? copy.shell.themeSystem
+                    : option === "light"
+                      ? copy.shell.themeLight
+                      : copy.shell.themeDark}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuSubContent>
@@ -753,7 +776,8 @@ export function StaffShell({
             </header>
 
             <main className="staff-content" key={location}>
-              {children}
+              {/* A page still downloading suspends here, so the shell and its theme stay put. */}
+              <Suspense fallback={<LoadingCenter />}>{children}</Suspense>
             </main>
           </div>
 

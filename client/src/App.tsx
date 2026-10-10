@@ -150,8 +150,15 @@ function LegacyStaffRedirect() {
 }
 
 function RouteLoading() {
+  const [location] = useLocation();
+  // The Student portal keeps its light design; everything else follows the theme.
+  const lightOnly = location.startsWith("/app/student");
   return (
-    <main className="platform-route-loading" aria-live="polite">
+    <main
+      className="platform-route-loading"
+      data-theme={lightOnly ? "light" : undefined}
+      aria-live="polite"
+    >
       <span />
       <strong>Loading workspace</strong>
     </main>

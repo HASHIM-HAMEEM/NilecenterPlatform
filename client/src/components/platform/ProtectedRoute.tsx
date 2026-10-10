@@ -96,7 +96,7 @@ export default function ProtectedRoute({
         (scopeStatus === "ready" && hydratedRole !== activeRole)))
   ) {
     return (
-      <main className="platform-route-loading" aria-live="polite">
+      <main className="platform-route-loading" data-theme="light" aria-live="polite">
         <span />
         <strong>
           {checkedSession ? "Loading scoped workspace" : "Checking session"}

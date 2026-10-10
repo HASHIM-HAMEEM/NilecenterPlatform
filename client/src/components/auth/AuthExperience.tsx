@@ -3,6 +3,7 @@ import "@/styles/auth-v2.css";
 import { ChevronDown, Globe2 } from "lucide-react";
 import { Link } from "wouter";
 import { NileLogo, NileRosette } from "@/components/brand/NileLogo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   getDirection,
   localeOptions,
@@ -119,7 +120,14 @@ export function AuthExperience({
           <Link href="/" className="auth-v2-brand auth-v2-brand-dark" aria-label="Nile Center">
             <NileLogo height={34} />
           </Link>
-          <AuthLanguageMenu locale={locale} onChange={onLocaleChange} />
+          <div className="auth-v2-tools">
+            <ThemeToggle
+              className="auth-v2-theme-toggle"
+              toDark={ui("Switch to dark theme")}
+              toLight={ui("Switch to light theme")}
+            />
+            <AuthLanguageMenu locale={locale} onChange={onLocaleChange} />
+          </div>
         </header>
         <div className="auth-v2-content">
           <NileRosette size={36} className="auth-v2-landing-mark" />

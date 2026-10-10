@@ -84,6 +84,16 @@
     padding: 28px;
   }
 
+  /* Dark splash before the themed app's own styles have loaded (lib/theme.ts). */
+  html[data-theme="dark"] .platform-route-loading:not([data-theme="light"]) {
+    color-scheme: dark;
+    background: #161513;
+    color: #f3f0ea;
+    --background: #161513;
+    --foreground: #f3f0ea;
+    --muted-foreground: #a59e92;
+  }
+
   .platform-route-loading small {
     color: var(--muted-foreground);
     font-size: 11px;
