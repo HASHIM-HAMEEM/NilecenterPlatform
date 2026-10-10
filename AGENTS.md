@@ -291,6 +291,16 @@ Use the commands that exist in `package.json`:
   `client/src/staff/copy*.ts`; public site: `client/src/pages/home/landing-copy.ts`
   and `public-copy.ts`. TypeScript and `copy.test.ts` reject missing keys,
   untranslated strings and lost `{placeholders}`. Arabic and Urdu are RTL.
+  `client/src/lib/translation-quality.test.ts` rejects wrong alphabet forms
+  (Urdu vs Arabic letters), Traditional Chinese, mixed-script Russian words,
+  and translated form values. Keep one term per concept in each language:
+  ar lead = عميل محتمل, course = دورة, trial lesson = حصة تجريبية; tr seats =
+  kontenjan, class session = ders, brand = "Nile Center"; zh registrar =
+  教务专员, head of department = 部门主任, seats = 名额; ru bookings of tests
+  and trials = «Тесты и пробные уроки», guardian = законный представитель;
+  ur status = اسٹیٹس, yesterday/tomorrow = گزشتہ کل / آئندہ کل. "SSA" and
+  `booking.branches[].value` stay untranslated. Quran verses use established
+  translations (Ma Jian for Chinese, Kuliev for Russian).
 - Nile Forms in the unified staff app (`/app/forms`) needs
   `NILE_FORMS_NCC_WRITES_ENABLED=1` for NCC staff writes (author, publish,
   review, fill). Reads work without it. The compatibility forms store is

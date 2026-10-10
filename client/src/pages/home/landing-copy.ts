@@ -220,7 +220,7 @@ const ar: LandingCopy = {
       { title: "أخبرنا بهدفك", text: "أرسل استفسارًا قصيرًا، ويرد عليك مستشار القبول بالخيارات المناسبة." },
       { title: "اختبار مستوى مجاني", text: "ثلاثون دقيقة أونلاين أو في المقر، لتبدأ من مستواك بالضبط." },
       { title: "حصة تجريبية مجانية", text: "احضر حصة حقيقية مع معلم معتمد قبل أن تقرر أي شيء." },
-      { title: "انضم إلى فصلك", text: "اختر مجموعة صباحية أو مسائية. خطتك وتقدمك في مكان واحد." },
+      { title: "انضم إلى فصلك", text: "اختر مجموعة صباحية أو ظهرية أو مسائية. خطتك وتقدمك في مكان واحد." },
     ],
   },
   modes: {
@@ -250,7 +250,7 @@ const ar: LandingCopy = {
   films: {
     title: "شاهد مركز النيل",
     lead: "فيلمان قصيران من قناة مركز النيل.",
-    life: { title: "الحياة في مركز النيل", note: "من داخل المركز في مدينة نصر، يعلّم منذ 1998" },
+    life: { title: "الحياة في مركز النيل", note: "من داخل مركزنا في مدينة نصر، نعلّم منذ 1998" },
     start: { title: "ابدأ تعلّم العربية والقرآن", note: "مقدمة قصيرة من مركز النيل" },
     play: "تشغيل الفيلم",
     source: "يُعرض من يوتيوب",
@@ -265,7 +265,7 @@ const ar: LandingCopy = {
       { q: "متى تُعقد الحصص؟", a: "توجد مجموعات صباحية وظهرية ومسائية، أونلاين وفي المقر." },
       { q: "هل تدرّسون الأطفال؟", a: "نعم. مسار الأطفال يشمل القرآن والعربية والدراسات الإسلامية من سن 5 إلى 14 سنة." },
       { q: "هل يمكنني الدراسة من خارج مصر؟", a: "نعم. الحصص المباشرة أونلاين متاحة حول العالم، مع تسجيلات ومواد للمراجعة." },
-      { q: "أين يقع المقر؟", a: "فرعان في الحي السابع بمدينة نصر، القاهرة: 37 شارع عبد الشافي محمد، و6 شارع فضل بن ربيع." },
+      { q: "أين تقع الفروع؟", a: "فرعان في الحي السابع بمدينة نصر، القاهرة: 37 شارع عبد الشافي محمد، و6 شارع فضل بن ربيع." },
     ],
   },
   cta: {
@@ -343,7 +343,7 @@ const tr: LandingCopy = {
   },
   wisdom: {
     meaning: "İlim nurdur.",
-    text: "Eski bir Arap sözü ve Nil Merkezi’nin var olma nedeni: her ders, öğrenciyi biraz daha net görür hâlde bırakmalı.",
+    text: "Eski bir Arap sözü ve Nile Center’ın var olma nedeni: her ders, öğrenciyi biraz daha net görür hâlde bırakmalı.",
   },
   teach: {
     title: "Nasıl öğretiyoruz",
@@ -391,7 +391,7 @@ const tr: LandingCopy = {
   films: {
     title: "Nile Center'ı izleyin",
     lead: "Nile Center'ın kendi kanalından iki kısa film.",
-    life: { title: "Nile Center'da yaşam", note: "1998'den beri Nasr City'deki merkezin içinden" },
+    life: { title: "Nile Center'da yaşam", note: "Nasr City’deki merkezimizden; 1998’den beri eğitim veriyoruz" },
     start: { title: "Arapça ve Kur’an öğrenmeye başlayın", note: "Nile Center'dan kısa bir tanıtım" },
     play: "Filmi oynat",
     source: "YouTube'dan oynatılır",
@@ -416,7 +416,7 @@ const tr: LandingCopy = {
     whatsapp: "WhatsApp’tan yazın",
   },
   footer: {
-    tagline: "Daha parlak bir gelecek için eğitim, her seferinde bir öğrenci.",
+    tagline: "Daha parlak bir gelecek için eğitim; her öğrenciyle tek tek.",
     programmes: "Programlar",
     school: "Merkez",
     contact: "İletişim",
@@ -426,7 +426,7 @@ const tr: LandingCopy = {
     privacy: "Gizlilik",
     terms: "Koşullar",
     staff: "Personel girişi",
-    rights: "Nil Eğitim Merkezi. Tüm hakları saklıdır.",
+    rights: "Nile Learning Center. Tüm hakları saklıdır.",
   },
 };
 
@@ -467,7 +467,7 @@ const zh: LandingCopy = {
     },
     {
       value: "120,000+",
-      label: "培养的学员"
+      label: "累计学员"
     },
     {
       value: "120",
@@ -674,7 +674,7 @@ const zh: LandingCopy = {
     whatsapp: "通过 WhatsApp 联系我们"
   },
   footer: {
-    tagline: "教育成就更光明的未来，一次成就一位学员。",
+    tagline: "用心培养每一位学员，以教育成就更光明的未来。",
     programmes: "课程项目",
     school: "学校",
     contact: "联系方式",
@@ -725,7 +725,7 @@ const ru: LandingCopy = {
     },
     {
       value: "120 000+",
-      label: "Выпускников"
+      label: "Учеников"
     },
     {
       value: "120",
@@ -885,7 +885,7 @@ const ru: LandingCopy = {
     lead: "Два коротких фильма с собственного канала Nile Center.",
     life: {
       title: "Жизнь в Nile Center",
-      note: "Внутри центра в Наср-Сити, обучаем с 1998 года"
+      note: "В нашем центре в Наср-Сити — учим с 1998 года"
     },
     start: {
       title: "Начните учить арабский и Коран",
@@ -983,7 +983,7 @@ const ur: LandingCopy = {
     },
     {
       value: "+120,000",
-      label: "فارغ التحصیل طلبہ"
+      label: "طلبہ"
     },
     {
       value: "120",
@@ -1020,13 +1020,13 @@ const ur: LandingCopy = {
       },
       {
         slug: "kids",
-        name: "بچے",
+        name: "بچوں کے لیے",
         desc: "کم عمر طلبہ کے لیے قرآن، عربی اور اسلامی علوم کے راستے۔",
         meta: "5 سے 14 سال"
       },
       {
         slug: "turkish",
-        name: "ترکی",
+        name: "ترکی زبان",
         desc: "تعلیم، سفر اور روزمرہ زندگی کے لیے جدید ترکی زبان۔",
         meta: "A1 سے B2 تک"
       },
@@ -1040,7 +1040,7 @@ const ur: LandingCopy = {
         slug: "teacher-training",
         name: "اساتذہ کی تربیت",
         desc: "عربی اور قرآن کے اساتذہ کے لیے طریقۂ تدریس، کلاس روم کی مہارت اور جانچ۔",
-        meta: "کام کرنے والے اساتذہ کے لیے"
+        meta: "تدریس کرنے والے اساتذہ کے لیے"
       },
       {
         slug: "enterprise",
@@ -1056,14 +1056,14 @@ const ur: LandingCopy = {
   },
   teach: {
     title: "ہم کیسے پڑھاتے ہیں",
-    lead: "تین عادتیں جو ہر کلاس میں ہیں، بچے کے پہلے حروف سے اجازہ تک۔",
+    lead: "تین اصول جو ہر کلاس میں اپنائے جاتے ہیں، بچے کے پہلے حروف سے اجازہ تک۔",
     items: [
       {
         title: "آپ کی سطح کے مطابق منصوبہ",
         text: "ہر طالب علم، بالکل نئے سے لے کر اجازہ کے امیدوار تک، کو ایسا منصوبہ ملتا ہے جو لیول ٹیسٹ کے نتیجے سے شروع ہوتا ہے۔"
       },
       {
-        title: "براہِ راست اور تعاملی",
+        title: "براہِ راست اور انٹرایکٹو",
         text: "حقیقی اساتذہ، حقیقی گفتگو، صبح، دوپہر اور شام کے گروپس میں، دہرانے کے لیے ریکارڈنگز کے ساتھ۔"
       },
       {
@@ -1099,7 +1099,7 @@ const ur: LandingCopy = {
     lead: "آپ جہاں بھی پڑھیں، وہی اساتذہ اور وہی معیار۔",
     online: {
       title: "براہِ راست آن لائن",
-      text: "آپ کے تعلیمی پلیٹ فارم پر ریکارڈ شدہ اسباق کے ساتھ تعاملی براہِ راست کلاسیں۔",
+      text: "آپ کے تعلیمی پلیٹ فارم پر ریکارڈ شدہ اسباق کے ساتھ انٹرایکٹو براہِ راست کلاسیں۔",
       points: [
         "دنیا میں کہیں سے بھی شامل ہوں",
         "صبح، دوپہر اور شام کے گروپس",
@@ -1111,8 +1111,8 @@ const ur: LandingCopy = {
       title: "قاہرہ میں کیمپس",
       text: "نصر سٹی میں دو کیمپس، پُرسکون کلاس رومز اور خطاطی اسٹوڈیوز کے ساتھ۔",
       points: [
-        "شاخ 1: 37 عبد الشافی محمد، ساتواں ضلع",
-        "شاخ 2: 6 فضل بن ربیع، ساتواں ضلع",
+        "شاخ 1: 37 عبد الشافی محمد، ساتواں ڈسٹرکٹ",
+        "شاخ 2: 6 فضل بن ربیع، ساتواں ڈسٹرکٹ",
         "لیول ٹیسٹ اور آزمائشی اسباق کیمپس میں"
       ],
       phoneLabel: "کیمپس کورسز"
@@ -1132,7 +1132,7 @@ const ur: LandingCopy = {
         context: "عربی، برطانیہ"
       },
       {
-        text: "ذاتی رہنمائی اور تعاملی اسباق نے تین مہینوں میں مجھے اعتماد سے مصری عامیہ بولنا سکھا دیا۔",
+        text: "ذاتی رہنمائی اور انٹرایکٹو اسباق نے تین مہینوں میں مجھے اعتماد سے مصری عامیہ بولنا سکھا دیا۔",
         name: "یاسمین",
         context: "مصری عامیہ، ترکی"
       }
@@ -1142,8 +1142,8 @@ const ur: LandingCopy = {
     title: "نائل سینٹر دیکھیں",
     lead: "نائل سینٹر کے اپنے چینل سے دو مختصر فلمیں۔",
     life: {
-      title: "نائل سینٹر کی زندگی",
-      note: "نصر سٹی سینٹر کے اندر، 1998 سے تدریس"
+      title: "نائل سینٹر میں زندگی",
+      note: "نصر سٹی کے ہمارے سینٹر سے، 1998 سے تدریس"
     },
     start: {
       title: "عربی اور قرآن سیکھنا شروع کریں",
@@ -1179,7 +1179,7 @@ const ur: LandingCopy = {
       },
       {
         q: "کیمپس کہاں ہیں؟",
-        a: "نصر سٹی، قاہرہ کے ساتویں ضلع میں دو شاخیں: 37 عبد الشافی محمد اور 6 فضل بن ربیع۔"
+        a: "نصر سٹی، قاہرہ کے ساتویں ڈسٹرکٹ میں دو شاخیں: 37 عبد الشافی محمد اور 6 فضل بن ربیع۔"
       }
     ]
   },

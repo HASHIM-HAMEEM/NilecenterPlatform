@@ -186,10 +186,10 @@ export type PublicCopy = typeof en;
 const ar: PublicCopy = {
   courses: {
     quran: { level: "من البداية حتى الإجازة", schedule: "مباشر أونلاين وحضوري", outcomes: ["التلاوة بتجويد صحيح", "الحفظ بخطة ثابتة", "الاستعداد للإجازة"] },
-    arabic: { level: "من A1 حتى المتقدم", schedule: "مجموعات صباحية وظهرية ومسائية", outcomes: ["قراءة نصوص عربية متصلة", "نحو تستطيع استخدامه", "التحدث بثقة"] },
+    arabic: { level: "من A1 حتى المتقدم", schedule: "مجموعات صباحية وظهرية ومسائية", outcomes: ["قراءة نصوص عربية متصلة", "إتقان نحو تستطيع استخدامه", "التحدث بثقة"] },
     "islamic-studies": { level: "من الأسس حتى المتوسط", schedule: "مجموعات مباشرة أسبوعية", outcomes: ["فهم العربية القرآنية", "دراسة المتون الأساسية مع معلم", "السؤال والنقاش بأدب"] },
-    kids: { level: "من 5 إلى 14 سنة", schedule: "بعد المدرسة وفي العطلات", outcomes: ["قراءة الحروف العربية وكتابتها", "تلاوة قصار السور وحفظها", "التعلم في مجموعة صغيرة دافئة"] },
-    turkish: { level: "من A1 حتى B2", schedule: "مجموعات صغيرة", outcomes: ["إدارة المحادثات اليومية", "قراءة التركية اليومية", "الاستعداد للدراسة أو السفر"] },
+    kids: { level: "من 5 إلى 14 سنة", schedule: "بعد المدرسة وفي العطلات", outcomes: ["قراءة الحروف العربية وكتابتها", "تلاوة قصار السور وحفظها", "التعلم في مجموعة صغيرة بأجواء ودودة"] },
+    turkish: { level: "من A1 حتى B2", schedule: "مجموعات صغيرة", outcomes: ["خوض المحادثات اليومية", "قراءة التركية اليومية", "الاستعداد للدراسة أو السفر"] },
     english: { level: "كل المستويات", schedule: "مجموعات صغيرة مركّزة", outcomes: ["التحدث بطلاقة أكبر", "الكتابة بوضوح", "بناء المهارات الأكاديمية"] },
     "teacher-training": { level: "للمعلمين الممارسين", schedule: "دفعات على مدار العام", outcomes: ["تخطيط دروس واضحة", "إدارة فصل حيوي", "تقييم عادل ومفيد"] },
     enterprise: { level: "نصممه معكم", schedule: "يُصمَّم حول مجموعتكم", outcomes: ["برنامج يناسب أهدافكم", "تقارير عن التقدم", "أونلاين أو في مقرنا أو لديكم"] },
@@ -243,7 +243,7 @@ const ar: PublicCopy = {
     required: "أدخل رمز الشهادة.",
     unavailable: "التحقق غير متاح الآن. حاول لاحقًا.",
     notFound: "لا توجد شهادة صادرة بهذا الرمز",
-    notFoundText: "راجع الرمز من أخطاء الكتابة، أو تواصل معنا.",
+    notFoundText: "تأكد من كتابة الرمز بشكل صحيح، أو تواصل معنا.",
   },
   booking: {
     trialEyebrow: "حصة تجريبية مجانية",
@@ -287,7 +287,7 @@ const ar: PublicCopy = {
       { q: "كيف أعرف المستوى المناسب لي؟", a: "يبدأ كل متعلم باختبار مستوى مجاني مدته نحو ثلاثين دقيقة أونلاين أو في المقر، ويستخدمه المعلم لوضعك في المجموعة المناسبة." },
       { q: "هل يمكنني تجربة حصة قبل الدفع؟", a: "نعم. احجز حصة تجريبية مجانية واحضر حصة حقيقية مع معلم معتمد قبل أن تقرر." },
       { q: "هل تدرّسون أونلاين؟", a: "نعم. حصص مباشرة أونلاين لمتعلمين حول العالم، مع تسجيلات ومواد على منصتك التعليمية." },
-      { q: "أين مقراتكم؟", a: "لدينا فرعان في مدينة نصر بالقاهرة: 37 شارع عبد الشافي محمد و6 شارع الفضل بن الربيع، وكلاهما في الحي السابع." },
+      { q: "أين تقع فروعكم؟", a: "لدينا فرعان في مدينة نصر بالقاهرة: 37 شارع عبد الشافي محمد و6 شارع الفضل بن الربيع، وكلاهما في الحي السابع." },
       { q: "متى تُعقد الحصص؟", a: "تعمل المجموعات صباحًا وظهرًا ومساءً، لتختار وقتًا يناسب يومك." },
       { q: "هل للأطفال برنامج خاص؟", a: "نعم. يشمل برنامج الأطفال القرآن والعربية والدراسات الإسلامية للأعمار من 5 إلى 14 سنة في مجموعات صغيرة." },
       { q: "هل سأحصل على شهادة؟", a: "عند إتمام المستوى تحصل على شهادة برمز يمكن لأي أحد التحقق منه على هذا الموقع." },
@@ -360,17 +360,17 @@ const ar: PublicCopy = {
 const tr: PublicCopy = {
   courses: {
     quran: { level: "Başlangıçtan icazete", schedule: "Canlı çevrim içi ve kampüste", outcomes: ["Doğru tecvidle okumak", "Düzenli bir planla ezberlemek", "İcazete hazırlanmak"] },
-    arabic: { level: "A1’den ileri seviyeye", schedule: "Sabah, öğleden sonra ve akşam grupları", outcomes: ["Bağlantılı Arapça metin okumak", "Kullanabileceğiniz dil bilgisi", "Kendinizden emin konuşmak"] },
+    arabic: { level: "A1’den ileri seviyeye", schedule: "Sabah, öğleden sonra ve akşam grupları", outcomes: ["Bağlantılı Arapça metin okumak", "Kullanabileceğiniz dil bilgisini edinmek", "Kendinizden emin konuşmak"] },
     "islamic-studies": { level: "Temelden orta seviyeye", schedule: "Haftalık canlı gruplar", outcomes: ["Kur’an Arapçasını anlamak", "Temel metinleri öğretmenle çalışmak", "Saygıyla soru sorup tartışmak"] },
-    kids: { level: "5-14 yaş", schedule: "Okul sonrası ve hafta sonu", outcomes: ["Arapça harfleri okuyup yazmak", "Kısa sureleri okuyup ezberlemek", "Sıcak küçük bir grupta öğrenmek"] },
+    kids: { level: "5-14 yaş", schedule: "Okul sonrası ve hafta sonu", outcomes: ["Arapça harfleri okuyup yazmak", "Kısa sureleri okuyup ezberlemek", "Samimi, küçük bir grupta öğrenmek"] },
     turkish: { level: "A1’den B2’ye", schedule: "Küçük gruplar", outcomes: ["Günlük konuşmaları yürütmek", "Gündelik Türkçe okumak", "Eğitim veya seyahate hazırlanmak"] },
-    english: { level: "Tüm seviyeler", schedule: "Küçük odaklı gruplar", outcomes: ["Daha akıcı konuşmak", "Açık yazmak", "Akademik beceriler kazanmak"] },
-    "teacher-training": { level: "Görevdeki öğretmenler için", schedule: "Yıl boyunca dönemler", outcomes: ["Net dersler planlamak", "Canlı bir sınıfı yönetmek", "Adil ve yararlı ölçmek"] },
+    english: { level: "Tüm seviyeler", schedule: "Küçük odaklı gruplar", outcomes: ["Daha akıcı konuşmak", "Açık ve anlaşılır yazmak", "Akademik beceriler kazanmak"] },
+    "teacher-training": { level: "Görevdeki öğretmenler için", schedule: "Yıl boyunca dönemler", outcomes: ["Net dersler planlamak", "Canlı bir sınıfı yönetmek", "Adil ve yararlı ölçme yapmak"] },
     enterprise: { level: "Sizinle birlikte", schedule: "Grubunuza göre tasarlanır", outcomes: ["Hedeflerinize uygun bir program", "İlerleme raporları", "Çevrim içi, kampüste veya sizde"] },
   },
   catalog: {
     eyebrow: "Programlar",
-    title: "Nil Merkezi’nde yolunuzu bulun.",
+    title: "Nile Center’da yolunuzu bulun.",
     lead: "Her program ücretsiz bir seviye sınavıyla başlar; böylece kendi seviyenizden başlarsınız.",
     search: "Programlarda ara",
     placeholder: "Arapça, tecvid, çocuklar…",
@@ -403,7 +403,7 @@ const tr: PublicCopy = {
   },
   verify: {
     eyebrow: "Sertifikalar",
-    title: "Bir Nil Merkezi sertifikasını doğrulayın.",
+    title: "Bir Nile Center sertifikasını doğrulayın.",
     lead: "Sertifikadaki kodu girin. Yalnızca düzenlenmiş sertifikalar kontrol edilebilir.",
     label: "Doğrulama kodu",
     placeholder: "örn. NCL-AR2-1234",
@@ -462,7 +462,7 @@ const tr: PublicCopy = {
       { q: "Ödemeden önce bir dersi deneyebilir miyim?", a: "Evet. Ücretsiz bir deneme dersi alın ve karar vermeden sertifikalı bir öğretmenle gerçek bir derse katılın." },
       { q: "Çevrim içi ders veriyor musunuz?", a: "Evet. Dünyanın her yerindeki öğrenciler için canlı çevrim içi dersler var; kayıtlar ve materyaller öğrenme platformunuzda." },
       { q: "Kampüsleriniz nerede?", a: "Kahire Nasr City’de iki kampüsümüz var: 37 Abd Al-Shafy Mohammed ve 6 Fadl ibn Rabea, ikisi de 7. Bölge’de." },
-      { q: "Dersler ne zaman?", a: "Gruplar sabah, öğleden sonra ve akşam çalışır; gününüze uyan bir saati seçebilirsiniz." },
+      { q: "Dersler ne zaman?", a: "Sabah, öğleden sonra ve akşam grupları var; gününüze uyan saati seçebilirsiniz." },
       { q: "Çocuklar için ayrı bir program var mı?", a: "Evet. Çocuk programımız 5-14 yaş için Kur’an, Arapça ve İslami ilimleri küçük gruplarda kapsar." },
       { q: "Sertifika alacak mıyım?", a: "Bir seviyeyi tamamladığınızda, bu sitede herkesin doğrulayabileceği kodlu bir sertifika alırsınız." },
       { q: "Okulumuza veya kurumumuza ders verebilir misiniz?", a: "Evet. Okullar, şirketler, camiler ve topluluklarla programlar tasarlıyoruz. Konuşmak için bize ulaşın." },
@@ -489,24 +489,24 @@ const tr: PublicCopy = {
   about: {
     eyebrow: "Hakkımızda",
     title: "Daha parlak bir gelecek için eğitim.",
-    lead: "Nil Merkezi 1998’den beri Kahire’de ve dünyanın dört bir yanında Arapça, Kur’an ve İslami ilimler öğretiyor.",
+    lead: "Nile Center 1998’den beri Kahire’de ve dünyanın dört bir yanında Arapça, Kur’an ve İslami ilimler öğretiyor.",
     storyTitle: "Hikâyemiz",
     story: [
-      "Nil Merkezi Kahire’de basit bir amaçla başladı: Arapçayı ve Kur’an’ı özenle, her öğrencinin seviyesinde öğretmek.",
-      "Bugün öğretmenlerimiz çocuklar, yetişkinler ve kurumlarla çevrim içi ve Nasr City’deki iki kampüste, her seferinde bir öğrenciyle çalışıyor.",
+      "Nile Center Kahire’de basit bir amaçla başladı: Arapçayı ve Kur’an’ı özenle, her öğrencinin seviyesinde öğretmek.",
+      "Bugün öğretmenlerimiz çocuklar, yetişkinler ve kurumlarla çevrim içi ve Nasr City’deki iki kampüste, her öğrenciyle tek tek ilgilenerek çalışıyor.",
     ],
-    figuresTitle: "Rakamlarla Nil Merkezi",
+    figuresTitle: "Rakamlarla Nile Center",
     ctaTitle: "Gelin, nasıl öğrettiğimizi görün.",
     ctaText: "Çevrim içi veya kampüste ücretsiz bir deneme dersi alın.",
   },
   privacy: {
     eyebrow: "Gizlilik",
-    title: "Nil Merkezi’nde bilgileriniz.",
+    title: "Nile Center’da bilgileriniz.",
     lead: "Bu sitenin paylaştıklarınızı nasıl ele aldığının kısa özeti. Tam politika ana sitemizdedir.",
     sections: [
       { h: "Ne topluyoruz", p: "Bir form gönderdiğinizde adınız, iletişim bilgileriniz ve ilgilendiğiniz kurs gibi yazdıklarınızı alırız." },
-      { h: "Neden kullanıyoruz", p: "Sorunuzu yanıtlamak, seviye sınavı ve deneme dersi ayarlamak ve katılırsanız derslerinizi yürütmek için." },
-      { h: "Kimler görebilir", p: "Kabul ve öğretim için ihtiyaç duyan Nil Merkezi personeli; personel korumalı bir çalışma alanına giriş yapar." },
+      { h: "Neden kullanıyoruz", p: "Bunları sorunuzu yanıtlamak, seviye sınavı ve deneme dersi ayarlamak ve katılırsanız derslerinizi yürütmek için kullanırız." },
+      { h: "Kimler görebilir", p: "Kabul ve öğretim için ihtiyaç duyan Nile Center personeli; personel korumalı bir çalışma alanına giriş yapar." },
       { h: "Seçenekleriniz", p: "Bize e-posta göndererek bilgilerinizi görmeyi, düzeltmeyi veya silmeyi isteyebilirsiniz." },
     ],
     full: "Gizlilik politikasının tamamını okuyun",
@@ -518,7 +518,7 @@ const tr: PublicCopy = {
     sections: [
       { h: "Seviye sınavı ve deneme", p: "Seviye sınavları ve deneme dersleri ücretsizdir; sizi doğru gruba yerleştirmemize yardım eder." },
       { h: "Kayıt", p: "Sınıftaki yeriniz, kaydınız ve ödemeniz ekibimizce işlendiğinde kesinleşir." },
-      { h: "Devam", p: "Düzenli devam ilerlemenize yardım eder. Öğretmeniniz her oturumda yoklama alır." },
+      { h: "Devam", p: "Düzenli devam ilerlemenize yardım eder. Öğretmeniniz her derste yoklama alır." },
       { h: "Sertifikalar", p: "Sertifikalar bir seviyeyi tamamladığınızda düzenlenir ve her biri bu sitede doğrulanabilir." },
     ],
     full: "Şartlar ve koşulların tamamını okuyun",
@@ -566,7 +566,7 @@ const zh: PublicCopy = {
       outcomes: [
         "读写阿拉伯字母",
         "诵读并背诵短章",
-        "在温暖的小组中学习"
+        "在温馨的小组中学习"
       ]
     },
     turkish: {
@@ -710,11 +710,11 @@ const zh: PublicCopy = {
     ],
     branches: [
       {
-        value: "开罗 B1",
+        value: "Cairo B1",
         label: "纳斯尔城校区"
       },
       {
-        value: "线上",
+        value: "Online",
         label: "线上"
       }
     ],
@@ -796,7 +796,7 @@ const zh: PublicCopy = {
     storyTitle: "我们的故事",
     story: [
       "尼罗中心在开罗起步，目标很简单：用心教授阿拉伯语和《古兰经》，并照顾每位学员的水平。",
-      "如今，我们的教师通过线上直播和纳斯尔城的两个校区，为儿童、成人和机构授课，一次成就一位学员。"
+      "如今，我们的教师通过线上直播和纳斯尔城的两个校区，为儿童、成人和机构授课，用心对待每一位学员。"
     ],
     figuresTitle: "数说尼罗中心",
     ctaTitle: "来看看我们如何教学。",
@@ -832,7 +832,7 @@ const zh: PublicCopy = {
     lead: "简要说明。完整的条款与条件请见我们的主网站，适用于每一次报名。",
     sections: [
       {
-        h: "分级测试和试听",
+        h: "分级测试和试听课",
         p: "分级测试和试听课免费。它们帮助我们把你分到合适的小组。"
       },
       {
@@ -884,7 +884,7 @@ const ru: PublicCopy = {
       outcomes: [
         "Понимать коранический арабский",
         "Изучать основные тексты с преподавателем",
-        "Задавать вопросы и обсуждать бережно"
+        "Задавать вопросы и уважительно обсуждать"
       ]
     },
     kids: {
@@ -893,7 +893,7 @@ const ru: PublicCopy = {
       outcomes: [
         "Читать и писать арабские буквы",
         "Читать и заучивать короткие суры",
-        "Учиться в тёплой небольшой группе"
+        "Учиться в дружной небольшой группе"
       ]
     },
     turkish: {
@@ -954,12 +954,12 @@ const ru: PublicCopy = {
     runTitle: "Как проходит курс",
     run: [
       {
-        title: "Распределение",
+        title: "Определение уровня",
         text: "Бесплатный тест определяет ваш уровень и подходящую группу."
       },
       {
         title: "Основные занятия",
-        text: "Живые уроки с сертифицированным преподавателем во время вашей группы."
+        text: "Живые уроки с сертифицированным преподавателем по расписанию вашей группы."
       },
       {
         title: "Практика и обратная связь",
@@ -976,7 +976,7 @@ const ru: PublicCopy = {
     ctaTitle: "Начните с бесплатного пробного урока.",
     ctaText: "Посетите настоящее занятие, прежде чем решить. Тест на уровень тоже бесплатный.",
     missingTitle: "Мы не нашли эту программу.",
-    missingText: "Возможно, она переехала. Посмотрите все программы."
+    missingText: "Возможно, страница перемещена. Посмотрите все программы."
   },
   verify: {
     eyebrow: "Сертификаты",
@@ -1037,11 +1037,11 @@ const ru: PublicCopy = {
     ],
     branches: [
       {
-        value: "Каир B1",
+        value: "Cairo B1",
         label: "Филиал в Наср-Сити"
       },
       {
-        value: "Онлайн",
+        value: "Online",
         label: "Онлайн"
       }
     ],
@@ -1057,7 +1057,7 @@ const ru: PublicCopy = {
     lead: "Вопросы, которые семьи и ученики задают нам чаще всего.",
     items: [
       {
-        q: "Как понять, в какой уровень записаться?",
+        q: "Как понять, на какой уровень записаться?",
         a: "Каждый ученик начинает с бесплатного теста на уровень длительностью около тридцати минут, онлайн или очно. По нему преподаватель определяет подходящую группу."
       },
       {
@@ -1085,7 +1085,7 @@ const ru: PublicCopy = {
         a: "По окончании уровня вы получите сертификат с кодом, который любой может проверить на этом сайте."
       },
       {
-        q: "Можете ли вы обучать нашу школу или организацию?",
+        q: "Можете ли вы провести обучение для нашей школы или организации?",
         a: "Да. Мы создаём программы вместе со школами, компаниями, мечетями и общинами. Свяжитесь с нами, чтобы обсудить."
       }
     ],
@@ -1122,7 +1122,7 @@ const ru: PublicCopy = {
     lead: "С 1998 года Nile Center преподаёт арабский язык, Коран и исламские науки ученикам в Каире и по всему миру.",
     storyTitle: "Наша история",
     story: [
-      "Nile Center начался в Каире с простой цели: бережно преподавать арабский язык и Коран с учётом уровня каждого ученика.",
+      "Nile Center открылся в Каире с простой целью: бережно преподавать арабский язык и Коран с учётом уровня каждого ученика.",
       "Сегодня наши преподаватели работают с детьми, взрослыми и организациями онлайн и в двух филиалах в Наср-Сити — с каждым учеником лично."
     ],
     figuresTitle: "Nile Center в цифрах",
@@ -1211,7 +1211,7 @@ const ur: PublicCopy = {
       outcomes: [
         "قرآنی عربی سمجھنا",
         "استاد کے ساتھ بنیادی متون کا مطالعہ",
-        "احتیاط سے سوال اور گفتگو"
+        "ادب کے ساتھ سوال اور گفتگو"
       ]
     },
     kids: {
@@ -1220,7 +1220,7 @@ const ur: PublicCopy = {
       outcomes: [
         "عربی حروف پڑھنا اور لکھنا",
         "چھوٹی سورتیں پڑھنا اور یاد کرنا",
-        "گرم جوش چھوٹے گروپ میں سیکھنا"
+        "دوستانہ چھوٹے گروپ میں سیکھنا"
       ]
     },
     turkish: {
@@ -1242,7 +1242,7 @@ const ur: PublicCopy = {
       ]
     },
     "teacher-training": {
-      level: "کام کرنے والے اساتذہ کے لیے",
+      level: "تدریس کرنے والے اساتذہ کے لیے",
       schedule: "سال بھر گروپس",
       outcomes: [
         "واضح اسباق کی منصوبہ بندی",
@@ -1281,7 +1281,7 @@ const ur: PublicCopy = {
     runTitle: "کورس کیسے چلتا ہے",
     run: [
       {
-        title: "درجہ بندی",
+        title: "لیول کا تعین",
         text: "مفت ٹیسٹ آپ کی سطح اور مناسب گروپ طے کرتا ہے۔"
       },
       {
@@ -1364,11 +1364,11 @@ const ur: PublicCopy = {
     ],
     branches: [
       {
-        value: "قاہرہ B1",
+        value: "Cairo B1",
         label: "نصر سٹی کیمپس"
       },
       {
-        value: "آن لائن",
+        value: "Online",
         label: "آن لائن"
       }
     ],
@@ -1397,7 +1397,7 @@ const ur: PublicCopy = {
       },
       {
         q: "آپ کے کیمپس کہاں ہیں؟",
-        a: "نصر سٹی، قاہرہ میں ہمارے دو کیمپس ہیں: 37 عبد الشافی محمد اور 6 فضل بن ربیع، دونوں ساتویں ضلع میں۔"
+        a: "نصر سٹی، قاہرہ میں ہمارے دو کیمپس ہیں: 37 عبد الشافی محمد اور 6 فضل بن ربیع، دونوں ساتویں ڈسٹرکٹ میں۔"
       },
       {
         q: "کلاسیں کب ہوتی ہیں؟",
@@ -1412,7 +1412,7 @@ const ur: PublicCopy = {
         a: "سطح مکمل کرنے پر آپ کو ایک کوڈ والا سرٹیفکیٹ ملتا ہے جس کی کوئی بھی اس سائٹ پر تصدیق کر سکتا ہے۔"
       },
       {
-        q: "کیا آپ ہمارے اسکول یا ادارے کو پڑھا سکتے ہیں؟",
+        q: "کیا آپ ہمارے اسکول یا ادارے کے لیے تدریس کر سکتے ہیں؟",
         a: "جی ہاں۔ ہم اسکولوں، کمپنیوں، مساجد اور برادریوں کے ساتھ مل کر پروگرام بناتے ہیں۔ بات کرنے کے لیے ہم سے رابطہ کریں۔"
       }
     ],
@@ -1428,12 +1428,12 @@ const ur: PublicCopy = {
     campuses: [
       {
         name: "شاخ 1",
-        address: "37 عبد الشافی محمد، ساتواں ضلع، نصر سٹی، قاہرہ",
+        address: "37 عبد الشافی محمد، ساتواں ڈسٹرکٹ، نصر سٹی، قاہرہ",
         query: "Nile Learning Center Branch 1 Nasr City"
       },
       {
         name: "شاخ 2",
-        address: "6 فضل بن ربیع، ساتواں ضلع، نصر سٹی، قاہرہ",
+        address: "6 فضل بن ربیع، ساتواں ڈسٹرکٹ، نصر سٹی، قاہرہ",
         query: "Nile Learning Center Branch 2 Nasr City"
       }
     ],
@@ -1467,7 +1467,7 @@ const ur: PublicCopy = {
       },
       {
         h: "ہم اسے کیوں استعمال کرتے ہیں",
-        p: "آپ کی پوچھ گچھ کا جواب دینے، لیول ٹیسٹ اور آزمائشی اسباق کا انتظام کرنے، اور شامل ہونے پر آپ کی کلاسیں چلانے کے لیے۔"
+        p: "ہم اسے آپ کی پوچھ گچھ کا جواب دینے، لیول ٹیسٹ اور آزمائشی اسباق کا انتظام کرنے، اور شامل ہونے پر آپ کی کلاسیں چلانے کے لیے استعمال کرتے ہیں۔"
       },
       {
         h: "اسے کون دیکھ سکتا ہے",

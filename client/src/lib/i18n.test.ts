@@ -30,7 +30,7 @@ describe("ui i18n", () => {
   it("translates shell and navigation UI labels without touching unknown content", () => {
     expect(t("zh", "signOut")).toBe("退出登录");
     expect(t("ru", "notifications")).toBe("Уведомления");
-    expect(translateUiLabel("ar", "Dashboard")).toBe("لوحة التحكم");
+    expect(translateUiLabel("ar", "Dashboard")).toBe("لوحة المتابعة");
     expect(translateUiLabel("ur", "Courses")).toBe("کورسز");
     expect(translateUiLabel("zh", "Student portal")).toBe("学生入口");
     expect(translateUiLabel("tr", "Language")).toBe("Dil");

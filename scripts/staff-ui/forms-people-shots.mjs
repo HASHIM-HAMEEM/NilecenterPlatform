@@ -89,7 +89,7 @@ try {
       // People -> Teachers of a class path.
       await p
         .locator(".staff-segment", {
-          hasText: lang === "ar" ? "معلمو صف" : "Teachers of a class",
+          hasText: lang === "ar" ? "معلمو فصل" : "Teachers of a class",
         })
         .click();
       await p.locator(".ui-sheet .ui-select").first().click();
