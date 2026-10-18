@@ -43,9 +43,11 @@ import type { StaffSecret } from "../ui/secret-dialog";
 import {
   useActiveAreas,
   useActiveCourses,
+  useBranches,
   useBranchRooms,
   useMentorTeachers,
 } from "./admissions-ui";
+import { useStaffSession } from "../session";
 
 const B = copy.admissions.booking;
 const L = copy.admissions.leads;
@@ -113,20 +115,31 @@ export function BookingSheet({
   onSecrets?: (secrets: StaffSecret[]) => void;
 }) {
   const invalidate = useInvalidate();
-  const online = subject.branch?.isOnline ?? false;
-  const rooms = useBranchRooms(subject.branch?.id, open && !online);
+  const { session } = useStaffSession();
+  const activeRole = session?.ncc?.activeRole ?? null;
+  const workspaceBranchId = session?.ncc?.workspaceBranchId ?? null;
+  const branches = useBranches();
+  const scheduleMode = booking?.item.status === "review";
+  // A request under review may carry no branch. Schedule mode owns a branch
+  // draft; booking and rescheduling keep using the subject's branch.
+  const initialBranchId =
+    booking?.item.branchId ?? (scheduleMode ? (workspaceBranchId ?? "") : "");
+  const existing = booking?.item ?? null;
   const areas = useActiveAreas(open);
   const courses = useActiveCourses(open && kind === "trial");
-  const existing = booking?.item ?? null;
-  const timeZone = subject.branch?.timezone ?? "UTC";
+  const initialZone =
+    branches.get(scheduleMode ? initialBranchId : null)?.timezone ??
+    subject.branch?.timezone ??
+    "UTC";
 
   const initial = useMemo(() => {
     const trial = booking?.kind === "trial" ? booking.item : null;
     const start =
       (existing?.scheduledAt &&
-        zonedDateHour(existing.scheduledAt, timeZone)) ||
-      zonedDateHour(new Date(Date.now() + 864e5).toISOString(), timeZone);
+        zonedDateHour(existing.scheduledAt, initialZone)) ||
+      zonedDateHour(new Date(Date.now() + 864e5).toISOString(), initialZone);
     return {
+      branchId: scheduleMode ? initialBranchId : "",
       date: start?.date ?? "",
       hour: existing?.scheduledAt && start ? String(start.hour) : "10",
       roomId: existing?.roomId ?? "",
@@ -140,8 +153,26 @@ export function BookingSheet({
           ? "area"
           : "course") as "course" | "area",
     };
-  }, [booking, existing, defaultAreaId, defaultCourseId, kind, timeZone]);
+  }, [
+    booking,
+    existing,
+    defaultAreaId,
+    defaultCourseId,
+    kind,
+    initialZone,
+    scheduleMode,
+    initialBranchId,
+  ]);
   const [draft, setDraft] = useState(initial);
+  const activeBranch = scheduleMode
+    ? branches.get(draft.branchId)
+    : subject.branch;
+  const online = activeBranch?.isOnline ?? false;
+  const rooms = useBranchRooms(
+    scheduleMode ? draft.branchId : subject.branch?.id,
+    open && !online
+  );
+  const timeZone = activeBranch?.timezone ?? "UTC";
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>();
@@ -165,6 +196,7 @@ export function BookingSheet({
     timeZone
   );
   const errors = {
+    branchId: scheduleMode && !draft.branchId ? B.chooseBranch : null,
     when: scheduledAtValue ? null : L.required,
     meetingUrl: !online
       ? null
@@ -205,7 +237,15 @@ export function BookingSheet({
           ...place,
           areaOfStudyId: draft.areaOfStudyId || null,
         };
-        if (existing) {
+        if (existing && scheduleMode) {
+          await staffWrite(
+            rescheduleNccPlacementTestRequest(existing.id, {
+              branchId: draft.branchId,
+              ...fields,
+              status: "scheduled",
+            })
+          );
+        } else if (existing) {
           await staffWrite(
             rescheduleNccPlacementTestRequest(existing.id, fields)
           );
@@ -230,7 +270,17 @@ export function BookingSheet({
           draft.topic === "course"
             ? { courseId: draft.courseId, areaOfStudyId: null }
             : { areaOfStudyId: draft.areaOfStudyId, courseId: null };
-        if (existing) {
+        if (existing && scheduleMode) {
+          await staffWrite(
+            patchNccTrialLessonRequest(existing.id, {
+              branchId: draft.branchId,
+              scheduledAt,
+              ...place,
+              ...topic,
+              status: "scheduled",
+            })
+          );
+        } else if (existing) {
           await staffWrite(
             patchNccTrialLessonRequest(existing.id, {
               scheduledAt,
@@ -269,13 +319,15 @@ export function BookingSheet({
       open={open}
       onOpenChange={onOpenChange}
       title={
-        existing
-          ? B.editTitle
-          : kind === "placement"
-            ? B.placementTitle
-            : B.trialTitle
+        scheduleMode
+          ? B.scheduleTitle
+          : existing
+            ? B.editTitle
+            : kind === "placement"
+              ? B.placementTitle
+              : B.trialTitle
       }
-      description={`${subject.branch?.name ?? ""} · ${
+      description={`${(scheduleMode ? activeBranch?.name : subject.branch?.name) ?? ""} · ${
         online
           ? copy.admissions.mode.onlineBranch
           : copy.admissions.mode.onsiteBranch
@@ -283,15 +335,47 @@ export function BookingSheet({
       dirty={dirty}
       saving={saving}
       fieldErrors={fieldErrors}
-      saveLabel={existing ? B.saveChanges : B.book}
+      saveLabel={scheduleMode ? B.schedule : existing ? B.saveChanges : B.book}
       onSubmit={() =>
         runAction(submit, {
-          success: existing ? B.updatedToast : B.bookedToast,
+          success: scheduleMode
+            ? B.scheduledToast
+            : existing
+              ? B.updatedToast
+              : B.bookedToast,
         })
       }
     >
       {errorFor => (
         <>
+          {scheduleMode ? (
+            <StaffField
+              label={B.branch}
+              error={show(errors.branchId) ?? errorFor("branch_id")}
+            >
+              {activeRole === "super_admin" ? (
+                <Select
+                  value={draft.branchId || undefined}
+                  onValueChange={value => set("branchId", value)}
+                >
+                  <SelectTrigger aria-label={B.branch}>
+                    <SelectValue placeholder={B.chooseBranch} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.active.map(branch => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="staff-muted">
+                  {activeBranch?.name ?? B.chooseBranch}
+                </p>
+              )}
+            </StaffField>
+          ) : null}
           <StaffField
             label={B.when}
             htmlFor="booking-date"

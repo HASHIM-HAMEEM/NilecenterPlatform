@@ -149,6 +149,25 @@ function placementTest() {
   };
 }
 
+function trialLesson() {
+  return {
+    id: "trial-1",
+    branch_id: "branch-1",
+    branch_name: "Cairo",
+    subject: {
+      subject_type: "lead",
+      subject_id: "lead-1",
+      first_name: "Nile",
+      last_name: "Lead",
+      email: "lead@example.test",
+    },
+    scheduled_at: "2026-11-02T09:00:00Z",
+    status: "scheduled",
+    created_at: "2026-10-18T10:00:00Z",
+    updated_at: "2026-10-18T10:00:00Z",
+  };
+}
+
 function classRow() {
   return {
     id: "class-1",
@@ -1186,6 +1205,160 @@ describe("NCC operational routes", () => {
       "reason-1"
     );
     expect(cancelled.result.status).toBe(200);
+  });
+
+  it("schedules review bookings through PATCH with branch and status", async () => {
+    const superCookie = await login("super_admin");
+    const registrarCookie = await login("registrar", "branch-1");
+    const patchPlacementTest = vi.fn(async () => ({
+      ok: true,
+      data: placementTest(),
+    }));
+    const patchTrialLesson = vi.fn(async () => ({
+      ok: true,
+      data: trialLesson(),
+    }));
+    const routes = captureRoutes({
+      env: env(),
+      api: { patchPlacementTest, patchTrialLesson },
+    });
+    const placementPatch =
+      "PATCH /api/ncc/admissions/placement-tests/:placementTestId";
+    const trialPatch =
+      "PATCH /api/ncc/admissions/trial-lessons/:trialLessonId";
+    const scheduled = responseRecorder();
+    const trialScheduled = responseRecorder();
+    const registrarScheduled = responseRecorder();
+    const mismatch = responseRecorder();
+    const completed = responseRecorder();
+
+    await routes.get(placementPatch)?.(
+      request(superCookie, { placementTestId: "placement-1" }, {
+        branchId: "branch-9",
+        scheduledAt: "2026-11-02T09:00:00Z",
+        roomId: "room-1",
+        areaOfStudyId: "area-1",
+        status: "scheduled",
+      }),
+      scheduled.response
+    );
+    await routes.get(trialPatch)?.(
+      request(superCookie, { trialLessonId: "trial-1" }, {
+        branchId: "branch-9",
+        scheduledAt: "2026-11-02T10:00:00Z",
+        meetingUrl: "https://meet.example/abc",
+        courseId: "course-1",
+        status: "scheduled",
+      }),
+      trialScheduled.response
+    );
+    await routes.get(placementPatch)?.(
+      request(registrarCookie, { placementTestId: "placement-2" }, {
+        branchId: "branch-1",
+        scheduledAt: "2026-11-02T09:00:00Z",
+        status: "scheduled",
+      }),
+      registrarScheduled.response
+    );
+    await routes.get(placementPatch)?.(
+      request(registrarCookie, { placementTestId: "placement-3" }, {
+        branchId: "branch-9",
+        scheduledAt: "2026-11-02T09:00:00Z",
+        status: "scheduled",
+      }),
+      mismatch.response
+    );
+    await routes.get(placementPatch)?.(
+      request(superCookie, { placementTestId: "placement-4" }, {
+        status: "completed",
+      }),
+      completed.response
+    );
+
+    expect(scheduled.result.status).toBe(200);
+    expect(patchPlacementTest).toHaveBeenNthCalledWith(
+      1,
+      "access-ncc-session-1",
+      "placement-1",
+      {
+        scheduled_at: "2026-11-02T09:00:00Z",
+        room_id: "room-1",
+        area_of_study_id: "area-1",
+        status: "scheduled",
+        branch_id: "branch-9",
+      }
+    );
+    expect(trialScheduled.result.status).toBe(200);
+    expect(patchTrialLesson).toHaveBeenCalledWith(
+      "access-ncc-session-1",
+      "trial-1",
+      {
+        scheduled_at: "2026-11-02T10:00:00Z",
+        meeting_url: "https://meet.example/abc",
+        course_id: "course-1",
+        status: "scheduled",
+        branch_id: "branch-9",
+      }
+    );
+    expect(registrarScheduled.result.status).toBe(200);
+    expect(patchPlacementTest).toHaveBeenNthCalledWith(
+      2,
+      "access-ncc-session-1",
+      "placement-2",
+      expect.objectContaining({ branch_id: "branch-1" })
+    );
+    expect(mismatch.result).toEqual({
+      status: 400,
+      body: { error: "branchId must match the selected branch." },
+    });
+    expect(completed.result).toEqual({
+      status: 400,
+      body: { error: "status is invalid." },
+    });
+    expect(patchPlacementTest).toHaveBeenCalledTimes(2);
+    expect(patchTrialLesson).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes the review status list filter through", async () => {
+    const cookie = await login("registrar", "branch-1");
+    const placementTests = vi.fn(async () => ({
+      ok: true,
+      data: paged([{ ...placementTest(), status: "review" }]),
+    }));
+    const trialLessons = vi.fn(async () => ({
+      ok: true,
+      data: paged([{ ...trialLesson(), status: "review" }]),
+    }));
+    const routes = captureRoutes({
+      env: env(),
+      api: { placementTests, trialLessons },
+    });
+    const placements = responseRecorder();
+    const trials = responseRecorder();
+    await routes.get("/api/ncc/admissions/placement-tests")?.(
+      request(cookie, undefined, undefined, { status: "review" }),
+      placements.response
+    );
+    await routes.get("/api/ncc/admissions/trial-lessons")?.(
+      request(cookie, undefined, undefined, { status: "review" }),
+      trials.response
+    );
+    expect(placementTests).toHaveBeenCalledWith(
+      "access-ncc-session-1",
+      expect.objectContaining({ status: "review" })
+    );
+    expect(placements.result).toMatchObject({
+      status: 200,
+      body: { items: [{ status: "review" }] },
+    });
+    expect(trialLessons).toHaveBeenCalledWith(
+      "access-ncc-session-1",
+      expect.objectContaining({ status: "review" })
+    );
+    expect(trials.result).toMatchObject({
+      status: 200,
+      body: { items: [{ status: "review" }] },
+    });
   });
 
   it("passes provider write errors through and translates courses", async () => {

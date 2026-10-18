@@ -77,6 +77,10 @@ function nextText(next: NextLeadAction): string {
       return L.nextBookPlacement;
     case "record_placement":
       return L.nextRecordPlacement;
+    case "schedule_placement":
+      return L.nextSchedulePlacement;
+    case "schedule_trial":
+      return L.nextScheduleTrial;
     case "book_trial":
       return L.nextBookTrial;
     case "record_trial":
@@ -184,6 +188,10 @@ export default function LeadDetailPage() {
     item => item.status === "scheduled"
   );
   const scheduledTrial = trialItems.find(item => item.status === "scheduled");
+  const reviewPlacement = placementItems.find(
+    item => item.status === "review"
+  );
+  const reviewTrial = trialItems.find(item => item.status === "review");
   const subject = { type: "lead" as const, id: lead.id, branch };
   const closed = lead.status === "lost" || Boolean(lead.studentId);
 
@@ -229,6 +237,30 @@ export default function LeadDetailPage() {
                 }),
             }
           : null;
+      case "schedule_placement":
+        return reviewPlacement
+          ? {
+              label: B.schedule,
+              run: () =>
+                setSheet({
+                  type: "book",
+                  kind: "placement",
+                  booking: { kind: "placement", item: reviewPlacement },
+                }),
+            }
+          : null;
+      case "schedule_trial":
+        return reviewTrial
+          ? {
+              label: B.schedule,
+              run: () =>
+                setSheet({
+                  type: "book",
+                  kind: "trial",
+                  booking: { kind: "trial", item: reviewTrial },
+                }),
+            }
+          : null;
       case "fee":
         return { label: L.recordFee, run: () => setSheet({ type: "fee" }) };
       case "convert":
@@ -248,13 +280,13 @@ export default function LeadDetailPage() {
   const secondary = closed
     ? []
     : ([
-        next !== "book_placement" && !scheduledPlacement
+        next !== "book_placement" && !scheduledPlacement && !reviewPlacement
           ? {
               label: L.bookPlacement,
               run: () => setSheet({ type: "book", kind: "placement" }),
             }
           : null,
-        next !== "book_trial" && !scheduledTrial
+        next !== "book_trial" && !scheduledTrial && !reviewTrial
           ? {
               label: L.bookTrial,
               run: () => setSheet({ type: "book", kind: "trial" }),
@@ -371,7 +403,12 @@ export default function LeadDetailPage() {
         <div className="staff-detail-main">
           <section className="staff-section">
             <h2 className="staff-section-title">{L.placements}</h2>
-            {!placements.data ? (
+            {placements.error && !placements.data ? (
+              <ErrorState
+                error={placements.error}
+                onRetry={() => void placements.mutate()}
+              />
+            ) : !placements.data ? (
               <LoadingRows rows={2} />
             ) : (
               <BookingList
@@ -386,7 +423,12 @@ export default function LeadDetailPage() {
           </section>
           <section className="staff-section">
             <h2 className="staff-section-title">{L.trials}</h2>
-            {!trials.data ? (
+            {trials.error && !trials.data ? (
+              <ErrorState
+                error={trials.error}
+                onRetry={() => void trials.mutate()}
+              />
+            ) : !trials.data ? (
               <LoadingRows rows={2} />
             ) : (
               <BookingList

@@ -24,6 +24,8 @@ export type NextLeadAction =
   | "record_placement"
   | "book_trial"
   | "record_trial"
+  | "schedule_placement"
+  | "schedule_trial"
   | "fee"
   | "convert"
   | "open_student"
@@ -46,8 +48,10 @@ export function leadJourney(
 ): { steps: Record<JourneyStep, JourneyState>; next: NextLeadAction } {
   const placementDone = placements.some(item => item.status === "completed");
   const placementOpen = placements.some(item => item.status === "scheduled");
+  const placementReview = placements.some(item => item.status === "review");
   const trialDone = trials.some(item => item.status === "completed");
   const trialOpen = trials.some(item => item.status === "scheduled");
+  const trialReview = trials.some(item => item.status === "review");
   const feeRecorded = Boolean(lead.registration);
   const isStudent = Boolean(lead.studentId);
 
@@ -56,6 +60,8 @@ export function leadJourney(
   else if (lead.status === "lost") next = "lost";
   else if (placementOpen) next = "record_placement";
   else if (trialOpen) next = "record_trial";
+  else if (placementReview) next = "schedule_placement";
+  else if (trialReview) next = "schedule_trial";
   else if (feeRecorded) next = "convert";
   else if (placementDone || trialDone || lead.entryPath === "direct")
     next = "fee";
@@ -91,8 +97,12 @@ export function leadJourney(
     next,
     steps: {
       contact: "done",
-      placement: bookingState("placement", placementDone, placementOpen),
-      trial: bookingState("trial", trialDone, trialOpen),
+      placement: bookingState(
+        "placement",
+        placementDone,
+        placementOpen || placementReview
+      ),
+      trial: bookingState("trial", trialDone, trialOpen || trialReview),
       fee: feeRecorded
         ? "done"
         : next === "fee"

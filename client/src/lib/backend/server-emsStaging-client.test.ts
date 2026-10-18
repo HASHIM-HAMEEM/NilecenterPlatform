@@ -27,6 +27,8 @@ import {
   normalizeEmsNotificationUnreadCount,
   normalizeEmsNotificationsMarkedRead,
   normalizeEmsPlacementTest,
+  normalizeEmsPlacementTests,
+  normalizeEmsTrialLesson,
   normalizeEmsRooms,
   normalizeEmsSelfProfile,
   normalizeEmsSession,
@@ -806,6 +808,112 @@ describe("EMS operational payload guards", () => {
         ...placement,
         subject: { ...placement.subject, subject_type: "guardian" },
       })
+    ).toBeNull();
+  });
+
+  it("normalizes review placement tests with absent branch and jotform intake", () => {
+    const {
+      branch_id: _branchId,
+      branch_name: _branchName,
+      ...reviewBase
+    } = placement;
+    const reviewPlacement = {
+      ...reviewBase,
+      status: "review",
+      jotform: {
+        form_id: "jf-1",
+        form_name: "Placement request",
+        submission_id: "sub-1",
+      },
+      jotform_appointment_text: "Saturday morning",
+      jotform_branch_label: "Cairo",
+      jotform_subject_label: "Arabic",
+      jotform_contact_preference: "WhatsApp",
+      jotform_comments: "Call before visiting",
+    };
+    expect(normalizeEmsPlacementTest(reviewPlacement)).toMatchObject({
+      branchId: null,
+      branchName: null,
+      scheduledAt: null,
+      status: "review",
+      intake: {
+        formName: "Placement request",
+        submissionId: "sub-1",
+        appointmentText: "Saturday morning",
+        branchLabel: "Cairo",
+        subjectLabel: "Arabic",
+        contactPreference: "WhatsApp",
+        comments: "Call before visiting",
+      },
+    });
+    expect(
+      normalizeEmsPlacementTest({ ...reviewBase, status: "review" })
+    ).toMatchObject({ status: "review", intake: null });
+    expect(
+      normalizeEmsPlacementTest({ ...reviewPlacement, jotform_comments: 42 })
+    ).toBeNull();
+    expect(
+      normalizeEmsPlacementTest({
+        ...reviewPlacement,
+        jotform: { form_name: 3 },
+      })
+    ).toBeNull();
+    expect(
+      normalizeEmsPlacementTest({ ...reviewPlacement, branch_id: "" })
+    ).toBeNull();
+    expect(
+      normalizeEmsPlacementTests({
+        items: [reviewPlacement, placement],
+        total: 2,
+        page: 1,
+        page_size: 100,
+      })
+    ).toHaveLength(2);
+  });
+
+  it("normalizes review trial lessons with absent branch and schedule", () => {
+    const reviewTrial = {
+      id: "trial-1",
+      subject: {
+        subject_type: "lead",
+        subject_id: "lead-1",
+        first_name: "Nile",
+        last_name: "Lead",
+        email: "lead@example.test",
+      },
+      status: "review",
+      created_at: "2026-10-18T10:00:00Z",
+      updated_at: "2026-10-18T10:00:00Z",
+      jotform: { form_name: "Trial request", submission_id: "sub-2" },
+      jotform_appointment_text: "Weekday evening",
+    };
+    expect(normalizeEmsTrialLesson(reviewTrial)).toMatchObject({
+      branchId: null,
+      branchName: null,
+      scheduledAt: null,
+      status: "review",
+      intake: {
+        formName: "Trial request",
+        submissionId: "sub-2",
+        appointmentText: "Weekday evening",
+        branchLabel: null,
+      },
+    });
+    expect(
+      normalizeEmsTrialLesson({
+        ...reviewTrial,
+        branch_id: "branch-1",
+        scheduled_at: "2026-11-02T09:00:00Z",
+      })
+    ).toMatchObject({ branchId: "branch-1", scheduledAt: "2026-11-02T09:00:00Z" });
+    expect(
+      normalizeEmsTrialLesson({ ...reviewTrial, scheduled_at: "not-a-date" })
+    ).toBeNull();
+    expect(
+      normalizeEmsTrialLesson({ ...reviewTrial, jotform_subject_label: 7 })
+    ).toBeNull();
+    expect(
+      normalizeEmsTrialLesson({ ...reviewTrial, status: "archived" })
     ).toBeNull();
   });
 

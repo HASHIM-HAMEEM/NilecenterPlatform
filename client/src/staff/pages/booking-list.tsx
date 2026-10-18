@@ -102,8 +102,28 @@ function BookingRow({
       ? (booking.item.courseName ?? booking.item.areaOfStudyName)
       : item.areaOfStudyName;
   const scheduled = item.status === "scheduled";
+  const review = item.status === "review";
   const overdue = needsOutcome(item);
   const placement = booking.kind === "placement" ? booking.item : null;
+  const intake = item.intake ?? null;
+  const intakeLines: Array<{ label: string; value: string }> = [];
+  if (review && intake) {
+    if (intake.appointmentText)
+      intakeLines.push({ label: B.requestedTime, value: intake.appointmentText });
+    if (!item.branchId && intake.branchLabel)
+      intakeLines.push({ label: B.requestedBranch, value: intake.branchLabel });
+    if (intake.subjectLabel)
+      intakeLines.push({ label: B.requestedTopic, value: intake.subjectLabel });
+    if (intake.contactPreference)
+      intakeLines.push({ label: B.contactBy, value: intake.contactPreference });
+    if (intake.comments)
+      intakeLines.push({ label: B.visitorNote, value: intake.comments });
+    if (intake.formName)
+      intakeLines.push({
+        label: B.fromForm.replace("{form}", intake.formName),
+        value: "",
+      });
+  }
   return (
     <li
       className="staff-booking"
@@ -112,7 +132,7 @@ function BookingRow({
     >
       <div className="staff-booking-when">
         <span className="staff-booking-time">
-          {formatInZone(item.scheduledAt, timeZone)}
+          {review ? B.notScheduled : formatInZone(item.scheduledAt, timeZone)}
         </span>
         {overdue ? (
           <span className="staff-badge" data-tone="amber">
@@ -135,21 +155,31 @@ function BookingRow({
             </span>
           </span>
         ) : null}
-        <span className="staff-booking-where">
-          {item.meetingUrl ? (
-            <a
-              className="staff-link staff-ltr"
-              href={item.meetingUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {B.joinLink}
-            </a>
-          ) : (
-            (item.roomName ?? B.noRoom)
-          )}
-          {topic ? <span className="staff-muted"> · {topic}</span> : null}
-        </span>
+        {review
+          ? intakeLines.map(line => (
+              <span key={line.label} className="staff-muted">
+                {line.label}
+                {line.value ? `: ${line.value}` : ""}
+              </span>
+            ))
+          : null}
+        {!review ? (
+          <span className="staff-booking-where">
+            {item.meetingUrl ? (
+              <a
+                className="staff-link staff-ltr"
+                href={item.meetingUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {B.joinLink}
+              </a>
+            ) : (
+              (item.roomName ?? B.noRoom)
+            )}
+            {topic ? <span className="staff-muted"> · {topic}</span> : null}
+          </span>
+        ) : null}
         {item.status === "completed" ? (
           <span className="staff-booking-result">
             {B.result}: <strong>{item.resultScore ?? copy.state.notSet}</strong>
@@ -170,7 +200,38 @@ function BookingRow({
           <span className="staff-muted">{item.resultNotes}</span>
         ) : null}
       </div>
-      {scheduled ? (
+      {review ? (
+        <div className="staff-booking-actions">
+          <button
+            type="button"
+            className="staff-btn"
+            data-size="sm"
+            data-variant="primary"
+            onClick={onChange}
+          >
+            {B.schedule}
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="staff-icon-btn"
+                aria-label={copy.actions.rowActions}
+              >
+                <MoreHorizontal strokeWidth={1.75} aria-hidden />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                className="text-[var(--staff-red)]"
+                onSelect={onCancel}
+              >
+                {B.cancel}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : scheduled ? (
         <div className="staff-booking-actions">
           <button
             type="button"
@@ -232,7 +293,7 @@ export function BookingList({
   empty,
 }: {
   bookings: Booking[];
-  branchFor: (branchId: string) => NccBranchDto | undefined;
+  branchFor: (branchId: string | null | undefined) => NccBranchDto | undefined;
   showSubject?: boolean;
   groupByDay?: boolean;
   empty?: string;

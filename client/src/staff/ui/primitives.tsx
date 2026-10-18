@@ -231,6 +231,7 @@ const TONES: Record<string, "green" | "blue" | "amber" | "red" | "plain"> = {
   trial_lesson: "blue",
   placement_test: "blue",
   pending: "amber",
+  review: "amber",
   pending_payment: "amber",
   follow_up: "amber",
   future_registration: "amber",

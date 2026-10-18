@@ -369,7 +369,13 @@ function identityUpstream(body: Record<string, unknown>) {
 }
 
 const LEAD_TYPES = ["new", "old", "old_student", "current_student"];
-const BOOKING_STATUSES = ["scheduled", "completed", "cancelled", "no_show"];
+const BOOKING_STATUSES = [
+  "review",
+  "scheduled",
+  "completed",
+  "cancelled",
+  "no_show",
+];
 const ENROLMENT_LIST_STATUSES = [
   "fill",
   "waiting",
@@ -667,8 +673,10 @@ function bookingBody(
     upstream.placement_moodle_course_id = body.placementMoodleCourseId;
   }
   if (body.status !== undefined) {
-    if (body.status !== "no_show") return "status is invalid.";
-    upstream.status = "no_show";
+    if (body.status !== "no_show" && body.status !== "scheduled") {
+      return "status is invalid.";
+    }
+    upstream.status = body.status;
   }
   return upstream;
 }
@@ -2318,12 +2326,29 @@ export function registerNccOperationalRoutes(
       }
       const upstream = bookingBody(
         body,
-        ["scheduledAt", "roomId", "status", "meetingUrl", "areaOfStudyId"],
+        [
+          "scheduledAt",
+          "roomId",
+          "status",
+          "meetingUrl",
+          "areaOfStudyId",
+          "branchId",
+        ],
         { create: false }
       );
       if (typeof upstream === "string") {
         response.status(400).json({ error: upstream });
         return;
+      }
+      if (body.branchId !== undefined) {
+        const branchId = selectedBranchId(
+          request,
+          response,
+          dependencies,
+          body.branchId
+        );
+        if (branchId === null) return;
+        if (branchId) upstream.branch_id = branchId;
       }
       await sendNccWrite(
         request,
@@ -2871,12 +2896,23 @@ export function registerNccOperationalRoutes(
           "areaOfStudyId",
           "courseId",
           "status",
+          "branchId",
         ],
         { create: false }
       );
       if (typeof upstream === "string") {
         response.status(400).json({ error: upstream });
         return;
+      }
+      if (body.branchId !== undefined) {
+        const branchId = selectedBranchId(
+          request,
+          response,
+          dependencies,
+          body.branchId
+        );
+        if (branchId === null) return;
+        if (branchId) upstream.branch_id = branchId;
       }
       await sendNccWrite(
         request,

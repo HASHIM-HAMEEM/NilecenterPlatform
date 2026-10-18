@@ -128,6 +128,16 @@ function AdmissionsDashboard() {
     "/api/ncc/admissions/trial-lessons",
     bookingQuery
   );
+  const reviewPlacements = useTotal("/api/ncc/admissions/placement-tests", {
+    status: "review",
+  });
+  const reviewTrials = useTotal("/api/ncc/admissions/trial-lessons", {
+    status: "review",
+  });
+  const toReview =
+    reviewPlacements === null || reviewTrials === null
+      ? null
+      : reviewPlacements + reviewTrials;
   const unpaid = useTotal("/api/ncc/admissions/enrolments", { status: "pending_payment" });
   // The enrolment status filter takes one value; paid sales wait in two.
   const pendingClass = useTotal("/api/ncc/admissions/enrolments", { status: "pending_class" });
@@ -146,7 +156,8 @@ function AdmissionsDashboard() {
     { unassigned: true, status: OPEN_STAGES }
   );
 
-  const zone = (branchId: string) => branches.get(branchId)?.timezone;
+  const zone = (branchId: string | null) =>
+    branchId ? branches.get(branchId)?.timezone : undefined;
   const bookings = [
     ...(placements.data?.items ?? []).map(item => ({ ...item, kind: "placement" as const })),
     ...(trials.data?.items ?? []).map(item => ({ ...item, kind: "trial" as const })),
@@ -171,6 +182,14 @@ function AdmissionsDashboard() {
     new Date(`${from}T12:00:00Z`).toLocaleDateString(intlLocale(), { day: "numeric", month: "short", timeZone: "UTC" });
 
   const attention = [
+    {
+      label: D.toReview,
+      count: toReview,
+      href:
+        (reviewPlacements ?? 0) > 0
+          ? "/app/placement-tests?status=review"
+          : "/app/trial-lessons?status=review",
+    },
     { label: D.resultsToRecord, count: placements.data && trials.data ? overdue.length : null, href: "/app/placement-tests" },
     { label: D.unpaid, count: unpaid, href: "/app/enrolments?status=pending_payment" },
     { label: D.waitingClass, count: waitingClass, href: "/app/enrolments" },

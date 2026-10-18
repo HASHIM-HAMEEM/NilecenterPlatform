@@ -376,7 +376,7 @@ export function bookingsReport(
   ).length;
 
   const branches = new Map<
-    string,
+    string | null,
     { label: string | null; placements: number; trials: number }
   >();
   for (const item of inPlacements) {

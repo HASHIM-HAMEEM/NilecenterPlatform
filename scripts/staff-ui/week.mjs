@@ -29,9 +29,19 @@ try {
   await settle(p);
   const rows = await p.locator(".staff-week .staff-session-item").count();
   step("past week shows sessions across classes", rows >= 2, `${rows} sessions`);
+  // Sessions with a Moodle attendance link may sit further back; walk up to
+  // six more past weeks looking for one.
+  let offered =
+    (await p.getByRole("button", { name: "Take attendance" }).count()) >= 1;
+  for (let i = 0; i < 6 && !offered; i++) {
+    await p.getByRole("button", { name: "Previous week" }).click();
+    await settle(p);
+    offered =
+      (await p.getByRole("button", { name: "Take attendance" }).count()) >= 1;
+  }
   step(
     "session with a Moodle attendance session offers Take attendance",
-    (await p.getByRole("button", { name: "Take attendance" }).count()) >= 1
+    offered
   );
   await p.screenshot({ path: `${suite.out}/en-week-past.png` });
   await p.getByRole("button", { name: "Take attendance" }).first().click();

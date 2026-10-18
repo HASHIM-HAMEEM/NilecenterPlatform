@@ -18,10 +18,10 @@ export function fillPercent(fill: number, capacity: number): number {
  * order) and every past booking that still needs a result, today's included.
  */
 export function splitToday<
-  T extends { status: string; scheduledAt: string | null; branchId: string },
+  T extends { status: string; scheduledAt: string | null; branchId: string | null },
 >(
   bookings: T[],
-  zoneFor: (branchId: string) => string | undefined,
+  zoneFor: (branchId: string | null) => string | undefined,
   now = Date.now()
 ): { today: T[]; overdue: T[] } {
   const today: T[] = [];

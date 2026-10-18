@@ -497,10 +497,20 @@ export type EmsStagingLead = {
   updatedAt: string;
 };
 
+export type EmsStagingBookingIntake = {
+  formName: string | null;
+  submissionId: string | null;
+  appointmentText: string | null;
+  branchLabel: string | null;
+  subjectLabel: string | null;
+  contactPreference: string | null;
+  comments: string | null;
+};
+
 export type EmsStagingPlacementTest = {
   id: string;
-  branchId: string;
-  branchName: string;
+  branchId: string | null;
+  branchName: string | null;
   subject: {
     type: "lead" | "student";
     id: string;
@@ -514,7 +524,8 @@ export type EmsStagingPlacementTest = {
   areaOfStudyId: string | null;
   areaOfStudyName: string | null;
   placementMoodleCourseId: number | null;
-  status: "scheduled" | "completed" | "cancelled" | "no_show";
+  status: "review" | "scheduled" | "completed" | "cancelled" | "no_show";
+  intake: EmsStagingBookingIntake | null;
   recommendedCourseId: string | null;
   recommendedCourseName: string | null;
   resultScore: string | null;
@@ -530,6 +541,7 @@ export type EmsStagingPlacementTest = {
 };
 
 export type EmsStagingBookingStatus =
+  | "review"
   | "scheduled"
   | "completed"
   | "cancelled"
@@ -537,10 +549,10 @@ export type EmsStagingBookingStatus =
 
 export type EmsStagingTrialLesson = {
   id: string;
-  branchId: string;
-  branchName: string;
+  branchId: string | null;
+  branchName: string | null;
   subject: { type: "lead" | "student"; id: string; name: string; email: string };
-  scheduledAt: string;
+  scheduledAt: string | null;
   roomId: string | null;
   roomName: string | null;
   meetingUrl: string | null;
@@ -549,6 +561,7 @@ export type EmsStagingTrialLesson = {
   courseId: string | null;
   courseName: string | null;
   status: EmsStagingBookingStatus;
+  intake: EmsStagingBookingIntake | null;
   recommendedCourseId: string | null;
   recommendedCourseName: string | null;
   resultScore: string | null;
@@ -2099,6 +2112,59 @@ function isPositiveIntegerOrNull(value: unknown) {
   );
 }
 
+function isNullableNonEmptyString(value: unknown) {
+  return (
+    value === null ||
+    value === undefined ||
+    (typeof value === "string" && value !== "")
+  );
+}
+
+/**
+ * Jotform intake block shared by placement tests and trial lessons. Returns
+ * false when the fields are malformed (rejects the record like other
+ * normalizer checks), null when no intake data is present, else the intake.
+ */
+function bookingIntake(
+  record: Record<string, unknown>
+): EmsStagingBookingIntake | null | false {
+  const fields = [
+    record.jotform_appointment_text,
+    record.jotform_branch_label,
+    record.jotform_subject_label,
+    record.jotform_contact_preference,
+    record.jotform_comments,
+  ];
+  if (!fields.every(isNullableString)) return false;
+  const jotform = record.jotform;
+  if (jotform !== null && jotform !== undefined) {
+    if (typeof jotform !== "object") return false;
+    const form = jotform as Record<string, unknown>;
+    if (
+      typeof form.form_name !== "string" ||
+      typeof form.submission_id !== "string"
+    ) {
+      return false;
+    }
+  }
+  const form =
+    jotform && typeof jotform === "object"
+      ? (jotform as Record<string, unknown>)
+      : null;
+  if (form === null && fields.every(value => value === null || value === undefined)) {
+    return null;
+  }
+  return {
+    formName: (form?.form_name as string) ?? null,
+    submissionId: (form?.submission_id as string) ?? null,
+    appointmentText: nullableString(record.jotform_appointment_text),
+    branchLabel: nullableString(record.jotform_branch_label),
+    subjectLabel: nullableString(record.jotform_subject_label),
+    contactPreference: nullableString(record.jotform_contact_preference),
+    comments: nullableString(record.jotform_comments),
+  };
+}
+
 function isNonNegativeInteger(value: unknown) {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
@@ -2659,13 +2725,13 @@ export function normalizeEmsPlacementTest(
     record.created_at,
     record.updated_at,
   ];
+  const intake = bookingIntake(record);
   if (
+    intake === false ||
     typeof record.id !== "string" ||
     !record.id ||
-    typeof record.branch_id !== "string" ||
-    !record.branch_id ||
-    typeof record.branch_name !== "string" ||
-    !record.branch_name ||
+    !isNullableNonEmptyString(record.branch_id) ||
+    !isNullableNonEmptyString(record.branch_name) ||
     !subject ||
     (subject.subject_type !== "lead" && subject.subject_type !== "student") ||
     typeof subject.subject_id !== "string" ||
@@ -2679,7 +2745,8 @@ export function normalizeEmsPlacementTest(
     (record.result_recorded_auto !== undefined &&
       record.result_recorded_auto !== null &&
       typeof record.result_recorded_auto !== "boolean") ||
-    (record.status !== "scheduled" &&
+    (record.status !== "review" &&
+      record.status !== "scheduled" &&
       record.status !== "completed" &&
       record.status !== "cancelled" &&
       record.status !== "no_show")
@@ -2691,8 +2758,8 @@ export function normalizeEmsPlacementTest(
     .join(" ");
   return {
     id: record.id,
-    branchId: record.branch_id,
-    branchName: record.branch_name,
+    branchId: nullableString(record.branch_id),
+    branchName: nullableString(record.branch_name),
     subject: {
       type: subject.subject_type,
       id: subject.subject_id,
@@ -2710,6 +2777,7 @@ export function normalizeEmsPlacementTest(
         ? record.placement_moodle_course_id
         : null,
     status: record.status,
+    intake,
     recommendedCourseId: nullableString(record.recommended_course_id),
     recommendedCourseName: nullableString(record.recommended_course_name),
     resultScore: nullableString(record.result_score),
@@ -2732,6 +2800,7 @@ export function normalizeEmsPlacementTests(
 }
 
 const EMS_BOOKING_STATUSES = [
+  "review",
   "scheduled",
   "completed",
   "cancelled",
@@ -2760,12 +2829,13 @@ export function normalizeEmsTrialLesson(
     record.result_score,
     record.result_notes,
   ];
+  const intake = bookingIntake(record);
   if (
+    intake === false ||
     typeof record.id !== "string" ||
     !record.id ||
-    typeof record.branch_id !== "string" ||
-    !record.branch_id ||
-    typeof record.branch_name !== "string" ||
+    !isNullableNonEmptyString(record.branch_id) ||
+    !isNullableNonEmptyString(record.branch_name) ||
     !subject ||
     (subject.subject_type !== "lead" && subject.subject_type !== "student") ||
     typeof subject.subject_id !== "string" ||
@@ -2773,8 +2843,7 @@ export function normalizeEmsTrialLesson(
     typeof subject.first_name !== "string" ||
     typeof subject.last_name !== "string" ||
     typeof subject.email !== "string" ||
-    typeof record.scheduled_at !== "string" ||
-    !Number.isFinite(Date.parse(record.scheduled_at)) ||
+    !isNullableTimestamp(record.scheduled_at) ||
     !optionalValues.every(isNullableString) ||
     !isNullableTimestamp(record.completed_at) ||
     !isNullableTimestamp(record.cancelled_at) ||
@@ -2789,15 +2858,15 @@ export function normalizeEmsTrialLesson(
     .join(" ");
   return {
     id: record.id,
-    branchId: record.branch_id,
-    branchName: record.branch_name,
+    branchId: nullableString(record.branch_id),
+    branchName: nullableString(record.branch_name),
     subject: {
       type: subject.subject_type,
       id: subject.subject_id,
       name: name || subject.email,
       email: subject.email,
     },
-    scheduledAt: record.scheduled_at,
+    scheduledAt: nullableString(record.scheduled_at),
     roomId: nullableString(record.room_id),
     roomName: nullableString(record.room_name),
     meetingUrl: nullableString(record.meeting_url),
@@ -2806,6 +2875,7 @@ export function normalizeEmsTrialLesson(
     courseId: nullableString(record.course_id),
     courseName: nullableString(record.course_name),
     status: record.status as EmsStagingBookingStatus,
+    intake,
     recommendedCourseId: nullableString(record.recommended_course_id),
     recommendedCourseName: nullableString(record.recommended_course_name),
     resultScore: nullableString(record.result_score),

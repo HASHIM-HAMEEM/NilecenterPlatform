@@ -27,7 +27,21 @@ const reasonOf = async kind => {
 await reasonOf("cancel_enrolment");
 await reasonOf("disable_student");
 await reasonOf("left_enrolment");
-const course = (await admin.call("GET", "/api/ncc/delivery/courses")).data.items[0];
+const courses = (await admin.call("GET", "/api/ncc/delivery/courses")).data.items;
+const QA_BRANCH = "ccab89aa-58a9-4db9-a413-61017ad9709b";
+// The add-to-class step needs a course with an active class in the QA branch.
+let course = courses[0];
+for (const candidate of courses) {
+  const classes =
+    (await admin.call(
+      "GET",
+      `/api/ncc/delivery/classes?courseId=${candidate.id}&branchId=${QA_BRANCH}&status=active&pageSize=100`
+    )).data?.items ?? [];
+  if (classes.length) {
+    course = candidate;
+    break;
+  }
+}
 await admin.call("POST", `/api/ncc/delivery/courses/${course.id}/enable`);
 const courseName = course.displayName ?? course.fullname;
 

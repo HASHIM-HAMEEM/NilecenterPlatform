@@ -65,8 +65,8 @@ Do not duplicate or infer that status in companion files.
 Current QA baseline:
 
 - Portal QA: 375 checks, 0 failures.
-- Staff browser suites (`npm run qa:staff`): 24 suites, 0 failures. That is
-  16 functional suites, the responsive gate in each of the six languages
+- Staff browser suites (`npm run qa:staff`): 25 suites, 0 failures. That is
+  17 functional suites, the responsive gate in each of the six languages
   (en, ar, tr, zh, ru, ur), and the light/dark contrast gate in en and ar.
 - This baseline must not be broken.
 

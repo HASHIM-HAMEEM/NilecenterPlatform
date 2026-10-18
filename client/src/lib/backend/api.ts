@@ -1288,10 +1288,20 @@ export type NccLeadDto = {
 export type NccLeadStatusDto = NccLeadDto["status"];
 export type NccLeadTypeDto = NccLeadDto["leadType"];
 
+export type NccBookingIntakeDto = {
+  formName: string | null;
+  submissionId: string | null;
+  appointmentText: string | null;
+  branchLabel: string | null;
+  subjectLabel: string | null;
+  contactPreference: string | null;
+  comments: string | null;
+};
+
 export type NccPlacementTestDto = {
   id: string;
-  branchId: string;
-  branchName: string;
+  branchId: string | null;
+  branchName: string | null;
   subject: {
     type: "lead" | "student";
     id: string;
@@ -1305,7 +1315,8 @@ export type NccPlacementTestDto = {
   areaOfStudyId?: string | null;
   areaOfStudyName?: string | null;
   placementMoodleCourseId?: number | null;
-  status: "scheduled" | "completed" | "cancelled" | "no_show";
+  status: "review" | "scheduled" | "completed" | "cancelled" | "no_show";
+  intake?: NccBookingIntakeDto | null;
   recommendedCourseId: string | null;
   recommendedCourseName: string | null;
   resultScore: string | null;
@@ -1324,10 +1335,10 @@ export type NccBookingStatusDto = NccPlacementTestDto["status"];
 
 export type NccTrialLessonDto = {
   id: string;
-  branchId: string;
-  branchName: string;
+  branchId: string | null;
+  branchName: string | null;
   subject: { type: "lead" | "student"; id: string; name: string; email: string };
-  scheduledAt: string;
+  scheduledAt: string | null;
   roomId: string | null;
   roomName: string | null;
   meetingUrl: string | null;
@@ -1336,6 +1347,7 @@ export type NccTrialLessonDto = {
   courseId: string | null;
   courseName: string | null;
   status: NccBookingStatusDto;
+  intake?: NccBookingIntakeDto | null;
   recommendedCourseId: string | null;
   recommendedCourseName: string | null;
   resultScore: string | null;
@@ -2381,7 +2393,12 @@ export function createNccPlacementTestRequest(input: {
 
 export function patchNccPlacementTestRequest(
   placementTestId: string,
-  input: { scheduledAt?: string; roomId?: string | null; status?: "no_show" }
+  input: {
+    scheduledAt?: string;
+    roomId?: string | null;
+    branchId?: string;
+    status?: "no_show" | "scheduled";
+  }
 ) {
   return apiJson<{ placementTest: NccPlacementTestDto }>(
     `/api/ncc/admissions/placement-tests/${encodeURIComponent(placementTestId)}`,
@@ -2457,7 +2474,8 @@ export function rescheduleNccPlacementTestRequest(
     roomId?: string | null;
     meetingUrl?: string | null;
     areaOfStudyId?: string | null;
-    status?: "no_show";
+    branchId?: string;
+    status?: "no_show" | "scheduled";
   }
 ) {
   return apiJson<{ placementTest: NccPlacementTestDto }>(
@@ -2483,7 +2501,8 @@ export function patchNccTrialLessonRequest(
     meetingUrl?: string | null;
     areaOfStudyId?: string | null;
     courseId?: string | null;
-    status?: "no_show";
+    branchId?: string;
+    status?: "no_show" | "scheduled";
   }
 ) {
   return apiJson<{ trialLesson: NccTrialLessonDto }>(

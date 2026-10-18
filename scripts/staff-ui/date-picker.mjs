@@ -71,7 +71,8 @@ step("days before the start date are unavailable", disabledCount > 0, `${disable
 const disabled = pop().locator(".staff-dp-day[aria-disabled='true']").first();
 await disabled.click({ force: true });
 step("clicking an unavailable day does nothing", (await pop().count()) === 1);
-const later = pop().locator(".staff-dp-day:not([aria-disabled]):not([data-outside])").nth(10);
+const enabledDays = pop().locator(".staff-dp-day:not([aria-disabled]):not([data-outside])");
+const later = enabledDays.nth(Math.min(10, (await enabledDays.count()) - 1));
 const laterIso = await later.getAttribute("data-iso");
 await later.click();
 await page.waitForTimeout(200);

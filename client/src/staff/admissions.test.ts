@@ -66,6 +66,29 @@ describe("leadJourney", () => {
     expect(result.next).toBe("book_placement");
   });
 
+  it("schedules review bookings before booking new ones", () => {
+    const review = leadJourney(lead(), [{ status: "review" }], []);
+    expect(review.next).toBe("schedule_placement");
+    expect(review.steps.placement).toBe("now");
+    expect(leadJourney(lead(), [], [{ status: "review" }]).next).toBe(
+      "schedule_trial"
+    );
+    const afterTest = leadJourney(
+      lead(),
+      [{ status: "completed" }],
+      [{ status: "review" }]
+    );
+    expect(afterTest.next).toBe("schedule_trial");
+    expect(afterTest.steps.trial).toBe("now");
+    expect(
+      leadJourney(
+        lead(),
+        [{ status: "scheduled" }, { status: "review" }],
+        []
+      ).next
+    ).toBe("record_placement");
+  });
+
   it("moves to the fee after a completed test, then to conversion", () => {
     const afterTest = leadJourney(lead(), [{ status: "completed" }], []);
     expect(afterTest.next).toBe("fee");

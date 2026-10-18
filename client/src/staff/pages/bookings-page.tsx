@@ -31,11 +31,12 @@ const A = copy.admissions.agenda;
 const PAGE_SIZE = 50;
 
 type Kind = "placement" | "trial";
-type Tab = "scheduled" | "completed" | "no_show" | "cancelled";
-const TABS: Tab[] = ["scheduled", "completed", "no_show", "cancelled"];
+type Tab = "scheduled" | "review" | "completed" | "no_show" | "cancelled";
+const TABS: Tab[] = ["scheduled", "review", "completed", "no_show", "cancelled"];
 
 function tabLabel(tab: Tab) {
   if (tab === "scheduled") return A.upcoming;
+  if (tab === "review") return A.toReview;
   if (tab === "completed") return A.completed;
   if (tab === "no_show") return A.missed;
   return A.cancelled;
@@ -70,8 +71,9 @@ export function BookingsAgenda({ kind }: { kind: Kind }) {
   const query: StaffQuery = {
     ...base,
     status: tab,
-    sort: "scheduled_at",
-    order: tab === "scheduled" ? "asc" : "desc",
+    // Requests waiting for review have no time yet; order them by arrival.
+    sort: tab === "review" ? "created_at" : "scheduled_at",
+    order: tab === "scheduled" || tab === "review" ? "asc" : "desc",
     pageSize: PAGE_SIZE,
     ...(page > 1 ? { page } : {}),
   };
@@ -157,7 +159,13 @@ export function BookingsAgenda({ kind }: { kind: Kind }) {
         <LoadingRows />
       ) : bookings.length === 0 ? (
         <EmptyState
-          title={tab === "scheduled" ? A.emptyUpcoming : A.emptyOther}
+          title={
+            tab === "review"
+              ? A.emptyReview
+              : tab === "scheduled"
+                ? A.emptyUpcoming
+                : A.emptyOther
+          }
           description={tab === "scheduled" ? A.emptyHint : undefined}
         />
       ) : (
@@ -166,7 +174,7 @@ export function BookingsAgenda({ kind }: { kind: Kind }) {
             bookings={bookings}
             branchFor={branches.get}
             showSubject
-            groupByDay
+            groupByDay={tab !== "review"}
           />
         </div>
       )}
