@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams, useSearch } from "wouter";
 import { MoreHorizontal, Pencil, Plus, Printer } from "lucide-react";
 import {
@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/staff/ui/kit";
-import { formatAmount } from "../admissions";
+import { formatAmount, recommendedNext } from "../admissions";
 import { staffGet, staffWrite, useInvalidate, useNcc } from "../api";
 import { copy } from "../copy";
 import { formatDob } from "../date-of-birth";
@@ -58,6 +58,7 @@ const S = copy.admissions.students;
 const E = copy.admissions.enrolments;
 const I = copy.admissions.identity;
 const L = copy.admissions.leads;
+const R = copy.admissions.recommend;
 
 const TABS = ["overview", "courses", "learning", "bookings", "report"] as const;
 type Tab = (typeof TABS)[number];
@@ -316,8 +317,9 @@ export default function StudentDetailPage() {
   const requested = new URLSearchParams(search).get("tab") as Tab | null;
   const tab: Tab =
     requested && TABS.includes(requested) ? requested : "overview";
+  // Overview also reads sales and results, for the recommended next course.
   const enrolments = useStudentEnrolments(
-    tab === "courses" ? student : undefined
+    tab === "courses" || tab === "overview" ? student : undefined
   );
   const learning = useNcc<{ learning: NccStudentLearningDto }>(
     student && tab === "learning"
@@ -329,16 +331,40 @@ export default function StudentDetailPage() {
       ? `/api/ncc/admissions/students/${encodeURIComponent(student.id)}/report`
       : null
   );
+  const readsBookings = tab === "bookings" || tab === "overview";
   const placements = useNcc<NccPageDto<NccPlacementTestDto>>(
-    student && tab === "bookings"
-      ? "/api/ncc/admissions/placement-tests"
-      : null,
+    student && readsBookings ? "/api/ncc/admissions/placement-tests" : null,
     { studentId: id, pageSize: 100 }
   );
   const trials = useNcc<NccPageDto<NccTrialLessonDto>>(
-    student && tab === "bookings" ? "/api/ncc/admissions/trial-lessons" : null,
+    student && readsBookings ? "/api/ncc/admissions/trial-lessons" : null,
     { studentId: id, pageSize: 100 }
   );
+  const recommendation =
+    student?.status === "active" &&
+    placements.data &&
+    trials.data &&
+    !enrolments.loading &&
+    !enrolments.error
+      ? recommendedNext(placements.data.items, trials.data.items, enrolments.items)
+      : null;
+  const [saleCourse, setSaleCourse] = useState<string | null>(null);
+
+  // Arriving with ?enrol=1 (from a lead that just became a student) opens the
+  // sale for the recommended course once it is known; the flag is dropped.
+  const wantsEnrol = new URLSearchParams(search).get("enrol") === "1";
+  const ready = Boolean(placements.data && trials.data && !enrolments.loading);
+  useEffect(() => {
+    if (!wantsEnrol || !ready) return;
+    const params = new URLSearchParams(search);
+    params.delete("enrol");
+    navigate(`?${params.toString()}`, { replace: true });
+    if (recommendation) {
+      setSaleCourse(recommendation.courseId);
+      setDialog("sale");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsEnrol, ready]);
 
   if (!allowed)
     return <EmptyState title={copy.shell.noAccess} description={S.noAccess} />;
@@ -491,6 +517,55 @@ export default function StudentDetailPage() {
         </div>
       </dl>
 
+      {recommendation ? (
+        <section
+          className="staff-next staff-recommend staff-print-hide"
+          aria-labelledby="student-recommend"
+        >
+          <div className="staff-next-text">
+            <h2 id="student-recommend" className="staff-section-title">
+              {R.recommendedTitle}
+            </h2>
+            <p className="staff-recommend-course">{recommendation.courseName}</p>
+            <p className="staff-recommend-why">
+              {[
+                (recommendation.source === "placement"
+                  ? R.fromPlacement
+                  : R.fromTrial
+                ).replace(
+                  "{date}",
+                  recommendation.completedAt
+                    ? formatDate(recommendation.completedAt)
+                    : ""
+                ),
+                recommendation.score
+                  ? R.score.replace("{score}", recommendation.score)
+                  : null,
+                recommendation.mentor
+                  ? R.mentor.replace("{name}", recommendation.mentor)
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
+          <div className="staff-next-actions">
+            <button
+              type="button"
+              className="staff-btn"
+              data-variant="primary"
+              aria-label={R.enrolIn.replace("{course}", recommendation.courseName)}
+              onClick={() => {
+                setSaleCourse(recommendation.courseId);
+                setDialog("sale");
+              }}
+            >
+              {R.enrol}
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <div
         className="staff-tabs staff-print-hide"
         role="tablist"
@@ -607,7 +682,10 @@ export default function StudentDetailPage() {
               className="staff-btn"
               data-size="sm"
               data-variant="primary"
-              onClick={() => setDialog("sale")}
+              onClick={() => {
+                setSaleCourse(null);
+                setDialog("sale");
+              }}
             >
               <Plus strokeWidth={1.75} aria-hidden />
               {E.sell}
@@ -745,6 +823,8 @@ export default function StudentDetailPage() {
         open={dialog === "sale"}
         onOpenChange={open => !open && setDialog(null)}
         student={student}
+        courseId={saleCourse}
+        recommendedCourseId={recommendation?.courseId ?? null}
       />
       <BookingSheet
         open={typeof dialog === "object" && dialog !== null}

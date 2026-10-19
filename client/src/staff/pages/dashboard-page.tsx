@@ -67,7 +67,6 @@ function Greeting({ context }: { context?: string | null }) {
           {D[greetingPart(new Date().getHours())]}
           {first ? `${D.nameSeparator}${first}` : ""}
         </h1>
-        <p className="staff-page-desc">{D.intro}</p>
       </div>
     </header>
   );

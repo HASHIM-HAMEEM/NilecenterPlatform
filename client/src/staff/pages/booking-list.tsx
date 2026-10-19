@@ -21,7 +21,9 @@ import { formatInZone } from "../admissions";
 import { staffWrite, useInvalidate } from "../api";
 import { copy } from "../copy";
 import { intlLocale } from "../i18n";
+import { canAccess } from "../nav";
 import { runAction } from "../run-action";
+import { useStaffSession } from "../session";
 import { ConfirmDialog } from "../ui/confirm-dialog";
 import { StatusBadge } from "../ui/primitives";
 import { SecretDialog, type StaffSecret } from "../ui/secret-dialog";
@@ -97,6 +99,17 @@ function BookingRow({
   onSync?: () => void;
 }) {
   const { item } = booking;
+  const { session } = useStaffSession();
+  const jotformHref = (intake: {
+    formRowId: string | null;
+    submissionId: string | null;
+  }) =>
+    intake.formRowId &&
+    intake.submissionId &&
+    session?.ncc?.activeRole &&
+    canAccess("/app/jotform", session.ncc.activeRole)
+      ? `/app/jotform/${intake.formRowId}/submissions/${intake.submissionId}`
+      : null;
   const topic =
     booking.kind === "trial"
       ? (booking.item.courseName ?? booking.item.areaOfStudyName)
@@ -106,7 +119,11 @@ function BookingRow({
   const overdue = needsOutcome(item);
   const placement = booking.kind === "placement" ? booking.item : null;
   const intake = item.intake ?? null;
-  const intakeLines: Array<{ label: string; value: string }> = [];
+  const intakeLines: Array<{
+    label: string;
+    value: string;
+    href?: string;
+  }> = [];
   if (review && intake) {
     if (intake.appointmentText)
       intakeLines.push({ label: B.requestedTime, value: intake.appointmentText });
@@ -120,8 +137,9 @@ function BookingRow({
       intakeLines.push({ label: B.visitorNote, value: intake.comments });
     if (intake.formName)
       intakeLines.push({
-        label: B.fromForm.replace("{form}", intake.formName),
-        value: "",
+        label: B.fromForm,
+        value: intake.formName,
+        href: jotformHref(intake) ?? undefined,
       });
   }
   return (
@@ -156,12 +174,26 @@ function BookingRow({
           </span>
         ) : null}
         {review
-          ? intakeLines.map(line => (
-              <span key={line.label} className="staff-muted">
-                {line.label}
-                {line.value ? `: ${line.value}` : ""}
-              </span>
-            ))
+          ? intakeLines.map(line => {
+              const [before, after] = line.href
+                ? line.label.split("{form}")
+                : [null, null];
+              return (
+                <span key={line.label} className="staff-muted">
+                  {line.href ? (
+                    <>
+                      {before}
+                      <Link href={line.href} className="staff-link">
+                        {line.value}
+                      </Link>
+                      {after}
+                    </>
+                  ) : (
+                    line.label + (line.value ? `: ${line.value}` : "")
+                  )}
+                </span>
+              );
+            })
           : null}
         {!review ? (
           <span className="staff-booking-where">

@@ -492,12 +492,16 @@ export type EmsStagingLead = {
   lostReasonName: string | null;
   areaOfStudyId: string | null;
   areaOfStudyName: string | null;
+  dateOfBirth: string | null;
+  nationality: string | null;
+  jotform: EmsStagingJotformRecordLink | null;
   registration: EmsStagingRegistration | null;
   createdAt: string;
   updatedAt: string;
 };
 
 export type EmsStagingBookingIntake = {
+  formRowId: string | null;
   formName: string | null;
   submissionId: string | null;
   appointmentText: string | null;
@@ -2120,6 +2124,33 @@ function isNullableNonEmptyString(value: unknown) {
   );
 }
 
+export type EmsStagingJotformRecordLink = {
+  /** Registry row uuid (`Jotform_Record_Link.form_id`), not the Jotform id. */
+  formId: string;
+  formName: string;
+  submissionId: string;
+};
+
+function normalizeJotformRecordLink(
+  payload: unknown
+): EmsStagingJotformRecordLink | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  if (
+    typeof record.form_id !== "string" ||
+    !record.form_id ||
+    typeof record.form_name !== "string" ||
+    typeof record.submission_id !== "string"
+  ) {
+    return null;
+  }
+  return {
+    formId: record.form_id,
+    formName: record.form_name,
+    submissionId: record.submission_id,
+  };
+}
+
 /**
  * Jotform intake block shared by placement tests and trial lessons. Returns
  * false when the fields are malformed (rejects the record like other
@@ -2137,26 +2168,18 @@ function bookingIntake(
   ];
   if (!fields.every(isNullableString)) return false;
   const jotform = record.jotform;
+  let form: EmsStagingJotformRecordLink | null = null;
   if (jotform !== null && jotform !== undefined) {
-    if (typeof jotform !== "object") return false;
-    const form = jotform as Record<string, unknown>;
-    if (
-      typeof form.form_name !== "string" ||
-      typeof form.submission_id !== "string"
-    ) {
-      return false;
-    }
+    form = normalizeJotformRecordLink(jotform);
+    if (!form) return false;
   }
-  const form =
-    jotform && typeof jotform === "object"
-      ? (jotform as Record<string, unknown>)
-      : null;
   if (form === null && fields.every(value => value === null || value === undefined)) {
     return null;
   }
   return {
-    formName: (form?.form_name as string) ?? null,
-    submissionId: (form?.submission_id as string) ?? null,
+    formRowId: form?.formId ?? null,
+    formName: form?.formName ?? null,
+    submissionId: form?.submissionId ?? null,
     appointmentText: nullableString(record.jotform_appointment_text),
     branchLabel: nullableString(record.jotform_branch_label),
     subjectLabel: nullableString(record.jotform_subject_label),
@@ -2637,6 +2660,11 @@ export function normalizeEmsLead(payload: unknown): EmsStagingLead | null {
     !isNullableString(record.assigned_ssa_name) ||
     !isNullableString(record.group_id) ||
     !isNullableString(record.group_label) ||
+    !isNullableString(record.date_of_birth) ||
+    !isNullableString(record.nationality) ||
+    (record.jotform !== undefined &&
+      record.jotform !== null &&
+      !normalizeJotformRecordLink(record.jotform)) ||
     (record.is_group_primary !== undefined &&
       record.is_group_primary !== null &&
       typeof record.is_group_primary !== "boolean") ||
@@ -2687,6 +2715,12 @@ export function normalizeEmsLead(payload: unknown): EmsStagingLead | null {
     lostReasonName: nullableString(record.lost_reason_name),
     areaOfStudyId: nullableString(record.area_of_study_id),
     areaOfStudyName: nullableString(record.area_of_study_name),
+    dateOfBirth: nullableString(record.date_of_birth),
+    nationality: nullableString(record.nationality),
+    jotform:
+      record.jotform === undefined || record.jotform === null
+        ? null
+        : normalizeJotformRecordLink(record.jotform),
     registration,
     createdAt: record.created_at,
     updatedAt: record.updated_at,
@@ -2885,6 +2919,312 @@ export function normalizeEmsTrialLesson(
     createdAt: record.created_at,
     updatedAt: record.updated_at,
   };
+}
+
+/* ---------------- Jotform registry (settings) ------------------------- */
+
+export type EmsStagingJotformTarget =
+  | "contact"
+  | "placement_test"
+  | "trial_lesson";
+export const JOTFORM_TARGETS: EmsStagingJotformTarget[] = [
+  "contact",
+  "placement_test",
+  "trial_lesson",
+];
+export type EmsStagingJotformAnswerRole = "branch" | "area" | "source";
+export const JOTFORM_ANSWER_ROLES: EmsStagingJotformAnswerRole[] = [
+  "branch",
+  "area",
+  "source",
+];
+
+export type EmsStagingJotformForm = {
+  id: string;
+  formId: string;
+  name: string;
+  target: EmsStagingJotformTarget;
+  fallbackBranchId: string | null;
+  fallbackBranchName: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EmsStagingJotformCatalogueInput = {
+  key: string;
+  required: boolean;
+  lookupRole: EmsStagingJotformAnswerRole | null;
+};
+
+export type EmsStagingJotformFieldMap = {
+  id: string;
+  inputKey: string;
+  questionKey: string;
+  sortOrder: number;
+};
+
+export type EmsStagingJotformFieldDefault = {
+  inputKey: string;
+  value: string;
+};
+
+export type EmsStagingJotformFormDetail = EmsStagingJotformForm & {
+  catalogue: EmsStagingJotformCatalogueInput[];
+  fields: EmsStagingJotformFieldMap[];
+  defaults: EmsStagingJotformFieldDefault[];
+};
+
+export type EmsStagingJotformAnswerMap = {
+  id: string;
+  formId: string;
+  fieldMapId: string;
+  role: EmsStagingJotformAnswerRole;
+  answerText: string;
+  targetId: string | null;
+  targetValue: string | null;
+  targetName: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EmsStagingJotformSubmission = {
+  id: string;
+  submissionId: string | null;
+  receivedAt: string;
+  answers: Array<{ label: string; value: string }>;
+};
+
+export function normalizeEmsJotformForm(
+  payload: unknown
+): EmsStagingJotformForm | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  if (
+    typeof record.id !== "string" ||
+    !record.id ||
+    typeof record.form_id !== "string" ||
+    !record.form_id ||
+    typeof record.name !== "string" ||
+    !record.name ||
+    !JOTFORM_TARGETS.includes(
+      record.target as EmsStagingJotformTarget
+    ) ||
+    (record.fallback_branch_id !== null &&
+      record.fallback_branch_id !== undefined &&
+      typeof record.fallback_branch_id !== "string") ||
+    typeof record.fallback_branch_name !== "string" ||
+    typeof record.enabled !== "boolean" ||
+    typeof record.created_at !== "string" ||
+    !record.created_at ||
+    typeof record.updated_at !== "string" ||
+    !record.updated_at
+  ) {
+    return null;
+  }
+  return {
+    id: record.id,
+    formId: record.form_id,
+    name: record.name,
+    target: record.target as EmsStagingJotformTarget,
+    fallbackBranchId: nullableString(record.fallback_branch_id),
+    fallbackBranchName: record.fallback_branch_name,
+    enabled: record.enabled,
+    createdAt: record.created_at,
+    updatedAt: record.updated_at,
+  };
+}
+
+export function normalizeEmsJotformFormPage(
+  payload: unknown
+): EmsStagingPage<EmsStagingJotformForm> | null {
+  return normalizeEmsPage(payload, normalizeEmsJotformForm);
+}
+
+export function normalizeEmsJotformFormDetail(
+  payload: unknown
+): EmsStagingJotformFormDetail | null {
+  const form = normalizeEmsJotformForm(payload);
+  if (!form) return null;
+  const record = payload as Record<string, unknown>;
+  if (
+    !Array.isArray(record.catalogue) ||
+    !Array.isArray(record.fields) ||
+    !Array.isArray(record.defaults)
+  ) {
+    return null;
+  }
+  const catalogue = normalizeRows(
+    record.catalogue,
+    (value): EmsStagingJotformCatalogueInput | null => {
+      if (!value || typeof value !== "object") return null;
+      const input = value as Record<string, unknown>;
+      if (
+        typeof input.key !== "string" ||
+        !input.key ||
+        typeof input.required !== "boolean" ||
+        (input.lookup_role !== undefined &&
+          input.lookup_role !== null &&
+          !JOTFORM_ANSWER_ROLES.includes(
+            input.lookup_role as EmsStagingJotformAnswerRole
+          ))
+      ) {
+        return null;
+      }
+      return {
+        key: input.key,
+        required: input.required,
+        lookupRole:
+          (input.lookup_role as EmsStagingJotformAnswerRole | undefined) ??
+          null,
+      };
+    }
+  );
+  const fields = normalizeRows(
+    record.fields,
+    (value): EmsStagingJotformFieldMap | null => {
+      if (!value || typeof value !== "object") return null;
+      const field = value as Record<string, unknown>;
+      if (
+        typeof field.id !== "string" ||
+        !field.id ||
+        typeof field.input_key !== "string" ||
+        !field.input_key ||
+        typeof field.question_key !== "string" ||
+        !field.question_key ||
+        !Number.isSafeInteger(field.sort_order)
+      ) {
+        return null;
+      }
+      return {
+        id: field.id,
+        inputKey: field.input_key,
+        questionKey: field.question_key,
+        sortOrder: field.sort_order as number,
+      };
+    }
+  );
+  const defaults = normalizeRows(
+    record.defaults,
+    (value): EmsStagingJotformFieldDefault | null => {
+      if (!value || typeof value !== "object") return null;
+      const row = value as Record<string, unknown>;
+      if (
+        typeof row.input_key !== "string" ||
+        !row.input_key ||
+        typeof row.value !== "string"
+      ) {
+        return null;
+      }
+      return { inputKey: row.input_key, value: row.value };
+    }
+  );
+  if (!catalogue || !fields || !defaults) return null;
+  return { ...form, catalogue, fields, defaults };
+}
+
+export function normalizeEmsJotformFormTitle(
+  payload: unknown
+): { name: string } | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.name !== "string" || !record.name) return null;
+  return { name: record.name };
+}
+
+export function normalizeEmsJotformAnswerMap(
+  payload: unknown
+): EmsStagingJotformAnswerMap | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  if (
+    typeof record.id !== "string" ||
+    !record.id ||
+    typeof record.form_id !== "string" ||
+    !record.form_id ||
+    typeof record.field_map_id !== "string" ||
+    !record.field_map_id ||
+    !JOTFORM_ANSWER_ROLES.includes(
+      record.role as EmsStagingJotformAnswerRole
+    ) ||
+    typeof record.answer_text !== "string" ||
+    (record.target_id !== null &&
+      record.target_id !== undefined &&
+      typeof record.target_id !== "string") ||
+    (record.target_value !== null &&
+      record.target_value !== undefined &&
+      typeof record.target_value !== "string") ||
+    typeof record.target_name !== "string" ||
+    typeof record.created_at !== "string" ||
+    !record.created_at ||
+    typeof record.updated_at !== "string" ||
+    !record.updated_at
+  ) {
+    return null;
+  }
+  return {
+    id: record.id,
+    formId: record.form_id,
+    fieldMapId: record.field_map_id,
+    role: record.role as EmsStagingJotformAnswerRole,
+    answerText: record.answer_text,
+    targetId: nullableString(record.target_id),
+    targetValue: nullableString(record.target_value),
+    targetName: record.target_name,
+    createdAt: record.created_at,
+    updatedAt: record.updated_at,
+  };
+}
+
+export function normalizeEmsJotformAnswerMaps(
+  payload: unknown
+): EmsStagingJotformAnswerMap[] | null {
+  if (!Array.isArray(payload)) return null;
+  const items = payload.map(normalizeEmsJotformAnswerMap);
+  return items.some(item => item === null)
+    ? null
+    : (items as EmsStagingJotformAnswerMap[]);
+}
+
+export function normalizeEmsJotformSubmission(
+  payload: unknown
+): EmsStagingJotformSubmission | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  if (
+    typeof record.id !== "string" ||
+    !record.id ||
+    !isNullableString(record.submission_id) ||
+    typeof record.received_at !== "string" ||
+    !record.received_at ||
+    !Array.isArray(record.answers) ||
+    record.answers.some(
+      answer =>
+        !answer ||
+        typeof answer !== "object" ||
+        typeof (answer as Record<string, unknown>).label !== "string" ||
+        typeof (answer as Record<string, unknown>).value !== "string"
+    )
+  ) {
+    return null;
+  }
+  return {
+    id: record.id,
+    submissionId: nullableString(record.submission_id),
+    receivedAt: record.received_at,
+    answers: (record.answers as Array<Record<string, unknown>>).map(
+      answer => ({
+        label: answer.label as string,
+        value: answer.value as string,
+      })
+    ),
+  };
+}
+
+export function normalizeEmsJotformSubmissionPage(
+  payload: unknown
+): EmsStagingPage<EmsStagingJotformSubmission> | null {
+  return normalizeEmsPage(payload, normalizeEmsJotformSubmission);
 }
 
 export function normalizeEmsLeadGroup(
@@ -4883,6 +5223,111 @@ export function createEmsStagingClient(options: EmsStagingClientOptions) {
       return request<unknown>(
         `/custom-fields/${encodeURIComponent(fieldId)}/enable`,
         { method: "POST", token }
+      );
+    },
+    jotformForms(token: string, query: EmsStagingListQuery = {}) {
+      return request<unknown>(`/jotform-forms${listQuery(query)}`, { token });
+    },
+    createJotformForm(token: string, body: Record<string, unknown>) {
+      return request<unknown>("/jotform-forms", {
+        method: "POST",
+        token,
+        body,
+      });
+    },
+    jotformFormTitle(token: string, formId: string) {
+      const params = new URLSearchParams({ form_id: formId });
+      return request<unknown>(`/jotform-forms/title?${params.toString()}`, {
+        token,
+      });
+    },
+    jotformForm(token: string, rowId: string) {
+      return request<unknown>(
+        `/jotform-forms/${encodeURIComponent(rowId)}`,
+        { token }
+      );
+    },
+    patchJotformForm(
+      token: string,
+      rowId: string,
+      body: Record<string, unknown>
+    ) {
+      return request<unknown>(
+        `/jotform-forms/${encodeURIComponent(rowId)}`,
+        { method: "PATCH", token, body }
+      );
+    },
+    replaceJotformFormFields(
+      token: string,
+      rowId: string,
+      body: Record<string, unknown>
+    ) {
+      return request<unknown>(
+        `/jotform-forms/${encodeURIComponent(rowId)}/fields`,
+        { method: "PUT", token, body }
+      );
+    },
+    deleteJotformFormField(
+      token: string,
+      rowId: string,
+      fieldMapId: string
+    ) {
+      return request<unknown>(
+        `/jotform-forms/${encodeURIComponent(rowId)}/fields/${encodeURIComponent(fieldMapId)}`,
+        { method: "DELETE", token }
+      );
+    },
+    jotformFormSubmissions(
+      token: string,
+      rowId: string,
+      query: EmsStagingListQuery = {}
+    ) {
+      return request<unknown>(
+        `/jotform-forms/${encodeURIComponent(rowId)}/submissions${listQuery(query)}`,
+        { token }
+      );
+    },
+    jotformFormSubmission(
+      token: string,
+      rowId: string,
+      submissionId: string
+    ) {
+      return request<unknown>(
+        `/jotform-forms/${encodeURIComponent(rowId)}/submissions/${encodeURIComponent(submissionId)}`,
+        { token }
+      );
+    },
+    jotformAnswerMaps(
+      token: string,
+      filters: { formId?: string; role?: string } = {}
+    ) {
+      const params = new URLSearchParams();
+      if (filters.formId) params.set("form_id", filters.formId);
+      if (filters.role) params.set("role", filters.role);
+      const suffix = params.size ? `?${params.toString()}` : "";
+      return request<unknown>(`/jotform-answer-maps${suffix}`, { token });
+    },
+    createJotformAnswerMap(token: string, body: Record<string, unknown>) {
+      return request<unknown>("/jotform-answer-maps", {
+        method: "POST",
+        token,
+        body,
+      });
+    },
+    patchJotformAnswerMap(
+      token: string,
+      mapId: string,
+      body: Record<string, unknown>
+    ) {
+      return request<unknown>(
+        `/jotform-answer-maps/${encodeURIComponent(mapId)}`,
+        { method: "PATCH", token, body }
+      );
+    },
+    deleteJotformAnswerMap(token: string, mapId: string) {
+      return request<unknown>(
+        `/jotform-answer-maps/${encodeURIComponent(mapId)}`,
+        { method: "DELETE", token }
       );
     },
     students(token: string, query: EmsStagingListQuery = {}) {

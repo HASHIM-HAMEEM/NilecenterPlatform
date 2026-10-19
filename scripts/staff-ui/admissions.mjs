@@ -78,7 +78,7 @@ try {
   }
   await waitFor(".staff-segments");
   await settle(page);
-  step("leads list renders with stage tabs", (await page.locator(".staff-segments .staff-segment").count()) === 8);
+  step("leads list renders with stage tabs", (await page.locator(".staff-segments-scroll .staff-segment").count()) === 8);
   step(
     "Admissions group shows in the sidebar",
     (await page.locator(".staff-nav-group-label", { hasText: "Admissions" }).count()) === 1

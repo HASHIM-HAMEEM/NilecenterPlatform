@@ -300,7 +300,6 @@ export default function StaffProfilePage() {
     <>
       <PageHeader
         title={copy.profile.title}
-        description={copy.profile.description}
       />
       <DetailsCard />
       <PasswordCard />

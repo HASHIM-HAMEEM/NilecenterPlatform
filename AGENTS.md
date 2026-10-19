@@ -65,8 +65,8 @@ Do not duplicate or infer that status in companion files.
 Current QA baseline:
 
 - Portal QA: 375 checks, 0 failures.
-- Staff browser suites (`npm run qa:staff`): 25 suites, 0 failures. That is
-  17 functional suites, the responsive gate in each of the six languages
+- Staff browser suites (`npm run qa:staff`): 28 suites, 0 failures. That is
+  20 functional suites, the responsive gate in each of the six languages
   (en, ar, tr, zh, ru, ur), and the light/dark contrast gate in en and ar.
 - This baseline must not be broken.
 
@@ -301,15 +301,32 @@ Use the commands that exist in `package.json`:
   ur status = اسٹیٹس, yesterday/tomorrow = گزشتہ کل / آئندہ کل. "SSA" and
   `booking.branches[].value` stay untranslated. Quran verses use established
   translations (Ma Jian for Chinese, Kuliev for Russian).
-- The public booking pages (`/book-free-trial`, `/book-placement-test`) keep
-  their own six-language design but submit into the published Nile Forms
-  `free-trial-enquiry` and `placement-request`, so requests appear in staff
-  Forms › Responses with "Create lead". Their question and choice ids are a
-  contract with `BookingForm`; republish them with
+- The public booking pages keep their own six-language design.
+  `/book-placement-test` embeds Nile Center's real Jotform form
+  `223611105769555` ("Book a Placement Test") via `JotformEmbed`. Submissions
+  are stored in Jotform, and reach EMS as review bookings only once the
+  backend team configures the Jotform webhook and registers the form under
+  Jotform in the staff app.
+  `/book-free-trial` submits into the published Nile Form
+  `free-trial-enquiry`, so requests appear in staff Forms › Responses with
+  "Create lead". Its question and choice ids are a contract with
+  `BookingForm`; republish it with
   `npx tsx scripts/staff-ui/publish-booking-forms.mts` (`STAFF_UI_BASE` picks
   the site). A single-choice question built with "Use our branch list" files
   each request under that EMS branch for its registrars. Never post public
   requests to `/api/platform/records`: production stores it under `/tmp`.
+  Never submit the live Jotform form from tests or QA runs.
+- EMS facts the admissions UI relies on: one lead per email, any status
+  (`POST /leads` returns 409 "Email is already in use", case-insensitive); a
+  lead may share a student's email. List `q` search matches email and name
+  fields one at a time, not phone. A sale joins a class only when fully paid
+  and the student has a Moodle account; a completed sale blocks selling the
+  same course again. `usePeopleMatches` and `recommendedNext` encode these.
+  Lead stages: staff may set In process, Follow up and Future registration;
+  booking a test or trial moves the lead there and cancelling moves it to
+  Follow up; Registered only comes from becoming a student (PATCH returns
+  400); Lost needs `lost_reason_id`. The Leads board (`pipeline.ts`
+  `dropAction`) follows these rules.
 - Nile Forms in the unified staff app (`/app/forms`) needs
   `NILE_FORMS_NCC_WRITES_ENABLED=1` for NCC staff writes (author, publish,
   review, fill). Reads work without it. The compatibility forms store is

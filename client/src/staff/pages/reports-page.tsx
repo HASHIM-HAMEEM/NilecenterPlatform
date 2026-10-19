@@ -204,9 +204,7 @@ function ReportNotice({
           {fill(R.truncated, { n: fmt(5000), total: fmt(total) })}
         </p>
       ) : null}
-      <p className="staff-muted">
-        {footnote} {R.liveFootnote}
-      </p>
+      <p className="staff-muted">{footnote}</p>
     </footer>
   );
 }
@@ -1322,7 +1320,6 @@ export default function ReportsPage() {
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={R.title}
-        description={R.description}
         actions={
           <button
             type="button"

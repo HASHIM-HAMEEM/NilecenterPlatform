@@ -17,6 +17,9 @@ import { copy } from "../copy";
 import { canSetAssignee } from "../roles";
 import { FormValidationError, runAction } from "../run-action";
 import { useStaffSession } from "../session";
+import { EMAIL_PATTERN, suggestedLeadType } from "../people-matches";
+import { PossibleMatches, usePeopleMatches } from "../ui/possible-matches";
+import { DateOfBirthField } from "../ui/date-of-birth-field";
 import { FormSheet, StaffField } from "../ui/form-sheet";
 import { MultiSelect } from "../ui/multi-select";
 import {
@@ -28,7 +31,6 @@ import {
 
 const L = copy.admissions.leads;
 const NONE = "__none";
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const LEAD_TYPES: NccLeadDto["leadType"][] = [
   "new",
@@ -58,6 +60,8 @@ type Draft = {
   areaOfStudyId: string;
   source: string;
   notes: string;
+  dateOfBirth: string;
+  nationality: string;
   assignedSsaId: string;
   leadType: NccLeadDto["leadType"];
 };
@@ -75,6 +79,8 @@ function draftFrom(lead: NccLeadDto | null, branchId: string): Draft {
     areaOfStudyId: lead?.areaOfStudyId ?? "",
     source: lead?.source ?? "",
     notes: lead?.notes ?? "",
+    dateOfBirth: lead?.dateOfBirth ?? "",
+    nationality: lead?.nationality ?? "",
     assignedSsaId: lead?.assignedSsaId ?? "",
     leadType: lead?.leadType ?? "new",
   };
@@ -103,6 +109,12 @@ export function leadPatch(before: Draft, after: Draft): NccLeadWriteInput {
   }
   if (after.source.trim() !== before.source) patch.source = blank(after.source);
   if (after.notes.trim() !== before.notes) patch.notes = blank(after.notes);
+  if (after.dateOfBirth !== before.dateOfBirth) {
+    patch.dateOfBirth = after.dateOfBirth || null;
+  }
+  if (after.nationality !== before.nationality) {
+    patch.nationality = after.nationality || null;
+  }
   if (after.assignedSsaId !== before.assignedSsaId) {
     patch.assignedSsaId = after.assignedSsaId || null;
   }
@@ -162,13 +174,36 @@ export function LeadForm({
         ? null
         : L.invalidEmail,
     branchId: pickBranch && !draft.branchId && !lead ? L.chooseBranch : null,
+    nationality:
+      draft.nationality && !/^[A-Z]{3}$/.test(draft.nationality)
+        ? copy.admissions.identity.invalidNationality
+        : null,
   };
   const invalid = Object.values(errors).some(Boolean);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
+  // New leads check email and name; an edit only rechecks a changed email.
+  const emailChanged = draft.email.trim() !== initial.email.trim();
+  const people = usePeopleMatches(
+    {
+      email: lead && !emailChanged ? "" : draft.email,
+      firstName: lead ? "" : draft.firstName,
+      lastName: lead ? "" : draft.lastName,
+    },
+    {
+      enabled: open,
+      exclude: { leadId: lead?.id, studentId: lead?.studentId },
+      byName: !lead,
+    }
+  );
+  const returning = suggestedLeadType(people.matches);
+  // EMS keeps one lead per email (any status), so this cannot be saved.
+  const leadTaken = people.matches.some(
+    match => match.kind === "lead" && match.strength === "email"
+  );
 
   async function submit() {
     setAttempted(true);
-    if (invalid) throw new FormValidationError();
+    if (invalid || leadTaken) throw new FormValidationError();
     setSaving(true);
     setFieldErrors(undefined);
     try {
@@ -191,6 +226,12 @@ export function LeadForm({
               preferredCourseIds: draft.preferredCourseIds,
               source: blank(draft.source),
               notes: blank(draft.notes),
+              ...(draft.dateOfBirth
+                ? { dateOfBirth: draft.dateOfBirth }
+                : {}),
+              ...(draft.nationality
+                ? { nationality: draft.nationality }
+                : {}),
               leadType: draft.leadType,
               ...(draft.areaOfStudyId
                 ? { areaOfStudyId: draft.areaOfStudyId }
@@ -226,7 +267,13 @@ export function LeadForm({
       dirty={dirty}
       saving={saving}
       fieldErrors={fieldErrors}
-      saveLabel={lead ? copy.catalog.shared.saveChanges : L.createSubmit}
+      saveLabel={
+        lead
+          ? copy.catalog.shared.saveChanges
+          : people.strong && !leadTaken
+            ? copy.admissions.matches.createAnyway
+            : L.createSubmit
+      }
       onSubmit={() =>
         runAction(submit, { success: lead ? L.updatedToast : L.createdToast })
       }
@@ -264,7 +311,11 @@ export function LeadForm({
           <StaffField
             label={L.email}
             htmlFor="lead-email"
-            error={show(errors.email) ?? errorFor("email")}
+            error={
+              (leadTaken ? copy.admissions.matches.leadTaken : null) ??
+              show(errors.email) ??
+              errorFor("email")
+            }
           >
             <input
               id="lead-email"
@@ -275,6 +326,22 @@ export function LeadForm({
               onChange={event => set("email", event.target.value)}
             />
           </StaffField>
+          <PossibleMatches
+            matches={people.matches}
+            context={leadTaken ? "leadTaken" : "lead"}
+            action={
+              returning && !leadTaken && draft.leadType !== returning ? (
+                <button
+                  type="button"
+                  className="staff-btn"
+                  data-size="sm"
+                  onClick={() => set("leadType", returning)}
+                >
+                  {copy.admissions.matches.markReturning}
+                </button>
+              ) : null
+            }
+          />
           <StaffField
             label={L.phone}
             htmlFor="lead-phone"
@@ -289,6 +356,31 @@ export function LeadForm({
               onChange={event => set("phone", event.target.value)}
             />
           </StaffField>
+          <div className="grid grid-cols-2 gap-3">
+            <DateOfBirthField
+              label={L.dateOfBirth}
+              value={draft.dateOfBirth}
+              onChange={value => set("dateOfBirth", value)}
+              error={errorFor("date_of_birth")}
+              optional
+            />
+            <StaffField
+              label={L.nationality}
+              htmlFor="lead-nationality"
+              error={show(errors.nationality) ?? errorFor("nationality")}
+            >
+              <input
+                id="lead-nationality"
+                className="staff-input staff-ltr"
+                maxLength={3}
+                placeholder="EGY"
+                value={draft.nationality}
+                onChange={event =>
+                  set("nationality", event.target.value.toUpperCase())
+                }
+              />
+            </StaffField>
+          </div>
 
           {pickBranch && !lead ? (
             <StaffField label={L.branch} error={show(errors.branchId)}>

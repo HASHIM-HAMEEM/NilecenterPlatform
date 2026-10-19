@@ -53,8 +53,10 @@ const vars = (values: Record<string, string | number>) => values as CSSPropertie
 export default function PublicSitePage({ mode, slug }: { mode: PublicMode; slug?: string }) {
   const [locale, setLocale] = usePublicLocale();
   const page =
-    mode === "trial" || mode === "placement" ? (
+    mode === "trial" ? (
       <BookingForm type={mode} locale={locale} />
+    ) : mode === "placement" ? (
+      <PlacementBooking locale={locale} />
     ) : mode === "verify" ? (
       <CertificateVerification locale={locale} />
     ) : mode === "course" || (mode === "catalog" && slug) ? (
@@ -681,6 +683,130 @@ function BookingForm({ type, locale }: PageProps & { type: "trial" | "placement"
               </button>
             </form>
           )}
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* ---------------- Placement: embedded Jotform ------------------------ */
+
+/**
+ * The real Jotform form in Nile Center's account. Changing this id changes
+ * what visitors fill in; never point it at a test form in production.
+ */
+const JOTFORM_PLACEMENT_ID = "223611105769555";
+const JOTFORM_MIN_HEIGHT = 640;
+const JOTFORM_LOAD_TIMEOUT_MS = 15000;
+
+function JotformEmbed({ locale }: PageProps) {
+  const t = PUBLIC_COPY[locale].booking;
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(JOTFORM_MIN_HEIGHT);
+  const [loaded, setLoaded] = useState(false);
+  const [alive, setAlive] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+  const formUrl = `https://form.jotform.com/${JOTFORM_PLACEMENT_ID}`;
+  // onLoad also fires for browser error pages (blocked/offline), so "alive"
+  // is what the timeout checks: a real Jotform embed always posts setHeight.
+  const failed = timedOut && !alive;
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      let host = "";
+      try {
+        host = new URL(event.origin).hostname;
+      } catch {
+        return;
+      }
+      if (host !== "jotform.com" && !host.endsWith(".jotform.com")) return;
+      if (event.source !== frameRef.current?.contentWindow) return;
+      const data = typeof event.data === "string" ? event.data : "";
+      const heightMatch = /^setHeight:(\d+)(?::(\d+))?$/.exec(data);
+      if (heightMatch) {
+        // A form id, when present, must be ours before we trust the number.
+        if (heightMatch[2] && heightMatch[2] !== JOTFORM_PLACEMENT_ID) return;
+        const next = Math.max(JOTFORM_MIN_HEIGHT, Number(heightMatch[1]));
+        if (Number.isFinite(next) && next <= 20000) setHeight(next);
+        setAlive(true);
+        return;
+      }
+      if (data === "scrollIntoView" || data.startsWith("scrollIntoView:")) {
+        setAlive(true);
+        frameRef.current?.scrollIntoView({ block: "start" });
+      }
+    };
+    window.addEventListener("message", onMessage);
+    const timer = window.setTimeout(
+      () => setTimedOut(true),
+      JOTFORM_LOAD_TIMEOUT_MS
+    );
+    return () => {
+      window.removeEventListener("message", onMessage);
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  return (
+    <div className="pp-card pp-embed">
+      {locale !== "en" ? (
+        <p className="pp-embed-note">{t.jotformNote}</p>
+      ) : null}
+      {failed ? (
+        <div className="pp-embed-fallback" role="status">
+          <MessageCircle aria-hidden="true" />
+          <p>{t.unavailable}</p>
+          <div className="lp-actions">
+            <a
+              href={whatsapp(PHONE_ONSITE)}
+              target="_blank"
+              rel="noreferrer"
+              className="lp-btn"
+              data-variant="primary"
+            >
+              {PUBLIC_COPY[locale].faq.whatsapp}
+            </a>
+            <a
+              href={formUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="lp-btn"
+            >
+              {t.jotformOpen}
+            </a>
+          </div>
+        </div>
+      ) : (
+        <div className="pp-embed-body">
+          {!loaded ? <div className="pp-embed-skel" aria-hidden="true" /> : null}
+          <iframe
+            ref={frameRef}
+            src={`${formUrl}?isIframeEmbed=1`}
+            title={t.jotformTitle}
+            referrerPolicy="strict-origin-when-cross-origin"
+            className="pp-embed-frame"
+            style={{ blockSize: height }}
+            onLoad={() => setLoaded(true)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlacementBooking({ locale }: PageProps) {
+  const t = PUBLIC_COPY[locale].booking;
+  return (
+    <>
+      <PageHero
+        eyebrow={t.placementEyebrow}
+        title={t.placementTitle}
+        lead={t.placementLead}
+        tone={PETAL_COLOURS[2]}
+      />
+      <section className="lp-section pp-narrow-section">
+        <div className="lp-wrap pp-narrow">
+          <JotformEmbed locale={locale} />
         </div>
       </section>
     </>

@@ -336,13 +336,69 @@ html.staff-ui .sr-only {
   grid-template-columns: var(--sidebar) minmax(0, 1fr);
 }
 
-.staff-shell[data-sidebar="collapsed"] {
+.staff-shell[data-rail] {
   grid-template-columns: var(--rail) minmax(0, 1fr);
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .staff-shell {
     transition: grid-template-columns 260ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  .staff-sidebar {
+    transition:
+      inline-size 260ms cubic-bezier(0.2, 0, 0, 1),
+      box-shadow 200ms var(--ease-out);
+  }
+  .staff-brand {
+    transition: padding-inline 260ms cubic-bezier(0.2, 0, 0, 1);
+  }
+  .staff-nav-link {
+    transition:
+      padding-inline 260ms cubic-bezier(0.2, 0, 0, 1),
+      background-color 150ms var(--ease-out),
+      color 150ms var(--ease-out);
+  }
+  .staff-nav-icon {
+    transition:
+      inline-size 260ms cubic-bezier(0.2, 0, 0, 1),
+      block-size 260ms cubic-bezier(0.2, 0, 0, 1);
+  }
+}
+
+/* ---------- Page entrance ---------------------------------------------- */
+/* A page's sections (header, tools, content) rise in 100ms apart on its first
+   paint. Sections that appear later enter at once. Reduced motion fades. */
+.staff-enter {
+  display: contents;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .staff-enter > :not(:only-child),
+  .staff-enter > :only-child > * {
+    animation: staff-enter 300ms var(--ease-out) both;
+  }
+  .staff-enter[data-entering] > :nth-child(2):not(:only-child),
+  .staff-enter[data-entering] > :only-child > :nth-child(2) {
+    animation-delay: 100ms;
+  }
+  .staff-enter[data-entering] > :nth-child(n + 3),
+  .staff-enter[data-entering] > :only-child > :nth-child(n + 3) {
+    animation-delay: 200ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staff-enter > :not(:only-child),
+  .staff-enter > :only-child > * {
+    animation: ui-fade-in 200ms linear both;
+  }
+}
+
+@keyframes staff-enter {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    translate: 0 12px;
   }
 }
 
@@ -384,26 +440,155 @@ html.staff-ui .sr-only {
   }
 }
 
-/* Collapsed: an icon rail. Labels stay for screen readers. */
-.staff-shell[data-sidebar="collapsed"] .staff-sidebar {
-  align-items: center;
-  padding-inline: 0.625rem;
-  overflow-x: hidden;
+/* Rail: the same sidebar, narrowed. Icons keep their place while the width
+   animates and labels fade, so nothing jumps. Peeking widens the rail over
+   the page (the grid column stays narrow, so the page does not move). */
+.staff-shell[data-rail] .staff-sidebar {
+  inline-size: var(--rail);
 }
 
-.staff-shell[data-sidebar="collapsed"] .staff-sidebar-head {
-  flex-direction: column;
-  gap: 0.75rem;
+.staff-shell[data-rail][data-peek] .staff-sidebar {
+  inline-size: var(--sidebar);
+  z-index: 40;
+  border-inline-end: 1px solid var(--line);
+  box-shadow: var(--shadow-overlay);
+}
+
+.staff-brand-text,
+.staff-nav-label,
+.staff-nav-group-text,
+.staff-nav-group-count {
+  transition: opacity 200ms var(--ease-out) 60ms;
+}
+
+.staff-shell[data-sidebar="collapsed"] :is(
+    .staff-brand-text,
+    .staff-nav-label,
+    .staff-nav-group-text,
+    .staff-nav-group-count,
+    .staff-nav-group-caret
+  ) {
+  opacity: 0;
+  transition-duration: 120ms;
+  transition-delay: 0ms;
+}
+
+/* The brand mark doubles as the expand button on the rail: the toggle sits
+   over it, showing on hover or keyboard focus (a tap on touch expands). */
+.staff-sidebar-head {
+  position: relative;
+}
+
+.staff-sidebar-toggle {
+  transition-property: background-color, color, opacity;
 }
 
 .staff-shell[data-sidebar="collapsed"] .staff-brand {
-  padding-inline: 0;
+  padding-inline: 0.375rem;
 }
 
-.staff-shell[data-sidebar="collapsed"] .staff-brand-text,
-.staff-shell[data-sidebar="collapsed"] .staff-nav-label,
-.staff-shell[data-sidebar="collapsed"] .staff-nav-group-label,
-.staff-shell[data-sidebar="collapsed"] .staff-user-meta {
+.staff-shell[data-sidebar="collapsed"] .staff-sidebar-toggle {
+  position: absolute;
+  inset-inline-start: 0.375rem;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  opacity: 0;
+  background: var(--paper-sunk);
+}
+
+.staff-shell[data-sidebar="collapsed"] .staff-sidebar-toggle:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .staff-shell[data-sidebar="collapsed"] .staff-sidebar-head:hover .staff-sidebar-toggle {
+    opacity: 1;
+  }
+}
+
+/* Centre the icon in the rail; padding and size ease with the width. */
+.staff-shell[data-sidebar="collapsed"] .staff-nav-link {
+  padding-inline: 0.8125rem;
+}
+
+.staff-shell[data-sidebar="collapsed"] .staff-nav-icon {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+}
+
+/* Group names give way to a short divider; the row keeps its height. */
+.staff-shell[data-sidebar="collapsed"] .staff-nav .staff-nav-group-label {
+  visibility: hidden;
+  transition:
+    visibility 0s linear 120ms,
+    color var(--t-press) var(--ease-out),
+    background-color var(--t-press) var(--ease-out);
+}
+
+.staff-nav .staff-nav-group-label::before {
+  content: "";
+  position: absolute;
+  inset-inline: calc(50% - 0.625rem);
+  inset-block-start: 50%;
+  block-size: 1px;
+  background: var(--line);
+  opacity: 0;
+  visibility: visible;
+  transition: opacity 120ms var(--ease-out);
+}
+
+.staff-shell[data-sidebar="collapsed"] .staff-nav-group:not(:first-child) .staff-nav-group-label::before {
+  opacity: 1;
+  transition-delay: 120ms;
+}
+
+/* A folded group's pages fly out beside its heading on hover. Portaled to
+   the body, so the sidebar's clip and scroll never cut it. */
+.staff-nav-flyout {
+  position: fixed;
+  z-index: 60;
+  min-inline-size: 13rem;
+  max-inline-size: 18rem;
+  padding: 0.375rem;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--r-md) + 0.375rem);
+  background: var(--paper-card);
+  box-shadow: var(--shadow-overlay);
+}
+
+.staff-nav-flyout-title {
+  padding: 0.25rem 0.625rem 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+html.staff-ui:is(:lang(ar), :lang(ur)) .staff-nav-flyout-title {
+  font-size: 0.8125rem;
+}
+
+.staff-nav-flyout .staff-nav-link[data-active="true"] {
+  background: rgb(var(--tint-rgb) / 0.06);
+}
+
+/* The heading whose pages are showing keeps its hover look. */
+.staff-nav .staff-nav-group-label[data-flyout-open] {
+  background: rgb(var(--tint-rgb) / 0.04);
+  color: var(--ink-2);
+}
+
+/* The footer stays compact on the rail, peeking or not, lined up with the
+   page icons. Name and role stay for screen readers. */
+.staff-shell[data-rail] .staff-sidebar-footer {
+  align-items: flex-start;
+  inline-size: 100%;
+}
+
+.staff-shell[data-rail] .staff-sidebar-footer .staff-rail-btn {
+  margin-inline-start: 0.375rem;
+}
+
+.staff-shell[data-rail] .staff-user-meta {
   position: absolute;
   inline-size: 1px;
   block-size: 1px;
@@ -412,75 +597,19 @@ html.staff-ui .sr-only {
   white-space: nowrap;
 }
 
-.staff-shell[data-sidebar="collapsed"] .staff-nav {
-  gap: 0.75rem;
-  inline-size: 100%;
-}
-
-.staff-shell[data-sidebar="collapsed"] .staff-nav-group + .staff-nav-group {
-  padding-block-start: 0.75rem;
-  border-block-start: 1px solid var(--line);
-}
-
-.staff-shell[data-sidebar="collapsed"] .staff-nav-link {
-  justify-content: center;
-  inline-size: 2.75rem;
-  block-size: 2.5rem;
-  margin-inline: auto;
-  padding-inline: 0;
-}
-
-.staff-shell[data-sidebar="collapsed"] .staff-nav-icon {
-  inline-size: 1.125rem;
-  block-size: 1.125rem;
-}
-
-.staff-shell[data-sidebar="collapsed"] .staff-sidebar-footer {
-  align-items: center;
-  inline-size: 100%;
-}
-
-.staff-shell[data-sidebar="collapsed"] .staff-user-trigger {
+.staff-shell[data-rail] .staff-user-trigger {
   justify-content: center;
   inline-size: 2.75rem;
   padding: 0;
 }
 
-/* Rail tooltip: fixed beside the rail, so its scroll never clips it. */
-.staff-rail-tip {
-  position: fixed;
-  inset-inline-start: calc(var(--rail) + 0.5rem);
-  z-index: 60;
-  translate: 0 -50%;
-  padding: 0.3125rem 0.625rem;
-  border-radius: var(--r-sm);
-  background: var(--ink);
-  color: var(--paper);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  white-space: nowrap;
-  pointer-events: none;
-  box-shadow: var(--shadow-overlay);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .staff-rail-tip {
-    animation: staff-tip-in 120ms var(--ease-out);
-  }
-}
-
-@keyframes staff-tip-in {
-  from {
-    opacity: 0;
-  }
-}
-
 .staff-sidebar {
   position: sticky;
   inset-block-start: 0;
+  z-index: 1;
+  inline-size: var(--sidebar);
   block-size: 100dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -522,6 +651,7 @@ html.staff-ui .sr-only {
 }
 
 .staff-brand-name {
+  white-space: nowrap;
   font-size: 1rem;
   font-weight: 600;
   line-height: 1.2;
@@ -545,11 +675,72 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-brand-sub {
   text-transform: none;
 }
 
+/* Only the page list scrolls, so the brand and your account stay put. The
+   scrollbar shows while the pointer is over it, and the edges fade while
+   there is more to scroll. Negative margins give the active pill's shadow
+   room inside the scroll clip. */
 .staff-nav {
   display: flex;
   flex: 1;
   flex-direction: column;
   gap: 1.5rem;
+  min-block-size: 0;
+  margin-inline: -0.375rem;
+  padding: 0.125rem 0.375rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+@media (hover: hover) {
+  .staff-nav:hover,
+  .staff-nav:focus-within {
+    scrollbar-color: rgb(var(--tint-rgb) / 0.24) transparent;
+  }
+}
+
+@property --staff-nav-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --staff-nav-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@supports (animation-timeline: scroll()) {
+  .staff-nav {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 var(--staff-nav-fade-start),
+      #000 calc(100% - var(--staff-nav-fade-end)),
+      transparent
+    );
+    animation: staff-nav-fade linear both;
+    animation-timeline: scroll(self);
+  }
+}
+
+@keyframes staff-nav-fade {
+  from {
+    --staff-nav-fade-start: 0px;
+    --staff-nav-fade-end: 1.5rem;
+  }
+  8%,
+  92% {
+    --staff-nav-fade-start: 1.5rem;
+    --staff-nav-fade-end: 1.5rem;
+  }
+  to {
+    --staff-nav-fade-start: 1.5rem;
+    --staff-nav-fade-end: 0px;
+  }
 }
 
 /* Group label doubles as the fold toggle for its pages. Two classes so it
@@ -571,6 +762,7 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-brand-sub {
   text-align: start;
   color: var(--ink-3);
   cursor: pointer;
+  position: relative;
   transition-property: color, background-color;
   transition-duration: var(--t-press);
   transition-timing-function: var(--ease-out);
@@ -607,7 +799,9 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-brand-sub {
   inline-size: 0.875rem;
   block-size: 0.875rem;
   flex-shrink: 0;
-  transition: rotate 200ms var(--ease);
+  transition:
+    rotate 200ms var(--ease),
+    opacity 200ms var(--ease-out) 60ms;
 }
 
 .staff-nav-group[data-folded] .staff-nav-group-caret {
@@ -645,10 +839,6 @@ html[dir="rtl"] .staff-nav-group[data-folded] .staff-nav-group-caret {
   .staff-nav-group-caret {
     transition: none;
   }
-}
-
-.staff-shell[data-sidebar="collapsed"] .staff-nav-group-label {
-  display: none;
 }
 
 .staff-shell[data-sidebar="collapsed"] .staff-nav-fold {
@@ -1537,6 +1727,90 @@ html.staff-ui input[type="radio"] {
   box-shadow: var(--shadow-card);
 }
 
+/* Sticky unsaved-changes bar (Jotform setup and similar editors). */
+.staff-dirtybar {
+  position: sticky;
+  inset-block-end: 1rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-card);
+}
+
+/* Binary on/off control — see kit.tsx Switch. */
+.staff-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  inline-size: 2.75rem;
+  block-size: 1.5rem;
+  padding: 0.125rem;
+  flex-shrink: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper-sunk);
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out;
+}
+
+/* Halo extends the 24px track to a 44px hit area (WCAG 2.5.8). */
+.staff-switch::after {
+  content: "";
+  position: absolute;
+  inset: -0.625rem -0.5rem;
+}
+
+@media (hover: hover) {
+  .staff-switch:not(:disabled):hover {
+    border-color: var(--ink-3);
+  }
+}
+
+.staff-switch[data-on] {
+  border-color: var(--positive);
+  background: var(--positive);
+  color: #fff;
+}
+
+.staff-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.staff-switch-thumb {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+  transition: transform 150ms ease-out;
+}
+
+.staff-switch[data-on] .staff-switch-thumb {
+  transform: translateX(1.25rem);
+}
+
+html.staff-ui:is(:lang(ar), :lang(ur)) .staff-switch[data-on] .staff-switch-thumb {
+  transform: translateX(-1.25rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staff-switch,
+  .staff-switch-thumb {
+    transition: none;
+  }
+}
+
 .staff-card dl {
   margin: 0;
 }
@@ -1559,6 +1833,140 @@ html.staff-ui input[type="radio"] {
   border-radius: var(--r-md);
   background: var(--paper-sunk);
   font-size: 0.9375rem;
+}
+
+/* "Already in Nile Learn": people who may be the one being added. The same
+   email reads as a caution; the same name is a quiet hint. Rows are inner
+   cards, so the panel radius is theirs plus the panel padding. */
+.staff-matches {
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--r-md) + 0.75rem);
+  background: var(--paper-sunk);
+}
+
+.staff-matches[data-strength="email"] {
+  border-color: color-mix(in srgb, var(--caution) 35%, transparent);
+  background: color-mix(in oklab, var(--caution) 8%, var(--paper-raised));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .staff-matches {
+    animation: staff-matches-in 200ms var(--ease-out) both;
+  }
+}
+
+@keyframes staff-matches-in {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+
+.staff-matches-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-inline: 0.25rem;
+}
+
+.staff-matches-head > svg {
+  inline-size: 1rem;
+  block-size: 1rem;
+  flex-shrink: 0;
+  color: var(--ink-3);
+}
+
+.staff-matches[data-strength="email"] .staff-matches-head > svg {
+  color: var(--caution);
+}
+
+.staff-matches-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.staff-matches-hint,
+.staff-matches-more {
+  margin: 0;
+  padding-inline: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+.staff-matches-more {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+}
+
+.staff-matches-list {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.staff-match {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--paper-card);
+}
+
+.staff-match-body {
+  display: grid;
+  gap: 0.125rem;
+  min-inline-size: 0;
+}
+
+.staff-match-name,
+.staff-match-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-match-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.staff-match-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+}
+
+.staff-match-kind {
+  padding-inline: 0.4375rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  color: var(--ink-2);
+}
+
+.staff-match-email {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+}
+
+.staff-matches-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-inline: 0.25rem;
 }
 
 .staff-banner[data-tone="success"] {
@@ -3375,7 +3783,8 @@ html[dir="rtl"] .staff-fact {
 /* ---------- Responsive ------------------------------------------------- */
 /* Below 900px the canvas is full-bleed and the sidebar becomes the Sheet. */
 @media (max-width: 899px) {
-  .staff-shell {
+  .staff-shell,
+  .staff-shell[data-rail] {
     grid-template-columns: minmax(0, 1fr);
   }
   .staff-sidebar {
@@ -3820,6 +4229,32 @@ fieldset.staff-field {
   margin-inline-start: auto;
 }
 
+/* Recommended next course: the course is the headline, the reason below. */
+.staff-next-text .staff-recommend-course {
+  font-family: var(--font-title);
+  font-weight: 600;
+  font-size: 1.375rem;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.staff-next-text .staff-recommend-why {
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+.staff-next-text .staff-recommend-line {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--river);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .staff-recommend {
+    animation: staff-matches-in 240ms var(--ease-out) both;
+  }
+}
+
 /* Detail page two-column body: work on the start side, facts on the end. */
 .staff-detail-grid {
   display: grid;
@@ -4125,13 +4560,44 @@ html.staff-ui[dir="rtl"] .staff-detail-contact {
 }
 
 .staff-choice-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.375rem;
   font-size: 0.8125rem;
   color: var(--ink-2);
   white-space: nowrap;
 }
 
+/* How full a class is, under its seats-left count. */
+.staff-seat-meter {
+  display: block;
+  inline-size: 4.5rem;
+  block-size: 0.25rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(var(--tint-rgb) / 0.08);
+}
+
+.staff-seat-meter > span {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--river);
+}
+
+.staff-seat-meter[data-full] > span {
+  background: var(--critical);
+}
+
 .staff-guardian-row {
   gap: 0.25rem 1rem;
+}
+
+/* A long guardian email wraps instead of pushing a phone screen sideways. */
+.staff-guardian-row > span {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Printable academic report. */
@@ -5216,6 +5682,69 @@ a.staff-agenda-name:hover {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Review-schedule sheet: compact inset summary of the visitor's request. */
+.staff-request {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--paper-sunk);
+}
+
+.staff-request-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.staff-request dl {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, max-content) minmax(0, 1fr);
+  column-gap: 1rem;
+  row-gap: 0.375rem;
+  margin: 0;
+}
+
+.staff-request-row {
+  display: contents;
+}
+
+.staff-request dt {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+}
+
+.staff-request dd {
+  margin: 0;
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639px) {
+  .staff-request dl {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .staff-request-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+}
+
+/* Jotform setup: answer-link table + add row, capped; controls match the
+   text input (buttons inherit 1rem, overriding .ui-field's 0.9375rem). */
+.staff-answers-panel {
+  max-inline-size: 46rem;
+}
+
+.staff-answers-panel .ui-select {
+  font-size: 0.9375rem;
+  line-height: 1.3;
 }
 
 .staff-map-row {
@@ -6818,5 +7347,454 @@ fieldset.staff-dob {
     line-height: 1.25;
     white-space: normal;
     text-align: start;
+  }
+}
+
+/* ---------- Leads pipeline board -------------------------------------- */
+/* Open stages share the width; closed stages (Registered, Lost) start
+   folded into slim rails, so the working stages fit on one screen. Cards sit
+   in each column's padding, so the column radius is theirs plus it. */
+.staff-view-switch {
+  flex-shrink: 0;
+}
+
+.staff-view-switch .staff-segment > svg {
+  inline-size: 0.9375rem;
+  block-size: 0.9375rem;
+}
+
+.staff-board-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-inline-size: 0;
+}
+
+.staff-board {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-block-end: 0.5rem;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.staff-board-col {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-inline-size: 12rem;
+  padding: 0.375rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--r-md) + 0.375rem);
+  background: color-mix(in oklab, var(--paper-sunk) 75%, var(--paper));
+  scroll-snap-align: start;
+  transition-property: background-color, border-color, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.staff-board-col[data-over][data-drop="ok"] {
+  border-color: color-mix(in srgb, var(--river) 45%, transparent);
+  background: color-mix(in oklab, var(--river) 9%, var(--paper-sunk));
+}
+
+/* Dim the column's own content, not the note that may float beside it. */
+.staff-board-col[data-drop="blocked"] > :not(.staff-board-ghost-float) {
+  opacity: 0.5;
+}
+
+.staff-board-col > * {
+  transition: opacity 150ms var(--ease-out);
+}
+
+.staff-board-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 2.25rem;
+  padding: 0.25rem 0.25rem 0.375rem 0.5rem;
+}
+
+.staff-board-dot {
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--ink-3);
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 0%, transparent);
+}
+
+.staff-board-col[data-stage="follow_up"] .staff-board-dot {
+  background: var(--caution);
+}
+
+.staff-board-col:is([data-stage="placement_test"], [data-stage="trial_lesson"]) .staff-board-dot {
+  background: var(--river);
+}
+
+.staff-board-col[data-stage="future_registration"] .staff-board-dot {
+  background: var(--ink-2);
+}
+
+.staff-board-col[data-stage="registered"] .staff-board-dot {
+  background: var(--positive);
+}
+
+.staff-board-col[data-stage="lost"] .staff-board-dot {
+  background: var(--critical);
+}
+
+/* Two classes so it outranks the app-wide h2 size. */
+.staff-board .staff-board-title {
+  min-inline-size: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.staff-board-count {
+  flex: 1;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.staff-board-fold {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  flex-shrink: 0;
+}
+
+.staff-board-fold > svg {
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
+}
+
+@media (hover: hover) {
+  .staff-board-col:not([data-folded], :hover, :focus-within) .staff-board-fold {
+    visibility: hidden;
+  }
+}
+
+/* Folded: a slim rail with the count and the stage name running down it. */
+.staff-board-col[data-folded] {
+  flex: 0 0 2.75rem;
+  min-inline-size: 2.75rem;
+  align-self: stretch;
+  max-block-size: 22rem;
+}
+
+.staff-board-col[data-folded] .staff-board-head {
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.125rem 0 0.5rem;
+}
+
+.staff-board-col[data-folded] .staff-board-fold {
+  order: -1;
+}
+
+.staff-board-col[data-folded] .staff-board-count {
+  flex: none;
+}
+
+.staff-board .staff-board-col[data-folded] .staff-board-title {
+  overflow: visible;
+  writing-mode: vertical-rl;
+  text-overflow: clip;
+}
+
+.staff-board-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-block-size: 9rem;
+  max-block-size: calc(100dvh - 15rem);
+  padding: 0.125rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.staff-board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.staff-board-card {
+  position: relative;
+  display: grid;
+  min-inline-size: 0;
+  gap: 0.5rem;
+  padding: 0.625rem 0.625rem 0.6875rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  border-radius: var(--r-md);
+  background: var(--paper-card);
+  box-shadow: 0 1px 2px rgb(var(--tint-rgb) / 0.05);
+  cursor: grab;
+  transition-property: box-shadow, border-color, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.staff-board-card:active {
+  cursor: grabbing;
+}
+
+.staff-board-card:not([draggable="true"]) {
+  cursor: default;
+}
+
+.staff-board-card[data-selected] {
+  border-color: var(--river);
+  box-shadow: 0 0 0 1px var(--river);
+}
+
+@media (hover: hover) {
+  .staff-board-card:hover {
+    border-color: var(--line);
+    box-shadow: var(--shadow-raised);
+  }
+  .staff-board-card[data-selected]:hover {
+    border-color: var(--river);
+    box-shadow:
+      0 0 0 1px var(--river),
+      var(--shadow-raised);
+  }
+}
+
+.staff-board-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+/* Avatar and tick box share one spot. */
+.staff-board-pick {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.staff-board-check {
+  position: absolute;
+  inset: 0;
+  inline-size: 1rem;
+  block-size: 1rem;
+  margin: auto;
+  accent-color: var(--river);
+  visibility: hidden;
+}
+
+@media (hover: hover) {
+  .staff-board-card:is(:hover, :focus-within, [data-selecting], [data-selected])
+    .staff-board-pick
+    > .staff-avatar {
+    visibility: hidden;
+  }
+  .staff-board-card:is(:hover, :focus-within, [data-selecting], [data-selected])
+    .staff-board-check {
+    visibility: visible;
+  }
+}
+
+@media (hover: none) {
+  .staff-board-pick > .staff-avatar {
+    visibility: hidden;
+  }
+  .staff-board-check {
+    visibility: visible;
+  }
+}
+
+.staff-board-name {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The menu floats over the card's corner on hover, so names use the width. */
+.staff-board-menu {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 0.4375rem;
+  inset-inline-end: 0.375rem;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: var(--r-sm);
+  background: var(--paper-card);
+  box-shadow: 0 0 0 4px var(--paper-card);
+}
+
+@media (hover: none) {
+  .staff-board-card-top:has(.staff-board-menu) .staff-board-name {
+    padding-inline-end: 1.75rem;
+  }
+}
+
+@media (hover: hover) {
+  .staff-board-card:not(:hover, :focus-within) .staff-board-menu:not([data-state="open"]) {
+    visibility: hidden;
+  }
+}
+
+.staff-board-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  font-size: 0.75rem;
+  color: var(--ink-2);
+}
+
+.staff-board-owner {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-board-owner[data-none] {
+  color: var(--ink-3);
+}
+
+.staff-board-branch {
+  flex-shrink: 0;
+  padding: 0 0.3125rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.125rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+}
+
+.staff-board-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  min-inline-size: 0;
+}
+
+.staff-board-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0 0.4375rem;
+  border-radius: var(--r-sm);
+  background: rgb(var(--tint-rgb) / 0.05);
+  max-inline-size: 100%;
+  padding-block: 0.125rem;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  color: var(--ink-2);
+}
+
+.staff-board-chip > svg {
+  inline-size: 0.8125rem;
+  block-size: 0.8125rem;
+  flex-shrink: 0;
+}
+
+.staff-board-chip[data-tone="river"] {
+  background: color-mix(in oklab, var(--river) 10%, var(--paper-raised));
+  color: var(--river);
+}
+
+.staff-board-chip[data-tone="caution"] {
+  background: color-mix(in oklab, var(--caution) 10%, var(--paper-raised));
+  color: var(--caution);
+}
+
+/* Where a dragged card would land, shown only in the column under it. */
+.staff-board-ghost {
+  display: grid;
+  place-items: center;
+  min-block-size: 3.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 1.5px dashed var(--river);
+  border-radius: var(--r-md);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+  color: var(--river);
+}
+
+.staff-board-col {
+  position: relative;
+}
+
+.staff-board-ghost-float {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 2.5rem;
+  inset-inline-end: calc(100% + 0.5rem);
+  inline-size: 12rem;
+  border-style: solid;
+  background: var(--paper-card);
+  box-shadow: var(--shadow-overlay);
+  pointer-events: none;
+}
+
+.staff-board-ghost[data-state="blocked"] {
+  border-color: var(--line-input);
+  color: var(--ink-2);
+}
+
+.staff-board-empty {
+  margin: 0;
+  padding: 1.5rem 0.75rem;
+  font-size: 0.8125rem;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+.staff-board-skel {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.staff-board-skel > span {
+  display: block;
+  block-size: 4.5rem;
+  border-radius: var(--r-md);
+  background: rgb(var(--tint-rgb) / 0.05);
+}
+
+.staff-board-more {
+  align-self: center;
+}
+
+@media (max-width: 639px) {
+  .staff-board {
+    scroll-snap-type: x mandatory;
+  }
+  .staff-board-col:not([data-folded]) {
+    flex: 0 0 85%;
+  }
+  .staff-board-body {
+    max-block-size: none;
   }
 }

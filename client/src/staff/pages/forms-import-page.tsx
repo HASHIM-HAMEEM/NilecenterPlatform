@@ -93,7 +93,7 @@ export default function FormsImportPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <PageHeader title={I.title} description={I.description} />
+      <PageHeader title={I.title} />
       {!status.data.configured ? (
         <p className="staff-banner" data-tone="caution" role="status">
           {I.notConnected}

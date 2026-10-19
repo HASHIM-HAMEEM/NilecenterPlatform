@@ -120,7 +120,6 @@ export default function StaffNotificationsPage() {
     <>
       <PageHeader
         title={copy.notifications.title}
-        description={copy.notifications.description}
         actions={
           <>
             <button

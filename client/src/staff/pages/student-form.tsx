@@ -28,12 +28,13 @@ import { FormSheet, StaffField } from "../ui/form-sheet";
 import type { StaffSecret } from "../ui/secret-dialog";
 import { useAssignees, useBranches } from "./admissions-ui";
 import { IdentityFields } from "./booking-sheets";
+import { EMAIL_PATTERN } from "../people-matches";
+import { PossibleMatches, usePeopleMatches } from "../ui/possible-matches";
 
 const S = copy.admissions.students;
 const L = copy.admissions.leads;
 const $ = copy.admissions.money;
 const NONE = "__none";
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function identityFrom(student: NccStudentDto | null): IdentityInput {
   const guardians = (student?.guardians ?? []).map(guardian => ({
@@ -132,6 +133,19 @@ export function StudentForm({
             : null,
   };
   const identityErrors = validateIdentity(draft.identity);
+  const people = usePeopleMatches(
+    {
+      email:
+        student && draft.email.trim() === initial.email.trim() ? "" : draft.email,
+      firstName: student ? "" : draft.firstName,
+      lastName: student ? "" : draft.lastName,
+    },
+    {
+      enabled: open,
+      exclude: { studentId: student?.id },
+      byName: !student,
+    }
+  );
 
   async function submit() {
     setAttempted(true);
@@ -214,7 +228,13 @@ export function StudentForm({
       dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
       saving={saving}
       fieldErrors={fieldErrors}
-      saveLabel={student ? copy.catalog.shared.saveChanges : S.createSubmit}
+      saveLabel={
+        student
+          ? copy.catalog.shared.saveChanges
+          : people.strong
+            ? copy.admissions.matches.createAnyway
+            : S.createSubmit
+      }
       onSubmit={() =>
         runAction(submit, {
           success: student ? S.updatedToast : S.createdToast,
@@ -262,6 +282,10 @@ export function StudentForm({
               onChange={event => set("email", event.target.value)}
             />
           </StaffField>
+          <PossibleMatches
+            matches={people.matches}
+            context={student ? "record" : "student"}
+          />
           <StaffField
             label={L.phone}
             htmlFor="student-phone"

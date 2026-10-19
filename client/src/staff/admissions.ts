@@ -1,4 +1,5 @@
 import type {
+  NccEnrolmentDto,
   NccLeadDto,
   NccPlacementTestDto,
   NccRegistrationDto,
@@ -112,6 +113,62 @@ export function leadJourney(
             : "later",
       student: isStudent ? "done" : next === "convert" ? "now" : "later",
     },
+  };
+}
+
+/* ---------------- Recommended course -------------------------------- */
+
+export type Recommendation = {
+  courseId: string;
+  courseName: string;
+  source: "placement" | "trial";
+  completedAt: string | null;
+  score: string | null;
+  mentor: string | null;
+};
+
+type Recommending = Pick<
+  NccPlacementTestDto | NccTrialLessonDto,
+  "status" | "recommendedCourseId" | "recommendedCourseName" | "resultScore" | "completedAt"
+> & { mentoringTeacherName?: string | null };
+
+/**
+ * The course the latest completed placement test or trial lesson recommends,
+ * unless the student already has a live sale for it (a cancelled or left
+ * sale does not count, since EMS allows a new one after those).
+ */
+export function recommendedNext(
+  placements: Recommending[],
+  trials: Recommending[],
+  enrolments: Array<Pick<NccEnrolmentDto, "courseId" | "status">>
+): Recommendation | null {
+  const results = [
+    ...placements.map(item => ({ item, source: "placement" as const })),
+    ...trials.map(item => ({ item, source: "trial" as const })),
+  ]
+    .filter(
+      ({ item }) => item.status === "completed" && item.recommendedCourseId
+    )
+    .sort((a, b) =>
+      (b.item.completedAt ?? "").localeCompare(a.item.completedAt ?? "")
+    );
+  const latest = results[0];
+  if (!latest) return null;
+  const courseId = latest.item.recommendedCourseId as string;
+  const sold = enrolments.some(
+    sale =>
+      sale.courseId === courseId &&
+      sale.status !== "cancelled" &&
+      sale.status !== "left"
+  );
+  if (sold) return null;
+  return {
+    courseId,
+    courseName: latest.item.recommendedCourseName ?? "",
+    source: latest.source,
+    completedAt: latest.item.completedAt,
+    score: latest.item.resultScore,
+    mentor: latest.item.mentoringTeacherName ?? null,
   };
 }
 

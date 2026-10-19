@@ -154,7 +154,6 @@ export default function StudentsPage() {
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={S.title}
-        description={S.description}
         actions={
           <button
             type="button"

@@ -192,7 +192,6 @@ export default function EnrolmentsPage() {
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={E.title}
-        description={E.description}
         actions={
           <button
             type="button"

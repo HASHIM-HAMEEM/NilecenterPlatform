@@ -3,13 +3,14 @@ import {
   Suspense,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "wouter";
-import { MotionConfig, motion } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { Building2, ChevronDown, Menu, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import {
   fetchAuthWorkspacesRequest,
@@ -61,9 +62,11 @@ import { StaffNotificationsBell } from "./staff-notifications";
 import { RoleViewChip } from "./role-view-bar";
 import {
   isTypingTarget,
+  RAIL_LEAVE,
   setSidebarCollapsed,
   toggleGroupFolded,
   useFoldedGroups,
+  useRailPeek,
   useSidebarCollapsed,
 } from "./sidebar-state";
 import { THEME_PREFERENCES, setThemePreference, useThemePreference } from "@/lib/theme";
@@ -138,42 +141,9 @@ function Brand() {
   );
 }
 
-/**
- * Floating label for the icon rail. Portaled to `document.body` because the
- * sticky sidebar forms its own stacking context — a fixed child still paints
- * under `.staff-main`.
- */
-function useRailTip(enabled: boolean) {
-  const [tip, setTip] = useState<{ label: string; top: number } | null>(null);
-  const [path] = useLocation();
-  useEffect(() => {
-    setTip(null);
-  }, [enabled, path]);
-  const show = (label: string) => (event: { currentTarget: HTMLElement }) => {
-    if (!enabled) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    setTip({ label, top: rect.top + rect.height / 2 });
-  };
-  const showFocus =
-    (label: string) => (event: { currentTarget: HTMLElement }) => {
-      // Only keyboard focus opens the label; mouse press already navigates.
-      if (event.currentTarget.matches(":focus-visible")) show(label)(event);
-    };
-  const node = tip
-    ? createPortal(
-        <span className="staff-rail-tip" role="tooltip" style={{ insetBlockStart: tip.top }}>
-          {tip.label}
-        </span>,
-        document.body
-      )
-    : null;
-  return { show, showFocus, hide: () => setTip(null), node };
-}
-
 function NavList({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   const { session } = useStaffSession();
   const [path] = useLocation();
-  const tip = useRailTip(collapsed);
   const foldedGroups = useFoldedGroups();
   const role = session?.ncc?.activeRole ?? "teacher";
   const sections = staffNavForRole(role);
@@ -186,6 +156,17 @@ function NavList({ onNavigate, collapsed = false }: { onNavigate?: () => void; c
           (item.href !== "/app" && path.startsWith(item.href + "/"))),
     )
     .sort((a, b) => b.href.length - a.href.length)[0];
+  const navRef = useRef<HTMLElement>(null);
+
+  const flyout = useGroupFlyout(path);
+
+  // Keep the current page in view when the list is taller than the screen.
+  useEffect(() => {
+    navRef.current
+      ?.querySelector<HTMLElement>('.staff-nav-link[data-active="true"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [bestMatch?.href]);
+  const flyoutSection = sections.find(section => section.id === flyout.state?.id);
 
   const renderItem = (item: (typeof sections)[number]["items"][number]) => {
     const active = bestMatch?.href === item.href;
@@ -197,10 +178,6 @@ function NavList({ onNavigate, collapsed = false }: { onNavigate?: () => void; c
           data-active={active}
           aria-current={active ? "page" : undefined}
           onClick={onNavigate}
-          onPointerEnter={tip.show(item.label)}
-          onPointerLeave={tip.hide}
-          onFocus={tip.showFocus(item.label)}
-          onBlur={tip.hide}
         >
           {active ? (
             <motion.span
@@ -218,7 +195,12 @@ function NavList({ onNavigate, collapsed = false }: { onNavigate?: () => void; c
   };
 
   return (
-    <nav className="staff-nav" aria-label={copy.shell.staffNav}>
+    <nav
+      ref={navRef}
+      className="staff-nav"
+      aria-label={copy.shell.staffNav}
+      onScroll={flyout.state ? flyout.close : undefined}
+    >
       {sections.map(section => {
         // The icon rail always shows every icon; folding is for the full sidebar.
         const folded = !collapsed && foldedGroups.has(section.id);
@@ -231,7 +213,26 @@ function NavList({ onNavigate, collapsed = false }: { onNavigate?: () => void; c
               className="staff-nav-group-label"
               aria-expanded={!folded}
               aria-controls={listId}
-              onClick={() => toggleGroupFolded(section.id)}
+              aria-haspopup={folded ? "true" : undefined}
+              data-flyout-open={flyout.state?.id === section.id || undefined}
+              onClick={() => {
+                flyout.close();
+                toggleGroupFolded(section.id);
+              }}
+              onPointerEnter={event => {
+                if (folded && event.pointerType === "mouse")
+                  flyout.openSoon(section.id, event.currentTarget);
+              }}
+              onPointerLeave={event => {
+                if (event.pointerType === "mouse") flyout.closeSoon();
+              }}
+              onKeyDown={event => {
+                const inward = document.documentElement.dir === "rtl" ? "ArrowLeft" : "ArrowRight";
+                if (folded && event.key === inward) {
+                  event.preventDefault();
+                  flyout.openNow(section.id, event.currentTarget, true);
+                }
+              }}
             >
               <span className="staff-nav-group-text">{section.label}</span>
               {folded ? (
@@ -255,8 +256,173 @@ function NavList({ onNavigate, collapsed = false }: { onNavigate?: () => void; c
           </div>
         );
       })}
-      {tip.node}
+      {createPortal(
+        <AnimatePresence>
+          {flyout.state && flyoutSection ? (
+            <GroupFlyout
+              key={flyoutSection.id}
+              label={flyoutSection.label}
+              items={flyoutSection.items}
+              activeHref={bestMatch?.href}
+              anchor={flyout.state.anchor}
+              focusFirst={flyout.state.focus}
+              onPointerEnter={flyout.cancelClose}
+              onPointerLeave={flyout.closeSoon}
+              onClose={returnFocus => {
+                const anchor = flyout.state?.anchor;
+                flyout.close();
+                if (returnFocus) anchor?.focus();
+              }}
+              onNavigate={() => {
+                flyout.close();
+                onNavigate?.();
+              }}
+            />
+          ) : null}
+        </AnimatePresence>,
+        document.body
+      )}
     </nav>
+  );
+}
+
+/** Dwell before a folded group's pages fly out, and grace before they close. */
+const FLYOUT_OPEN_MS = 120;
+const FLYOUT_CLOSE_MS = 200;
+
+function useGroupFlyout(path: string) {
+  const [state, setState] = useState<{
+    id: string;
+    anchor: HTMLElement;
+    focus: boolean;
+  } | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const clear = () => window.clearTimeout(timer.current);
+
+  useEffect(() => {
+    clear();
+    setState(null);
+  }, [path]);
+  useEffect(() => clear, []);
+
+  return {
+    state,
+    openNow(id: string, anchor: HTMLElement, focus = false) {
+      clear();
+      setState({ id, anchor, focus });
+    },
+    openSoon(id: string, anchor: HTMLElement) {
+      clear();
+      // Moving between headings while one is open swaps at once.
+      if (state) setState({ id, anchor, focus: false });
+      else
+        timer.current = window.setTimeout(
+          () => setState({ id, anchor, focus: false }),
+          FLYOUT_OPEN_MS
+        );
+    },
+    closeSoon() {
+      clear();
+      timer.current = window.setTimeout(() => setState(null), FLYOUT_CLOSE_MS);
+    },
+    cancelClose: clear,
+    close() {
+      clear();
+      setState(null);
+    },
+  };
+}
+
+/**
+ * A folded group's pages, shown beside its heading while the pointer rests
+ * on it. Nothing in the sidebar moves; the current page is marked.
+ */
+function GroupFlyout({
+  label,
+  items,
+  activeHref,
+  anchor,
+  focusFirst,
+  onPointerEnter,
+  onPointerLeave,
+  onClose,
+  onNavigate,
+}: {
+  label: string;
+  items: ReturnType<typeof staffNavForRole>[number]["items"];
+  activeHref: string | undefined;
+  anchor: HTMLElement;
+  focusFirst: boolean;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
+  onClose: (returnFocus: boolean) => void;
+  onNavigate: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const rtl = document.documentElement.dir === "rtl";
+  const head = anchor.getBoundingClientRect();
+  const side = (anchor.closest(".staff-sidebar") ?? anchor).getBoundingClientRect();
+  const [top, setTop] = useState(head.top - 8);
+
+  // Keep the card on screen when the heading sits low.
+  useLayoutEffect(() => {
+    const height = ref.current?.offsetHeight ?? 0;
+    setTop(Math.max(8, Math.min(head.top - 8, window.innerHeight - height - 8)));
+    if (focusFirst) ref.current?.querySelector<HTMLElement>("a")?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <motion.div
+      ref={ref}
+      className="staff-nav-flyout"
+      role="group"
+      aria-label={label}
+      style={
+        rtl
+          ? { top, right: window.innerWidth - side.left + 8, transformOrigin: "right top" }
+          : { top, left: side.right + 8, transformOrigin: "left top" }
+      }
+      initial={{ opacity: 0, scale: 0.96, x: rtl ? 6 : -6 }}
+      animate={{ opacity: 1, scale: 1, x: 0 }}
+      exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.1 } }}
+      transition={{ type: "spring", duration: 0.22, bounce: 0 }}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={event => {
+        if (event.pointerType !== "mouse") return;
+        onPointerLeave();
+        const next = event.relatedTarget;
+        if (!(next instanceof Element && next.closest(".staff-sidebar")))
+          window.dispatchEvent(new Event(RAIL_LEAVE));
+      }}
+      onKeyDown={event => {
+        if (event.key === "Escape" || event.key === (rtl ? "ArrowRight" : "ArrowLeft")) {
+          event.preventDefault();
+          onClose(true);
+        }
+      }}
+    >
+      <div className="staff-nav-flyout-title">{label}</div>
+      <ul className="staff-nav-list">
+        {items.map(item => {
+          const active = activeHref === item.href;
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                className="staff-nav-link"
+                data-active={active}
+                aria-current={active ? "page" : undefined}
+                onClick={onNavigate}
+              >
+                <item.icon className="staff-nav-icon" strokeWidth={1.75} aria-hidden />
+                <span className="staff-nav-label">{item.label}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </motion.div>
   );
 }
 
@@ -483,6 +649,24 @@ function UserMenu({ session, compact = false }: { session: AuthSessionDto; compa
   );
 }
 
+/**
+ * A page's sections arrive in order (header, tools, content) once its code
+ * has loaded. The window only staggers the first paint; a section that
+ * appears later, such as a list replacing its loading rows, enters at once.
+ */
+function PageEnter({ children }: { children: ReactNode }) {
+  const [entering, setEntering] = useState(true);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setEntering(false), 600);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return (
+    <div className="staff-enter" data-entering={entering || undefined}>
+      {children}
+    </div>
+  );
+}
+
 function SidebarFooter({ session, compact = false }: { session: AuthSessionDto; compact?: boolean }) {
   return (
     <div className="staff-sidebar-footer">
@@ -687,6 +871,14 @@ export function StaffShell({
   const collapsedRef = useRef(collapsed);
   collapsedRef.current = collapsed;
   const toggleHint = `${collapsed ? copy.shell.expandSidebar : copy.shell.collapseSidebar} ([)`;
+  const peek = useRailPeek(collapsed);
+  // The rail opens over the page while peeking; the page keeps its width.
+  const railVisual = collapsed && !peek.open;
+
+  const toggleSidebar = () => {
+    peek.close({ untilLeave: true });
+    setSidebarCollapsed(!collapsed);
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -712,14 +904,19 @@ export function StaffShell({
     <MotionConfig reducedMotion="user">
       <StaffCrumbContext.Provider value={setCrumb}>
       <StaffParentContext.Provider value={setParentOverride}>
-        <div className="staff-app staff-shell" data-sidebar={collapsed ? "collapsed" : "expanded"}>
-          <aside className="staff-sidebar">
+        <div
+          className="staff-app staff-shell"
+          data-sidebar={railVisual ? "collapsed" : "expanded"}
+          data-rail={collapsed || undefined}
+          data-peek={peek.open || undefined}
+        >
+          <aside className="staff-sidebar" {...peek.handlers}>
             <div className="staff-sidebar-head">
               <Brand />
               <button
                 type="button"
                 className="staff-sidebar-toggle"
-                onClick={() => setSidebarCollapsed(!collapsed)}
+                onClick={toggleSidebar}
                 aria-label={collapsed ? copy.shell.expandSidebar : copy.shell.collapseSidebar}
                 aria-expanded={!collapsed}
                 title={toggleHint}
@@ -731,7 +928,8 @@ export function StaffShell({
                 )}
               </button>
             </div>
-            <NavList collapsed={collapsed} />
+            <NavList collapsed={railVisual} />
+            {/* The footer stays compact while peeking, so its menus keep their anchor. */}
             {session ? <SidebarFooter session={session} compact={collapsed} /> : null}
           </aside>
 
@@ -777,7 +975,9 @@ export function StaffShell({
 
             <main className="staff-content" key={location}>
               {/* A page still downloading suspends here, so the shell and its theme stay put. */}
-              <Suspense fallback={<LoadingCenter />}>{children}</Suspense>
+              <Suspense fallback={<LoadingCenter />}>
+                <PageEnter>{children}</PageEnter>
+              </Suspense>
             </main>
           </div>
 

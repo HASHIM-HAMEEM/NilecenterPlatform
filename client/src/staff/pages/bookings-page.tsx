@@ -114,9 +114,6 @@ export function BookingsAgenda({ kind }: { kind: Kind }) {
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={kind === "placement" ? A.placementsTitle : A.trialsTitle}
-        description={
-          kind === "placement" ? A.placementsDescription : A.trialsDescription
-        }
       />
       <div className="staff-toolbar">
         <ServerSegments

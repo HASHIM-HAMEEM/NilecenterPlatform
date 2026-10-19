@@ -157,7 +157,6 @@ export default function MoodleSitePage() {
     <div className="flex min-w-0 flex-col gap-5">
       <header className="flex flex-col gap-1">
         <h1 className="staff-page-header">{C.title}</h1>
-        <p className="staff-muted max-w-prose">{C.description}</p>
       </header>
 
       <section className="staff-card">

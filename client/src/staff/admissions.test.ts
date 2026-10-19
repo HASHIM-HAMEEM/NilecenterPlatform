@@ -5,6 +5,7 @@ import {
   leadJourney,
   paidShare,
   parseAmount,
+  recommendedNext,
   validateIdentity,
   type IdentityInput,
 } from "./admissions";
@@ -298,5 +299,43 @@ describe("enrolment actions", async () => {
     expect(
       Object.values(enrolmentActions(sale("cancelled"))).some(Boolean)
     ).toBe(false);
+  });
+});
+
+describe("recommendedNext", () => {
+  const result = (over: Record<string, unknown>) => ({
+    status: "completed" as const,
+    recommendedCourseId: "c1",
+    recommendedCourseName: "Arabic 2",
+    resultScore: "78",
+    completedAt: "2026-10-10T10:00:00Z",
+    ...over,
+  });
+
+  it("takes the latest completed result that recommends a course", () => {
+    const next = recommendedNext(
+      [result({ completedAt: "2026-10-01T10:00:00Z", recommendedCourseId: "old" })],
+      [result({ recommendedCourseId: "c2", recommendedCourseName: "Quran 1" })],
+      []
+    );
+    expect(next).toMatchObject({ courseId: "c2", courseName: "Quran 1", source: "trial" });
+  });
+
+  it("ignores open, cancelled and recommendation-free results", () => {
+    expect(
+      recommendedNext(
+        [result({ status: "scheduled" }), result({ status: "cancelled" })],
+        [result({ recommendedCourseId: null })],
+        []
+      )
+    ).toBeNull();
+  });
+
+  it("hides once the course is sold, but not after a cancelled or left sale", () => {
+    const placements = [result({ mentoringTeacherName: "Huda" })];
+    expect(recommendedNext(placements, [], [{ courseId: "c1", status: "pending_payment" }])).toBeNull();
+    expect(
+      recommendedNext(placements, [], [{ courseId: "c1", status: "cancelled" }])
+    ).toMatchObject({ courseId: "c1", mentor: "Huda", score: "78" });
   });
 });

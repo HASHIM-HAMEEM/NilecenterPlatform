@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileText,
+  FormInput,
   DoorOpen,
   GraduationCap,
   LayoutDashboard,
@@ -258,6 +259,13 @@ export function staffNav(): StaffNavGroup[] {
           roles: ["super_admin"],
           available: true,
           icon: Plug,
+        },
+        {
+          label: copy.nav.jotform,
+          href: "/app/jotform",
+          roles: ["super_admin"],
+          available: true,
+          icon: FormInput,
         },
         {
           label: copy.nav.systemHealth,

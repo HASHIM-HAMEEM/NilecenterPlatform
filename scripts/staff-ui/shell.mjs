@@ -26,15 +26,32 @@ try {
   await p.getByRole("button", { name: "Collapse sidebar" }).click();
   await p.waitForTimeout(500);
   const rail = await width();
-  step("collapse folds the sidebar into a rail", rail < 90 && wide > 200, `${wide}px -> ${rail}px`);
-  await p.locator(".staff-nav-link").nth(2).hover();
-  await p.waitForSelector(".staff-rail-tip", { timeout: 5000 }).catch(() => {});
   step(
-    "rail shows a tooltip on hover",
-    (await p.locator(".staff-rail-tip").count()) === 1,
-    await p.locator(".staff-rail-tip").innerText().catch(() => "")
+    "collapse folds the sidebar into a rail (no peek under the cursor that collapsed it)",
+    rail < 90 && wide > 200,
+    `${wide}px -> ${rail}px`
   );
   await p.screenshot({ path: `${suite.out}/shell-rail.png` });
+  const mainX = async () => Math.round((await p.locator(".staff-main").boundingBox()).x);
+  await p.mouse.move(700, 500);
+  await p.waitForTimeout(400);
+  const restX = await mainX();
+  await p.locator(".staff-nav-link").nth(2).hover();
+  await p.waitForTimeout(500);
+  const peekWidth = await width();
+  const labelOpacity = await p
+    .locator(".staff-nav-link .staff-nav-label")
+    .nth(2)
+    .evaluate(el => Number(getComputedStyle(el).opacity));
+  step(
+    "resting on the rail opens it over the page, labels shown, page not moved",
+    peekWidth > 200 && labelOpacity > 0.9 && (await mainX()) === restX,
+    `width ${peekWidth}px, label opacity ${labelOpacity}, main x ${restX} -> ${await mainX()}`
+  );
+  await p.screenshot({ path: `${suite.out}/shell-peek.png` });
+  await p.mouse.move(900, 500);
+  await p.waitForTimeout(700);
+  step("leaving the rail closes the peek", (await width()) < 90, `${await width()}px`);
   await p.reload();
   await p.waitForSelector(".staff-dash");
   await settle(p);

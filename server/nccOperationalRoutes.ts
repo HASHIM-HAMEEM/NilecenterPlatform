@@ -395,6 +395,8 @@ const LEAD_REFERENCE_KEYS = [
   "lostActionReasonId",
   "areaOfStudyId",
   "assignedSsaId",
+  "dateOfBirth",
+  "nationality",
 ] as const;
 
 function leadReferenceError(body: Record<string, unknown>): string | null {
@@ -403,6 +405,22 @@ function leadReferenceError(body: Record<string, unknown>): string | null {
     !LEAD_TYPES.includes(String(body.leadType))
   ) {
     return "leadType is invalid.";
+  }
+  if (
+    body.dateOfBirth !== undefined &&
+    body.dateOfBirth !== null &&
+    (typeof body.dateOfBirth !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(body.dateOfBirth))
+  ) {
+    return "dateOfBirth is invalid.";
+  }
+  if (
+    body.nationality !== undefined &&
+    body.nationality !== null &&
+    (typeof body.nationality !== "string" ||
+      !/^[A-Z]{3}$/.test(body.nationality))
+  ) {
+    return "nationality is invalid.";
   }
   for (const key of [
     "lostReasonId",
@@ -430,6 +448,8 @@ function leadReferenceUpstream(body: Record<string, unknown>) {
     ["lostActionReasonId", "lost_action_reason_id"],
     ["areaOfStudyId", "area_of_study_id"],
     ["assignedSsaId", "assigned_ssa_id"],
+    ["dateOfBirth", "date_of_birth"],
+    ["nationality", "nationality"],
   ] as const) {
     if (body[source] !== undefined) upstream[target] = body[source];
   }
@@ -485,7 +505,7 @@ function isHttpsUrl(value: unknown): value is string {
   }
 }
 
-type ListParam = {
+export type ListParam = {
   /** Browser query name (camelCase). */
   name: string;
   /** EMS query name. */
@@ -500,7 +520,7 @@ const PAGING_KEYS = ["q", "page", "pageSize", "sort", "order"];
  * Validates browser list filters against an allowlist and maps them to EMS
  * query names. Unknown filters are rejected instead of silently dropped.
  */
-function readListQuery(
+export function readListQuery(
   request: OperationalRequest,
   response: OperationalResponse,
   params: ListParam[]
@@ -578,7 +598,7 @@ function readListQuery(
   return out;
 }
 
-function pageBody<T>(page: {
+export function pageBody<T>(page: {
   items: T[];
   total: number;
   page: number;
@@ -2332,6 +2352,7 @@ export function registerNccOperationalRoutes(
           "status",
           "meetingUrl",
           "areaOfStudyId",
+          "placementMoodleCourseId",
           "branchId",
         ],
         { create: false }

@@ -146,11 +146,12 @@ function zoneOffsetMs(utcMs: number, timeZone: string): number {
  * `timeZone`. EMS requires bookings and sessions to start on the hour in the
  * branch time zone, whatever zone the browser is in.
  */
-export function zonedInstant(date: string, hour: number, timeZone: string): string | null {
+export function zonedInstant(date: string, hour: number, timeZone: string, minute = 0): string | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   if (!match || !Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+  if (!Number.isInteger(minute) || minute < 0 || minute > 59) return null;
   try {
-    const wall = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), hour);
+    const wall = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), hour, minute);
     let instant = wall - zoneOffsetMs(wall, timeZone);
     // Second pass settles DST transitions near the guess.
     instant = wall - zoneOffsetMs(instant, timeZone);

@@ -75,6 +75,16 @@ const StaffAreasOfStudyPage = lazy(
 const StaffCustomFieldsPage = lazy(
   () => import("./staff/pages/custom-fields-page")
 );
+const StaffJotformPage = lazy(() => import("./staff/pages/jotform-page"));
+const StaffJotformSetupPage = lazy(
+  () => import("./staff/pages/jotform-setup-page")
+);
+const StaffJotformSubmissionsPage = lazy(
+  () => import("./staff/pages/jotform-submissions-page")
+);
+const StaffJotformSubmissionPage = lazy(
+  () => import("./staff/pages/jotform-submission-page")
+);
 const StaffUsersPage = lazy(() => import("./staff/pages/staff-page"));
 const StaffUserDetailPage = lazy(
   () => import("./staff/pages/staff-detail-page")
@@ -243,11 +253,8 @@ function Router() {
           )}
         </Route>
         <Route path="/book-placement-test">
-          {nileFormsCutoverEnabled ? (
-            <PublicNileFormPage slug="placement-request" />
-          ) : (
-            <PublicSitePage mode="placement" />
-          )}
+          {/* Placement booking moved to the embedded Jotform form. */}
+          <PublicSitePage mode="placement" />
         </Route>
         <Route path="/apply">
           {nileFormsCutoverEnabled ? (
@@ -315,6 +322,18 @@ function Router() {
         </StaffRoute>
         <StaffRoute path="/app/custom-fields">
           <StaffCustomFieldsPage />
+        </StaffRoute>
+        <StaffRoute path="/app/jotform/:rowId/submissions/:submissionId">
+          <StaffJotformSubmissionPage />
+        </StaffRoute>
+        <StaffRoute path="/app/jotform/:rowId/submissions">
+          <StaffJotformSubmissionsPage />
+        </StaffRoute>
+        <StaffRoute path="/app/jotform/:rowId">
+          <StaffJotformSetupPage />
+        </StaffRoute>
+        <StaffRoute path="/app/jotform">
+          <StaffJotformPage />
         </StaffRoute>
         <StaffRoute path="/app/staff/:id">
           <StaffUserDetailPage />

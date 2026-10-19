@@ -328,38 +328,42 @@ export function ListPage<T>({
         </div>
         <div className="staff-toolbar-end">
           {headerActions}
-          <span className="staff-results">
-            {copy.staffUsers.results}: {total}
-          </span>
-          <div className="relative">
-            <button
-              type="button"
-              className="staff-btn"
-              data-size="sm"
-              aria-expanded={pickerOpen}
-              aria-label={copy.actions.columns}
-              onClick={() => setPickerOpen(open => !open)}
-            >
-              <Columns3 strokeWidth={1.75} aria-hidden />
-              {copy.actions.columns}
-            </button>
-            {pickerOpen ? (
-              <div className="staff-menu" role="menu">
-                {columns
-                  .filter(column => !column.always)
-                  .map(column => (
-                    <label key={column.id} className="staff-menu-item">
-                      <input
-                        type="checkbox"
-                        checked={columnIds.includes(column.id)}
-                        onChange={() => toggleColumn(column.id)}
-                      />
-                      {column.label}
-                    </label>
-                  ))}
+          {total > 0 ? (
+            <>
+              <span className="staff-results">
+                {copy.staffUsers.results}: {total}
+              </span>
+              <div className="relative">
+                <button
+                  type="button"
+                  className="staff-btn"
+                  data-size="sm"
+                  aria-expanded={pickerOpen}
+                  aria-label={copy.actions.columns}
+                  onClick={() => setPickerOpen(open => !open)}
+                >
+                  <Columns3 strokeWidth={1.75} aria-hidden />
+                  {copy.actions.columns}
+                </button>
+                {pickerOpen ? (
+                  <div className="staff-menu" role="menu">
+                    {columns
+                      .filter(column => !column.always)
+                      .map(column => (
+                        <label key={column.id} className="staff-menu-item">
+                          <input
+                            type="checkbox"
+                            checked={columnIds.includes(column.id)}
+                            onChange={() => toggleColumn(column.id)}
+                          />
+                          {column.label}
+                        </label>
+                      ))}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
+            </>
+          ) : null}
         </div>
       </div>
 

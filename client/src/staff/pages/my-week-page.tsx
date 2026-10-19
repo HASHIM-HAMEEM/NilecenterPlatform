@@ -81,7 +81,7 @@ export default function MyWeekPage() {
   const error = workspace.error ?? feed.error;
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <PageHeader title={W.title} description={W.description} />
+      <PageHeader title={W.title} />
       <div className="staff-toolbar">
         <div className="flex items-center gap-1">
           <button type="button" className="staff-icon-btn" aria-label={W.previous} onClick={() => setAnchor(addDaysIso(anchor, -7))}>

@@ -1553,6 +1553,78 @@
   box-shadow: var(--shadow);
 }
 
+/* Jotform renders a light surface; keep it light in dark mode with a
+   token border so the embed still looks intentional. */
+.pp-embed {
+  padding: 0;
+  overflow: clip;
+  border: 1px solid var(--line-input);
+  background: #ffffff;
+  color-scheme: light;
+}
+
+.pp-embed-note {
+  margin: 0;
+  padding: 0.75rem 1.5rem;
+  border-block-end: 1px solid var(--line-mid);
+  color: #57534b;
+  font-size: 0.875rem;
+}
+
+.pp-embed-body {
+  position: relative;
+}
+
+.pp-embed-frame {
+  display: block;
+  inline-size: 100%;
+  border: 0;
+}
+
+.pp-embed-skel {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(100deg, transparent 30%, rgb(0 0 0 / 0.04) 50%, transparent 70%) 0 0 / 200% 100%,
+    #f5f3ee;
+  animation: pp-embed-shine 1.4s ease-in-out infinite;
+}
+
+@keyframes pp-embed-shine {
+  from {
+    background-position: 200% 0, 0 0;
+  }
+  to {
+    background-position: -100% 0, 0 0;
+  }
+}
+
+.pp-embed-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: clamp(2rem, 5vw, 3.5rem) 1.5rem;
+  color: #373430;
+  text-align: center;
+}
+
+.pp-embed-fallback > svg {
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  color: var(--navy);
+}
+
+.pp-embed-fallback p {
+  margin: 0;
+  max-inline-size: 30rem;
+}
+
+.pp-embed-fallback .lp-actions {
+  justify-content: center;
+}
+
 .pp-field {
   display: flex;
   flex-direction: column;

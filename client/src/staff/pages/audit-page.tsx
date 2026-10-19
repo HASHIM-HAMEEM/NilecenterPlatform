@@ -183,7 +183,7 @@ export default function AuditPage() {
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <PageHeader title={C.title} description={C.description} />
+      <PageHeader title={C.title} />
 
       <div className="staff-toolbar">
         <div className="staff-segments" role="group" aria-label={C.stream}>

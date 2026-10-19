@@ -39,6 +39,14 @@ import {
   normalizeEmsStudent,
   normalizeEmsStudentEnrolments,
   normalizeEmsAuditEvents,
+  normalizeEmsJotformAnswerMap,
+  normalizeEmsJotformAnswerMaps,
+  normalizeEmsJotformForm,
+  normalizeEmsJotformFormDetail,
+  normalizeEmsJotformFormPage,
+  normalizeEmsJotformFormTitle,
+  normalizeEmsJotformSubmission,
+  normalizeEmsJotformSubmissionPage,
   normalizeEmsDashboardSummary,
   normalizeEmsSystemHealth,
   normalizeEmsTeacherWorkspace,
@@ -837,6 +845,7 @@ describe("EMS operational payload guards", () => {
       scheduledAt: null,
       status: "review",
       intake: {
+        formRowId: "jf-1",
         formName: "Placement request",
         submissionId: "sub-1",
         appointmentText: "Saturday morning",
@@ -884,7 +893,11 @@ describe("EMS operational payload guards", () => {
       status: "review",
       created_at: "2026-10-18T10:00:00Z",
       updated_at: "2026-10-18T10:00:00Z",
-      jotform: { form_name: "Trial request", submission_id: "sub-2" },
+      jotform: {
+        form_id: "jf-2",
+        form_name: "Trial request",
+        submission_id: "sub-2",
+      },
       jotform_appointment_text: "Weekday evening",
     };
     expect(normalizeEmsTrialLesson(reviewTrial)).toMatchObject({
@@ -893,6 +906,7 @@ describe("EMS operational payload guards", () => {
       scheduledAt: null,
       status: "review",
       intake: {
+        formRowId: "jf-2",
         formName: "Trial request",
         submissionId: "sub-2",
         appointmentText: "Weekday evening",
@@ -2560,5 +2574,166 @@ describe("EMS staff directory paging", () => {
       .mockResolvedValueOnce(jsonResponse(403, { detail: "Forbidden" }));
     const client = createEmsStagingClient({ baseUrl: "https://staging.example/api", fetchImpl });
     expect((await client.users("access-1")).ok).toBe(false);
+  });
+});
+
+describe("Jotform registry normalizers", () => {
+  const formRow = {
+    id: "08516608-14cb-403b-9ca1-b9f9567e432e",
+    form_id: "223611105769555",
+    name: "Book a Placement Test",
+    target: "placement_test",
+    fallback_branch_id: "73df6659-4252-4d76-ad64-dab15de795cf",
+    fallback_branch_name: "Nasr City",
+    enabled: false,
+    created_at: "2026-10-01T00:00:00Z",
+    updated_at: "2026-10-02T00:00:00Z",
+  };
+
+  it("normalizes a form row and a page", () => {
+    const form = normalizeEmsJotformForm(formRow);
+    expect(form).toEqual({
+      id: formRow.id,
+      formId: "223611105769555",
+      name: "Book a Placement Test",
+      target: "placement_test",
+      fallbackBranchId: formRow.fallback_branch_id,
+      fallbackBranchName: "Nasr City",
+      enabled: false,
+      createdAt: formRow.created_at,
+      updatedAt: formRow.updated_at,
+    });
+    const page = normalizeEmsJotformFormPage({
+      items: [formRow],
+      total: 1,
+      page: 1,
+      page_size: 25,
+    });
+    expect(page?.total).toBe(1);
+    expect(page?.items[0]?.formId).toBe("223611105769555");
+  });
+
+  it("rejects a form row with an unknown target or non-boolean enabled", () => {
+    expect(normalizeEmsJotformForm({ ...formRow, target: "survey" })).toBeNull();
+    expect(normalizeEmsJotformForm({ ...formRow, enabled: 1 })).toBeNull();
+    expect(normalizeEmsJotformForm({ ...formRow, form_id: null })).toBeNull();
+    expect(normalizeEmsJotformFormPage({ items: [formRow, { ...formRow, name: 4 }], total: 2, page: 1, page_size: 25 })).toBeNull();
+  });
+
+  it("normalizes the detail with catalogue, fields and defaults", () => {
+    const detail = normalizeEmsJotformFormDetail({
+      ...formRow,
+      catalogue: [
+        { key: "email", required: true, lookup_role: null },
+        { key: "branch_label", required: true, lookup_role: "branch" },
+        { key: "source", required: false },
+      ],
+      fields: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          input_key: "email",
+          question_key: "q3_email",
+          sort_order: 0,
+        },
+      ],
+      defaults: [{ input_key: "source", value: "jotform" }],
+    });
+    expect(detail?.catalogue).toHaveLength(3);
+    expect(detail?.catalogue[1]?.lookupRole).toBe("branch");
+    expect(detail?.catalogue[2]?.lookupRole).toBeNull();
+    expect(detail?.fields[0]).toEqual({
+      id: "11111111-1111-4111-8111-111111111111",
+      inputKey: "email",
+      questionKey: "q3_email",
+      sortOrder: 0,
+    });
+    expect(detail?.defaults).toEqual([{ inputKey: "source", value: "jotform" }]);
+  });
+
+  it("rejects a detail with a malformed field map or unknown lookup role", () => {
+    const base = {
+      ...formRow,
+      catalogue: [],
+      fields: [],
+      defaults: [],
+    };
+    expect(
+      normalizeEmsJotformFormDetail({
+        ...base,
+        fields: [{ id: "f1", input_key: "email", question_key: 7, sort_order: 0 }],
+      })
+    ).toBeNull();
+    expect(
+      normalizeEmsJotformFormDetail({
+        ...base,
+        catalogue: [{ key: "branch_label", required: true, lookup_role: "colour" }],
+      })
+    ).toBeNull();
+    expect(normalizeEmsJotformFormDetail({ ...base, defaults: "none" })).toBeNull();
+  });
+
+  it("normalizes the title probe and rejects junk", () => {
+    expect(normalizeEmsJotformFormTitle({ name: "Book a Placement Test" })).toEqual({
+      name: "Book a Placement Test",
+    });
+    expect(normalizeEmsJotformFormTitle({ name: 42 })).toBeNull();
+    expect(normalizeEmsJotformFormTitle("nope")).toBeNull();
+  });
+
+  it("normalizes answer maps and rejects a bad row inside the list", () => {
+    const mapRow = {
+      id: "22222222-2222-4222-8222-222222222222",
+      form_id: "223611105769555",
+      field_map_id: "33333333-3333-4333-8333-333333333333",
+      role: "branch",
+      answer_text: "Nasr City",
+      target_id: "73df6659-4252-4d76-ad64-dab15de795cf",
+      target_value: null,
+      target_name: "Nasr City",
+      created_at: "2026-10-01T00:00:00Z",
+      updated_at: "2026-10-01T00:00:00Z",
+    };
+    const map = normalizeEmsJotformAnswerMap(mapRow);
+    expect(map).toMatchObject({
+      formId: "223611105769555",
+      fieldMapId: mapRow.field_map_id,
+      role: "branch",
+      answerText: "Nasr City",
+      targetId: mapRow.target_id,
+      targetValue: null,
+    });
+    expect(normalizeEmsJotformAnswerMaps([mapRow])).toHaveLength(1);
+    expect(
+      normalizeEmsJotformAnswerMaps([mapRow, { ...mapRow, role: "bogus" }])
+    ).toBeNull();
+    expect(normalizeEmsJotformAnswerMap({ ...mapRow, answer_text: 5 })).toBeNull();
+  });
+
+  it("normalizes submissions with answers in Jotform order", () => {
+    const row = {
+      id: "44444444-4444-4444-8444-444444444444",
+      submission_id: "564123987",
+      received_at: "2026-10-18T10:04:00Z",
+      answers: [
+        { label: "Full name", value: "Test Visitor" },
+        { label: "Email", value: "visitor@example.test" },
+      ],
+    };
+    const submission = normalizeEmsJotformSubmission(row);
+    expect(submission?.submissionId).toBe("564123987");
+    expect(submission?.answers[1]?.value).toBe("visitor@example.test");
+    const page = normalizeEmsJotformSubmissionPage({
+      items: [row],
+      total: 1,
+      page: 1,
+      page_size: 25,
+    });
+    expect(page?.items).toHaveLength(1);
+    expect(
+      normalizeEmsJotformSubmission({ ...row, answers: [{ label: "x" }] })
+    ).toBeNull();
+    expect(
+      normalizeEmsJotformSubmission({ ...row, submission_id: 9 })
+    ).toBeNull();
   });
 });

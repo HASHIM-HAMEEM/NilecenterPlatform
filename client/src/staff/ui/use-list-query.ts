@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearch } from "wouter";
 import type { StaffQuery } from "../api";
 
-function useDebounced<T>(value: T, delayMs: number): T {
+export function useDebounced<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
     const timer = window.setTimeout(() => setDebounced(value), delayMs);

@@ -358,7 +358,6 @@ export default function CustomFieldsPage() {
     <div className="flex flex-col gap-4 min-w-0">
       <PageHeader
         title={C.title}
-        description={C.description}
         actions={
           canManage ? (
             <button

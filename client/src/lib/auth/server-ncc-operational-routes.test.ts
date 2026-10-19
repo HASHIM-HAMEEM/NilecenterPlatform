@@ -930,6 +930,59 @@ describe("NCC operational routes", () => {
     });
   });
 
+  it("maps lead dateOfBirth and nationality and validates their formats", async () => {
+    const cookie = await login("registrar", "branch-1");
+    const createLead = vi.fn(async () => ({ ok: true, data: lead() }));
+    const patchLead = vi.fn(async () => ({ ok: true, data: lead() }));
+    const routes = captureRoutes({
+      env: env(),
+      api: { createLead, patchLead },
+    });
+    const created = responseRecorder();
+    const patched = responseRecorder();
+    await routes.get("POST /api/ncc/admissions/leads")?.(
+      request(cookie, undefined, {
+        firstName: "Nile",
+        lastName: "Lead",
+        email: "lead@example.test",
+        dateOfBirth: "2012-03-14",
+        nationality: "EGY",
+      }),
+      created.response
+    );
+    await routes.get("PATCH /api/ncc/admissions/leads/:leadId")?.(
+      request(
+        cookie,
+        { leadId: "lead-1" },
+        { dateOfBirth: null, nationality: null }
+      ),
+      patched.response
+    );
+    expect(createLead.mock.calls[0]?.[1]).toMatchObject({
+      date_of_birth: "2012-03-14",
+      nationality: "EGY",
+    });
+    expect(patchLead).toHaveBeenCalledWith("access-ncc-session-1", "lead-1", {
+      date_of_birth: null,
+      nationality: null,
+    });
+    for (const body of [
+      { dateOfBirth: "14/03/2012" },
+      { dateOfBirth: "2012-3-4" },
+      { nationality: "EG" },
+      { nationality: "egy" },
+      { nationality: "EGY1" },
+    ]) {
+      const bad = responseRecorder();
+      await routes.get("PATCH /api/ncc/admissions/leads/:leadId")?.(
+        request(cookie, { leadId: "lead-1" }, body),
+        bad.response
+      );
+      expect(bad.result.status, JSON.stringify(body)).toBe(400);
+    }
+    expect(patchLead).toHaveBeenCalledTimes(1);
+  });
+
   it("requires identity fields for conversion and maps them", async () => {
     const cookie = await login("registrar", "branch-1");
     const convertLead = vi.fn(async () => ({

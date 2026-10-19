@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
+import { toast } from "sonner";
 import {
   attachNccClassEnrolmentRequest,
   closeNccEnrolmentRequest,
@@ -33,6 +34,7 @@ import { FeeSheet } from "./booking-sheets";
 
 const E = copy.admissions.enrolments;
 const $ = copy.admissions.money;
+const R = copy.admissions.recommend;
 
 /** Which follow-up actions EMS accepts for an enrolment status. */
 export function enrolmentActions(
@@ -82,6 +84,99 @@ export function BalanceCell({ enrolment }: { enrolment: NccEnrolmentDto }) {
 
 export function scheduleText(item: NccClassDto): string | null {
   return scheduleFromClass(item.schedule);
+}
+
+/* ---------------- Class choice -------------------------------------- */
+
+/**
+ * Open classes as radio cards: name, usual time, teachers, and seats left
+ * with a fill bar. Full classes stay listed but cannot be picked. An
+ * optional "later" choice lets a sale skip the class for now.
+ */
+export function ClassChoices({
+  name,
+  classes,
+  value,
+  onChange,
+  laterLabel,
+}: {
+  name: string;
+  classes: NccClassDto[];
+  value: string;
+  onChange: (classId: string) => void;
+  laterLabel?: string;
+}) {
+  return (
+    <div className="staff-choice-list" role="radiogroup" aria-label={E.class}>
+      {laterLabel ? (
+        <label className="staff-choice">
+          <input
+            type="radio"
+            name={name}
+            value=""
+            checked={value === ""}
+            onChange={() => onChange("")}
+          />
+          <span className="staff-choice-body">
+            <span className="staff-choice-title">{laterLabel}</span>
+          </span>
+        </label>
+      ) : null}
+      {classes.map(item => {
+        const left = item.capacity - item.activeEnrolmentCount;
+        const full = left <= 0;
+        const schedule = scheduleText(item);
+        const fill =
+          item.capacity > 0
+            ? Math.min(100, Math.round((item.activeEnrolmentCount / item.capacity) * 100))
+            : 100;
+        return (
+          <label
+            key={item.id}
+            className="staff-choice"
+            data-disabled={full || undefined}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={item.id}
+              disabled={full}
+              checked={value === item.id}
+              onChange={() => onChange(item.id)}
+            />
+            <span className="staff-choice-body">
+              <span className="staff-choice-title">{item.name}</span>
+              {schedule ? <span className="staff-muted">{schedule}</span> : null}
+              {item.teachers.length ? (
+                <span className="staff-muted">
+                  {E.teachers}:{" "}
+                  {item.teachers.map(teacher => teacher.name).join(", ")}
+                </span>
+              ) : null}
+            </span>
+            <span className="staff-choice-meta">
+              {full ? (
+                <span className="staff-badge" data-tone="red">
+                  {E.full}
+                </span>
+              ) : (
+                <span className="staff-figures">
+                  {left} {E.seatsLeft}
+                </span>
+              )}
+              <span
+                className="staff-seat-meter"
+                aria-hidden
+                data-full={full || undefined}
+              >
+                <span style={{ inlineSize: `${fill}%` }} />
+              </span>
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  );
 }
 
 /* ---------------- Add to class -------------------------------------- */
@@ -160,56 +255,12 @@ function AttachSheet({
       ) : options.length === 0 ? (
         <p className="staff-muted">{E.noClasses}</p>
       ) : (
-        <div
-          className="staff-choice-list"
-          role="radiogroup"
-          aria-label={E.class}
-        >
-          {options.map(item => {
-            const left = item.capacity - item.activeEnrolmentCount;
-            const full = left <= 0;
-            const schedule = scheduleText(item);
-            return (
-              <label
-                key={item.id}
-                className="staff-choice"
-                data-disabled={full || undefined}
-              >
-                <input
-                  type="radio"
-                  name="attach-class"
-                  value={item.id}
-                  disabled={full}
-                  checked={classId === item.id}
-                  onChange={() => setClassId(item.id)}
-                />
-                <span className="staff-choice-body">
-                  <span className="staff-choice-title">{item.name}</span>
-                  {schedule ? (
-                    <span className="staff-muted">{schedule}</span>
-                  ) : null}
-                  {item.teachers.length ? (
-                    <span className="staff-muted">
-                      {E.teachers}:{" "}
-                      {item.teachers.map(teacher => teacher.name).join(", ")}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="staff-choice-meta">
-                  {full ? (
-                    <span className="staff-badge" data-tone="red">
-                      {E.full}
-                    </span>
-                  ) : (
-                    <span className="staff-figures">
-                      {left} {E.seatsLeft}
-                    </span>
-                  )}
-                </span>
-              </label>
-            );
-          })}
-        </div>
+        <ClassChoices
+          name="attach-class"
+          classes={options}
+          value={classId}
+          onChange={setClassId}
+        />
       )}
     </FormSheet>
   );
@@ -402,11 +453,17 @@ export function SaleSheet({
   open,
   onOpenChange,
   student,
+  courseId: startCourseId,
+  recommendedCourseId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Fixed student (student page). Without it the sheet searches students. */
-  student?: Pick<NccStudentDto, "id" | "name" | "homeBranchId"> | null;
+  student?: Pick<NccStudentDto, "id" | "name" | "homeBranchId" | "moodleLinked"> | null;
+  /** Course to start with, e.g. the one a placement result recommends. */
+  courseId?: string | null;
+  /** Marked "Recommended" in the course list. */
+  recommendedCourseId?: string | null;
 }) {
   const { session } = useStaffSession();
   const superAdmin = session?.ncc?.activeRole === "super_admin";
@@ -417,14 +474,16 @@ export function SaleSheet({
     () => ({
       studentId: student?.id ?? "",
       query: "",
-      courseId: "",
+      courseId: startCourseId ?? "",
       kind: "group" as "group" | "individual",
       branchId: student?.homeBranchId ?? "",
       toBePaid: "",
       paid: "",
+      classId: "",
     }),
-    [student]
+    [student, startCourseId]
   );
+  const [pickedMoodle, setPickedMoodle] = useState<boolean | null>(null);
   const [draft, setDraft] = useState(empty);
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -438,7 +497,15 @@ export function SaleSheet({
   const set = <K extends keyof typeof draft>(
     key: K,
     value: (typeof draft)[K]
-  ) => setDraft(current => ({ ...current, [key]: value }));
+  ) =>
+    setDraft(current => ({
+      ...current,
+      [key]: value,
+      // A class belongs to one course, branch and kind.
+      ...(key === "courseId" || key === "branchId" || key === "kind"
+        ? { classId: "" }
+        : {}),
+    }));
 
   const search = draft.query.trim();
   const matches = useNcc<NccPageDto<NccStudentDto>>(
@@ -449,8 +516,31 @@ export function SaleSheet({
     { keepPreviousData: true }
   );
 
+  const classBranchId = draft.branchId || student?.homeBranchId || "";
+  const classes = useNcc<NccPageDto<NccClassDto>>(
+    open && draft.courseId && classBranchId ? "/api/ncc/delivery/classes" : null,
+    {
+      courseId: draft.courseId,
+      branchId: classBranchId,
+      status: "active",
+      pageSize: 100,
+    },
+    { keepPreviousData: true }
+  );
+  const classOptions = (classes.data?.items ?? []).filter(
+    item => !item.kind || item.kind === draft.kind
+  );
+  const chosenClass = classOptions.find(item => item.id === draft.classId) ?? null;
+
   const toBePaid = parseAmount(draft.toBePaid);
   const paid = parseAmount(draft.paid);
+  const moodleLinked = student ? student.moodleLinked : pickedMoodle;
+  const fullyPaid =
+    toBePaid !== null &&
+    !Number.isNaN(toBePaid) &&
+    (paid ?? 0) >= toBePaid;
+  // EMS adds only fully paid sales to a class, and only with a Moodle account.
+  const joinNow = Boolean(chosenClass) && fullyPaid && moodleLinked !== false;
   const errors = {
     studentId: draft.studentId ? null : copy.admissions.leads.required,
     courseId: draft.courseId ? null : copy.admissions.booking.chooseCourse,
@@ -477,7 +567,7 @@ export function SaleSheet({
     setSaving(true);
     setFieldErrors(undefined);
     try {
-      await staffWrite(
+      const { enrolment } = await staffWrite(
         createNccEnrolmentRequest({
           studentId: draft.studentId,
           courseId: draft.courseId,
@@ -487,10 +577,36 @@ export function SaleSheet({
           ...(superAdmin ? { branchId: draft.branchId } : {}),
         })
       );
+      let toastText = E.saleToast;
+      if (
+        joinNow &&
+        chosenClass &&
+        (enrolment.status === "pending_class" || enrolment.status === "pending_group")
+      ) {
+        try {
+          await staffWrite(
+            attachNccClassEnrolmentRequest(chosenClass.id, {
+              enrolmentId: enrolment.id,
+            })
+          );
+          toastText = R.soldAndAdded.replace("{class}", chosenClass.name);
+        } catch (error) {
+          // The sale stands; the class can be added from Enrolments.
+          toastText = "";
+          toast.warning(
+            R.soldNotAdded.replace(
+              "{reason}",
+              error instanceof Error ? error.message : copy.state.errorGeneric
+            )
+          );
+        }
+      }
       await Promise.all([
         invalidate("/api/ncc/admissions/enrolments"),
         invalidate("/api/ncc/admissions/students"),
+        invalidate("/api/ncc/delivery/classes"),
       ]);
+      if (toastText) toast.success(toastText);
       onOpenChange(false);
     } catch (error) {
       const details = (error as { details?: Record<string, string[]> }).details;
@@ -513,8 +629,8 @@ export function SaleSheet({
       dirty={JSON.stringify(draft) !== JSON.stringify(empty)}
       saving={saving}
       fieldErrors={fieldErrors}
-      saveLabel={E.sell}
-      onSubmit={() => runAction(submit, { success: E.saleToast })}
+      saveLabel={joinNow ? R.sellAndAdd : E.sell}
+      onSubmit={() => runAction(submit)}
     >
       {errorFor => (
         <>
@@ -553,6 +669,7 @@ export function SaleSheet({
                         checked={draft.studentId === item.id}
                         onChange={() => {
                           set("studentId", item.id);
+                          setPickedMoodle(item.moodleLinked);
                           if (!draft.branchId)
                             set("branchId", item.homeBranchId);
                         }}
@@ -587,6 +704,9 @@ export function SaleSheet({
                 {courses.map(course => (
                   <SelectItem key={course.value} value={course.value}>
                     {course.label}
+                    {course.value === recommendedCourseId
+                      ? ` · ${R.recommendedTag}`
+                      : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -660,6 +780,32 @@ export function SaleSheet({
               />
             </StaffField>
           </div>
+          {draft.courseId && classBranchId ? (
+            <StaffField label={R.classTitle}>
+              {!classes.data ? (
+                <span className="staff-muted">{copy.state.loading}</span>
+              ) : classOptions.length === 0 ? (
+                <span className="staff-hint">{E.noClasses}</span>
+              ) : (
+                <ClassChoices
+                  name="sale-class"
+                  classes={classOptions}
+                  value={draft.classId}
+                  onChange={value => set("classId", value)}
+                  laterLabel={R.classLater}
+                />
+              )}
+              {chosenClass && moodleLinked === false ? (
+                <span className="staff-hint" data-tone="caution">
+                  {R.classMoodleNote}
+                </span>
+              ) : chosenClass && !fullyPaid ? (
+                <span className="staff-hint" data-tone="caution">
+                  {R.classPaidNote}
+                </span>
+              ) : null}
+            </StaffField>
+          ) : null}
         </>
       )}
     </FormSheet>

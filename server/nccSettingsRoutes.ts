@@ -26,14 +26,14 @@ import {
   type RemoteResult,
 } from "./nccAuthSession.js";
 
-type SettingsRequest = {
+export type SettingsRequest = {
   headers: { cookie?: string };
   params?: Record<string, string>;
   query?: Record<string, unknown>;
   body?: Record<string, unknown>;
 };
 
-type SettingsResponse = {
+export type SettingsResponse = {
   setHeader(name: string, value: string): void;
   status(code: number): SettingsResponse;
   json(body: unknown): void;
@@ -44,10 +44,12 @@ type SettingsHandler = (
   response: SettingsResponse
 ) => void | Promise<void>;
 
-type SettingsApp = {
+export type SettingsApp = {
   get(path: string, handler: SettingsHandler): void;
   post(path: string, handler: SettingsHandler): void;
   patch?(path: string, handler: SettingsHandler): void;
+  put?(path: string, handler: SettingsHandler): void;
+  delete?(path: string, handler: SettingsHandler): void;
 };
 
 export function nccSettingsEnabled(env: NodeJS.ProcessEnv = process.env) {
@@ -56,17 +58,19 @@ export function nccSettingsEnabled(env: NodeJS.ProcessEnv = process.env) {
   );
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+export function isPlainObject(
+  value: unknown
+): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
-function hasOnlyKeys(record: Record<string, unknown>, keys: string[]) {
+export function hasOnlyKeys(record: Record<string, unknown>, keys: string[]) {
   return Object.keys(record).every(key => keys.includes(key));
 }
 
-function emptyBody(body: unknown) {
+export function emptyBody(body: unknown) {
   return (
     body === undefined ||
     body === null ||
@@ -82,7 +86,7 @@ function optionalInt(value: unknown) {
   return value === undefined || Number.isSafeInteger(value);
 }
 
-function optionalBool(value: unknown) {
+export function optionalBool(value: unknown) {
   return value === undefined || typeof value === "boolean";
 }
 
@@ -114,7 +118,7 @@ function reasonIdBody(body: unknown): string | null {
   return body.reasonId;
 }
 
-function prepareSettingsWrite(
+export function prepareSettingsWrite(
   request: SettingsRequest,
   response: SettingsResponse,
   dependencies: NccAuthDependencies
@@ -134,7 +138,7 @@ function prepareSettingsWrite(
   return true;
 }
 
-async function handleSettingsRead<T>(
+export async function handleSettingsRead<T>(
   request: SettingsRequest,
   response: SettingsResponse,
   dependencies: NccAuthDependencies,
@@ -171,7 +175,7 @@ async function handleSettingsRead<T>(
   }
 }
 
-async function handleSettingsWrite<T>(
+export async function handleSettingsWrite<T>(
   request: SettingsRequest,
   response: SettingsResponse,
   dependencies: NccAuthDependencies,

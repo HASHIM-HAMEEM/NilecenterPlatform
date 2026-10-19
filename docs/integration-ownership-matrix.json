@@ -588,7 +588,7 @@
       "failureBehavior": "Remain visibly disconnected or unavailable and fail provider operations closed.",
       "futureWriteStatus": "configuration_only_provider_writes_blocked",
       "selectors": {
-        "clientRoutes": ["^/app/moodle$"],
+        "clientRoutes": ["^/app/moodle$", "^/app/jotform(?:/.*)?$"],
         "workflowActions": [
           "^(integration[.](local_check|status[.]update)|settings[.]save)$"
         ],
@@ -598,7 +598,8 @@
           "^GET /api/ems-staging/status$",
           "^POST /api/ems-staging/(session|logout)$",
           "^(GET|PUT|PATCH) /api/ncc/moodle/site$",
-          "^POST /api/ncc/moodle/site/(?:disconnect|test)$"
+          "^POST /api/ncc/moodle/site/(?:disconnect|test)$",
+          "^(GET|POST|PATCH|PUT|DELETE) /api/ncc/settings/jotform(?:/.*)?$"
         ]
       }
     },

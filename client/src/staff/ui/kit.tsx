@@ -238,6 +238,37 @@ export function SheetHeader({ className, ...props }: HTMLAttributes<HTMLDivEleme
 export const SheetTitle = DialogTitle;
 export const SheetDescription = DialogDescription;
 
+/* ---------------- Switch ---------------- */
+
+/**
+ * Binary on/off control. The visible track is 44×24 px; a ::after halo in
+ * staff.css extends the hit area to 44 px tall. The state word next to it is
+ * the caller's job — colour and motion never carry the state alone.
+ */
+export function Switch({
+  checked,
+  onCheckedChange,
+  className,
+  ...props
+}: Omit<ComponentProps<"button">, "onChange" | "value" | "role" | "type"> & {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className={cn("staff-switch", className)}
+      data-on={checked || undefined}
+      onClick={() => onCheckedChange(!checked)}
+      {...props}
+    >
+      <span className="staff-switch-thumb" aria-hidden />
+    </button>
+  );
+}
+
 /* ---------------- Menu ---------------- */
 
 export const DropdownMenu = MenuPrimitive.Root;

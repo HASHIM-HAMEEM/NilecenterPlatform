@@ -19,6 +19,7 @@ import {
 import {
   JOURNEY_STEPS,
   leadJourney,
+  recommendedNext,
   type JourneyStep,
   type NextLeadAction,
 } from "../admissions";
@@ -49,6 +50,7 @@ import {
   ResultSheet,
 } from "./booking-sheets";
 import { LeadForm, leadTypeLabel } from "./lead-form";
+import { PossibleMatches, usePeopleMatches } from "../ui/possible-matches";
 
 const L = copy.admissions.leads;
 const B = copy.admissions.booking;
@@ -166,6 +168,16 @@ export default function LeadDetailPage() {
     confirm?.type === "lost" ? "/api/ncc/settings/lost-reasons" : null
   );
   useStaffCrumb(lead?.name ?? null);
+  // Other leads or students with this email: likely the same person twice
+  // (a second enquiry, or a website request for someone already here).
+  const twins = usePeopleMatches(
+    { email: lead?.email ?? "", firstName: "", lastName: "" },
+    {
+      enabled: Boolean(lead),
+      byName: false,
+      exclude: { leadId: lead?.id, studentId: lead?.studentId },
+    }
+  );
 
   if (!allowed)
     return <EmptyState title={copy.shell.noAccess} description={L.noAccess} />;
@@ -184,6 +196,11 @@ export default function LeadDetailPage() {
   const trialItems = trials.data?.items ?? [];
   const bookingsReady = Boolean(placements.data && trials.data);
   const { steps, next } = leadJourney(lead, placementItems, trialItems);
+  // What the results suggest selling once this lead is a student.
+  const recommendation =
+    next === "fee" || next === "convert" || next === "open_student"
+      ? recommendedNext(placementItems, trialItems, [])
+      : null;
   const scheduledPlacement = placementItems.find(
     item => item.status === "scheduled"
   );
@@ -269,7 +286,10 @@ export default function LeadDetailPage() {
         return lead?.studentId
           ? {
               label: L.openStudent,
-              run: () => navigate(`/app/students/${lead.studentId}`),
+              run: () =>
+                navigate(
+                  `/app/students/${lead.studentId}${recommendation ? "?enrol=1" : ""}`
+                ),
             }
           : null;
       case "lost":
@@ -357,6 +377,8 @@ export default function LeadDetailPage() {
         </div>
       </header>
 
+      <PossibleMatches matches={twins.matches} context="record" />
+
       <Journey steps={steps} />
 
       <section
@@ -369,6 +391,14 @@ export default function LeadDetailPage() {
             {L.nextStep}
           </h2>
           <p>{nextText(next)}</p>
+          {recommendation ? (
+            <p className="staff-recommend-line">
+              {copy.admissions.recommend.recommendedCourse.replace(
+                "{course}",
+                recommendation.courseName
+              )}
+            </p>
+          ) : null}
           {lead.status === "lost" && lead.lostReasonName ? (
             <p className="staff-muted">
               {L.lostBecause}: {lead.lostReasonName}
@@ -495,6 +525,38 @@ export default function LeadDetailPage() {
                 <dt>{L.source}</dt>
                 <dd>{lead.source ?? <NotSet />}</dd>
               </div>
+              {lead.jotform ? (
+                <div>
+                  <dt>{copy.nav.jotform}</dt>
+                  <dd>
+                    {session?.ncc?.activeRole &&
+                    canAccess("/app/jotform", session.ncc.activeRole) ? (
+                      <Link
+                        href={`/app/jotform/${lead.jotform.formRowId}/submissions/${lead.jotform.submissionId}`}
+                        className="staff-link"
+                      >
+                        {L.fromJotform.replace("{form}", lead.jotform.formName)}
+                      </Link>
+                    ) : (
+                      L.fromJotform.replace("{form}", lead.jotform.formName)
+                    )}
+                  </dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>{L.dateOfBirth}</dt>
+                <dd>
+                  {lead.dateOfBirth ? (
+                    formatDate(lead.dateOfBirth)
+                  ) : (
+                    <NotSet />
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>{L.nationality}</dt>
+                <dd className="staff-ltr">{lead.nationality ?? <NotSet />}</dd>
+              </div>
               <div>
                 <dt>{L.added}</dt>
                 <dd>{formatDate(lead.createdAt)}</dd>
@@ -565,8 +627,12 @@ export default function LeadDetailPage() {
       <ConvertSheet
         open={sheet?.type === "convert"}
         onOpenChange={open => !open && setSheet(null)}
-        leadId={lead.id}
-        onConverted={student => navigate(`/app/students/${student.id}`)}
+        lead={lead}
+        onConverted={student =>
+          navigate(
+            `/app/students/${student.id}${recommendation ? "?enrol=1" : ""}`
+          )
+        }
       />
 
       <ConfirmDialog

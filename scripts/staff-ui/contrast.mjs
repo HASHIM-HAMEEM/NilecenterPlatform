@@ -20,12 +20,12 @@ const suite = createSuite(`contrast-${LANGS.join("+")}`);
 const PUBLIC = ["/", "/courses", "/courses/arabic", "/book-free-trial", "/verify-certificate", "/faq", "/contact", "/about", "/privacy", "/terms", "/404", "/forms/free-trial-enquiry"];
 const AUTH = ["/auth/administration-login", "/auth/student-login", "/auth/forgot-password"];
 const STAFF = [
-  "/app/dashboard", "/app/reports", "/app/forms", "/app/notifications", "/app/profile", "/app/students", "/app/leads",
+  "/app/dashboard", "/app/reports", "/app/forms", "/app/notifications", "/app/profile", "/app/students", "/app/leads", "/app/leads?view=board",
   "/app/enrolments", "/app/placement-tests", "/app/trial-lessons", "/app/courses", "/app/classes", "/app/rooms",
   "/app/staff", "/app/branches", "/app/departments", "/app/lost-reasons", "/app/action-reasons",
-  "/app/areas-of-study", "/app/custom-fields", "/app/moodle", "/app/system", "/app/audit",
+  "/app/areas-of-study", "/app/custom-fields", "/app/moodle", "/app/system", "/app/audit", "/app/jotform",
 ];
-const DETAIL_LISTS = ["/app/students", "/app/leads", "/app/classes", "/app/courses", "/app/staff", "/app/branches", "/app/rooms"];
+const DETAIL_LISTS = ["/app/students", "/app/leads", "/app/classes", "/app/courses", "/app/staff", "/app/branches", "/app/rooms", "/app/jotform"];
 
 /* Runs in the page. Returns failures and the count of checked items. */
 function audit() {
@@ -281,7 +281,10 @@ for (const theme of THEMES) {
               await page.goto(`${BASE}${list}`);
               await settle(page);
               const href = await page.locator(`.staff-content a[href^='${list}/']`).first().getAttribute("href").catch(() => null);
-              if (href) pages.push(href.split("?")[0]);
+              if (href) {
+                pages.push(href.split("?")[0]);
+                if (list === "/app/jotform") pages.push(`${href.split("?")[0]}/submissions`);
+              }
             }
             // Forms: the editor, a fill page and a response, wherever they exist.
             for (const tab of ["", "?tab=fill", "?tab=review"]) {

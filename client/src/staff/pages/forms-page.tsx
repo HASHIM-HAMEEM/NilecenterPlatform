@@ -351,7 +351,6 @@ export default function FormsPage() {
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={F.title}
-        description={F.description}
         actions={
           manager ? (
             <>

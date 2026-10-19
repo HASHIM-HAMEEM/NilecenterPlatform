@@ -103,6 +103,9 @@ const en = {
     failed: "We could not send your request. Try again, or message us on WhatsApp.",
     unavailable: "Online booking is not available right now. Message us on WhatsApp and we will book it for you.",
     success: "Thank you. Your request is with our admissions team.",
+    jotformTitle: "Book a placement test",
+    jotformNote: "The form itself is in English.",
+    jotformOpen: "Open the form in a new tab",
   },
   faq: {
     eyebrow: "Questions",
@@ -280,6 +283,9 @@ const ar: PublicCopy = {
     failed: "تعذر إرسال طلبك. حاول مرة أخرى أو راسلنا على واتساب.",
     unavailable: "الحجز عبر الإنترنت غير متاح الآن. راسلنا عبر واتساب وسنحجز لك.",
     success: "شكرًا لك. وصل طلبك إلى فريق القبول.",
+    jotformTitle: "احجز اختبار تحديد المستوى",
+    jotformNote: "النموذج نفسه بالإنجليزية.",
+    jotformOpen: "افتح النموذج في علامة تبويب جديدة",
   },
   faq: {
     eyebrow: "الأسئلة",
@@ -455,6 +461,9 @@ const tr: PublicCopy = {
     failed: "Talebiniz gönderilemedi. Tekrar deneyin veya WhatsApp’tan yazın.",
     unavailable: "Çevrim içi randevu şu anda kullanılamıyor. Bize WhatsApp'tan yazın, randevunuzu biz oluşturalım.",
     success: "Teşekkürler. Talebiniz kabul ekibimize ulaştı.",
+    jotformTitle: "Seviye sınavı randevusu alın",
+    jotformNote: "Formun kendisi İngilizcedir.",
+    jotformOpen: "Formu yeni sekmede açın",
   },
   faq: {
     eyebrow: "Sorular",
@@ -726,7 +735,10 @@ const zh: PublicCopy = {
     invalid: "请填写姓名、有效的电子邮箱、电话以及其他必选项。",
     failed: "无法发送你的请求。请重试，或通过 WhatsApp 联系我们。",
     unavailable: "在线预约暂时无法使用。请通过 WhatsApp 联系我们，我们会为你预约。",
-    success: "谢谢。你的请求已提交给我们的招生团队。"
+    success: "谢谢。你的请求已提交给我们的招生团队。",
+    jotformTitle: "预约分级测试",
+    jotformNote: "表单内容为英文。",
+    jotformOpen: "在新标签页中打开表单"
   },
   faq: {
     eyebrow: "常见问题",
@@ -1054,7 +1066,10 @@ const ru: PublicCopy = {
     invalid: "Укажите имя, корректную эл. почту, телефон и другие обязательные пункты.",
     failed: "Не удалось отправить заявку. Повторите попытку или напишите нам в WhatsApp.",
     unavailable: "Онлайн-запись сейчас недоступна. Напишите нам в WhatsApp, и мы запишем вас.",
-    success: "Спасибо. Ваша заявка передана нашей команде приёма."
+    success: "Спасибо. Ваша заявка передана нашей команде приёма.",
+    jotformTitle: "Записаться на тест на уровень",
+    jotformNote: "Сама форма на английском языке.",
+    jotformOpen: "Открыть форму в новой вкладке"
   },
   faq: {
     eyebrow: "Вопросы",
@@ -1382,7 +1397,10 @@ const ur: PublicCopy = {
     invalid: "اپنا نام، درست ای میل، فون اور دیگر لازمی انتخاب پُر کریں۔",
     failed: "آپ کی درخواست نہیں بھیجی جا سکی۔ دوبارہ کوشش کریں، یا واٹس ایپ پر پیغام بھیجیں۔",
     unavailable: "آن لائن بکنگ ابھی دستیاب نہیں۔ واٹس ایپ پر پیغام بھیجیں، ہم آپ کی بکنگ کر دیں گے۔",
-    success: "شکریہ۔ آپ کی درخواست ہماری داخلہ ٹیم کو مل گئی ہے۔"
+    success: "شکریہ۔ آپ کی درخواست ہماری داخلہ ٹیم کو مل گئی ہے۔",
+    jotformTitle: "لیول ٹیسٹ بک کریں",
+    jotformNote: "خود فارم انگریزی میں ہے۔",
+    jotformOpen: "فارم نئے ٹیب میں کھولیں"
   },
   faq: {
     eyebrow: "سوالات",

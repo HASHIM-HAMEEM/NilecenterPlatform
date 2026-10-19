@@ -67,7 +67,6 @@ export default function RoomsPage() {
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={R.title}
-        description={R.description}
         actions={
           canWrite ? (
             <button type="button" className="staff-btn" data-variant="primary" onClick={() => setFormOpen(true)}>

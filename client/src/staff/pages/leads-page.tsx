@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
-import { Plus } from "lucide-react";
+import { useId, useMemo, useState } from "react";
+import { Link, useLocation, useSearch } from "wouter";
+import { Columns3, List, Plus } from "lucide-react";
 import type { NccLeadDto, NccPageDto } from "@/lib/backend/api";
 import { useNcc, type StaffQuery } from "../api";
 import { copy } from "../copy";
@@ -8,6 +8,7 @@ import { canSetAssignee, isAdmissionsRole } from "../roles";
 import { useStaffSession } from "../session";
 import { ListPage, type ListColumn, type ListFilter } from "../ui/list-page";
 import {
+  ActiveMark,
   Avatar,
   EmptyState,
   ErrorState,
@@ -24,10 +25,43 @@ import {
   useAssignees,
   useBranches,
 } from "./admissions-ui";
+import { LeadsBoard } from "./leads-board";
 import { LEAD_TYPES, LeadForm, leadTypeLabel } from "./lead-form";
 
 const L = copy.admissions.leads;
 const M = copy.admissions.mode;
+const K = copy.admissions.board;
+const VIEW_KEY = "staff.leads.view";
+
+/** List or board: the URL wins, then the last choice on this device. */
+function useLeadsView(): ["list" | "board", (view: "list" | "board") => void] {
+  const search = useSearch();
+  const [, navigate] = useLocation();
+  const fromUrl = new URLSearchParams(search).get("view");
+  let stored: string | null = null;
+  try {
+    stored = window.localStorage.getItem(VIEW_KEY);
+  } catch {
+    stored = null;
+  }
+  const view = (fromUrl ?? stored) === "board" ? "board" : "list";
+  const setView = (next: "list" | "board") => {
+    try {
+      window.localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // Private mode: the URL still carries the choice.
+    }
+    const params = new URLSearchParams(search);
+    params.set("view", next);
+    // Board columns are the stages, and paging belongs to the list.
+    if (next === "board") {
+      params.delete("status");
+      params.delete("page");
+    }
+    navigate(`?${params.toString()}`, { replace: true });
+  };
+  return [view, setView];
+}
 
 export const LEAD_STAGES: NccLeadDto["status"][] = [
   "in_process",
@@ -79,12 +113,14 @@ export default function LeadsPage() {
   );
   const [formOpen, setFormOpen] = useState(false);
   const [, navigate] = useLocation();
+  const [view, setView] = useLeadsView();
+  const viewGroup = useId();
 
   const urlQuery = useListQuery(FILTER_KEYS);
   const query = useMemo(() => leadListQuery(urlQuery), [urlQuery]);
   const { status: _status, page: _page, pageSize: _size, ...countBase } = query;
   const leads = useNcc<NccPageDto<NccLeadDto>>(
-    allowed ? "/api/ncc/admissions/leads" : null,
+    allowed && view === "list" ? "/api/ncc/admissions/leads" : null,
     query,
     { keepPreviousData: true }
   );
@@ -244,19 +280,44 @@ export default function LeadsPage() {
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={L.title}
-        description={L.description}
         actions={
-          <button
-            type="button"
-            className="staff-btn"
-            data-variant="primary"
-            onClick={() => setFormOpen(true)}
-          >
-            <Plus strokeWidth={1.75} aria-hidden />
-            {L.add}
-          </button>
+          <>
+            <div className="staff-segments staff-view-switch" role="group" aria-label={K.viewLabel}>
+              {(["list", "board"] as const).map(option => (
+                <button
+                  key={option}
+                  type="button"
+                  className="staff-segment"
+                  data-active={view === option}
+                  aria-pressed={view === option}
+                  onClick={() => setView(option)}
+                >
+                  {view === option ? <ActiveMark group={viewGroup} /> : null}
+                  {option === "list" ? (
+                    <List strokeWidth={1.75} aria-hidden />
+                  ) : (
+                    <Columns3 strokeWidth={1.75} aria-hidden />
+                  )}
+                  {option === "list" ? K.viewList : K.viewBoard}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="staff-btn"
+              data-variant="primary"
+              onClick={() => setFormOpen(true)}
+            >
+              <Plus strokeWidth={1.75} aria-hidden />
+              {L.add}
+            </button>
+          </>
         }
       />
+      {view === "board" ? (
+        <LeadsBoard query={countBase} filters={filters} />
+      ) : (
+      <>
       <ServerSegments
         path="/api/ncc/admissions/leads"
         base={countBase}
@@ -325,6 +386,8 @@ export default function LeadsPage() {
             />
           }
         />
+      )}
+      </>
       )}
       <LeadForm
         open={formOpen}

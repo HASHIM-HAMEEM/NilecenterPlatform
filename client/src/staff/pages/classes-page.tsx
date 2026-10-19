@@ -118,7 +118,6 @@ export default function ClassesPage() {
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={K.title}
-        description={K.description}
         actions={
           canWrite ? (
             <button type="button" className="staff-btn" data-variant="primary" onClick={() => setFormOpen(true)}>

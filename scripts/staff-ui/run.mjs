@@ -13,7 +13,7 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const LANGUAGES = ["en", "ar", "tr", "zh", "ru", "ur"];
 const SCRIPTS = new Map([
   ...["admissions", "students", "teaching", "week", "forms", "forms-people", "reports", "shell", "public", "fix-verify",
-    "sidebar", "back-navigation", "date-picker", "date-of-birth", "landing", "public-languages", "review-bookings"].map(name => [name, { script: `${name}.mjs` }]),
+    "sidebar", "back-navigation", "date-picker", "date-of-birth", "landing", "public-languages", "review-bookings", "jotform", "matches-enrol", "pipeline-board"].map(name => [name, { script: `${name}.mjs` }]),
   ...LANGUAGES.map(lang => [`responsive-${lang}`, { script: "responsive.mjs", env: { STAFF_UI_LANG: lang } }]),
   // Colour contrast in light and dark. Colours don't change with language, so
   // one left-to-right and one right-to-left language cover every layout.

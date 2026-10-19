@@ -859,6 +859,254 @@ export function enableNccCustomFieldRequest(fieldId: string) {
   );
 }
 
+/* ---- jotform ---- */
+
+/** The submission that created a lead, placement test, or trial lesson. */
+export type NccJotformRecordLinkDto = {
+  /** Registry row uuid, not the Jotform numeric id. */
+  formRowId: string;
+  formName: string;
+  submissionId: string;
+};
+
+export type NccJotformTargetDto =
+  | "contact"
+  | "placement_test"
+  | "trial_lesson";
+
+export type NccJotformAnswerRoleDto = "branch" | "area" | "source";
+
+export type NccJotformFormDto = {
+  id: string;
+  /** Jotform numeric form id. */
+  formId: string;
+  name: string;
+  target: NccJotformTargetDto;
+  fallbackBranchId: string | null;
+  fallbackBranchName: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NccJotformCatalogueInputDto = {
+  key: string;
+  required: boolean;
+  lookupRole: NccJotformAnswerRoleDto | null;
+};
+
+export type NccJotformFieldMapDto = {
+  id: string;
+  inputKey: string;
+  questionKey: string;
+  sortOrder: number;
+};
+
+export type NccJotformFieldDefaultDto = {
+  inputKey: string;
+  value: string;
+};
+
+export type NccJotformFormDetailDto = NccJotformFormDto & {
+  catalogue: NccJotformCatalogueInputDto[];
+  fields: NccJotformFieldMapDto[];
+  defaults: NccJotformFieldDefaultDto[];
+};
+
+export type NccJotformAnswerMapDto = {
+  id: string;
+  /** Jotform numeric form id. */
+  formId: string;
+  fieldMapId: string;
+  role: NccJotformAnswerRoleDto;
+  answerText: string;
+  targetId: string | null;
+  targetValue: string | null;
+  targetName: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NccJotformSubmissionDto = {
+  /** Registry row uuid. */
+  id: string;
+  /** Jotform-side submission id. */
+  submissionId: string | null;
+  receivedAt: string;
+  answers: Array<{ label: string; value: string }>;
+};
+
+export function fetchNccJotformFormsRequest(query: {
+  q?: string;
+  target?: NccJotformTargetDto[];
+  enabled?: boolean;
+  fallbackBranchId?: string;
+  page?: number;
+  pageSize?: number;
+  sort?: string;
+  order?: "asc" | "desc";
+} = {}) {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  for (const target of query.target ?? []) params.append("target", target);
+  if (query.enabled !== undefined) params.set("enabled", String(query.enabled));
+  if (query.fallbackBranchId) {
+    params.set("fallbackBranchId", query.fallbackBranchId);
+  }
+  if (query.page !== undefined) params.set("page", String(query.page));
+  if (query.pageSize !== undefined) {
+    params.set("pageSize", String(query.pageSize));
+  }
+  if (query.sort) params.set("sort", query.sort);
+  if (query.order) params.set("order", query.order);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return apiJson<NccPageDto<NccJotformFormDto>>(
+    `/api/ncc/settings/jotform/forms${suffix}`
+  );
+}
+
+export function createNccJotformFormRequest(input: {
+  formId: string;
+  name: string;
+  target: NccJotformTargetDto;
+  fallbackBranchId?: string | null;
+}) {
+  return apiJson<{ form: NccJotformFormDto }>(
+    "/api/ncc/settings/jotform/forms",
+    { method: "POST", body: JSON.stringify(input) }
+  );
+}
+
+export function fetchNccJotformFormTitleRequest(formId: string) {
+  const params = new URLSearchParams({ formId });
+  return apiJson<{ title: { name: string } }>(
+    `/api/ncc/settings/jotform/forms/title?${params.toString()}`
+  );
+}
+
+export function fetchNccJotformFormRequest(rowId: string) {
+  return apiJson<{ form: NccJotformFormDetailDto }>(
+    `/api/ncc/settings/jotform/forms/${encodeURIComponent(rowId)}`
+  );
+}
+
+export function patchNccJotformFormRequest(
+  rowId: string,
+  input: {
+    formId?: string;
+    name?: string;
+    target?: NccJotformTargetDto;
+    fallbackBranchId?: string | null;
+    enabled?: boolean;
+  }
+) {
+  return apiJson<{ form: NccJotformFormDto }>(
+    `/api/ncc/settings/jotform/forms/${encodeURIComponent(rowId)}`,
+    { method: "PATCH", body: JSON.stringify(input) }
+  );
+}
+
+export function replaceNccJotformFormFieldsRequest(
+  rowId: string,
+  input: {
+    fields: Array<{
+      id?: string | null;
+      inputKey: string;
+      questionKey: string;
+      sortOrder: number;
+    }>;
+    defaults?: NccJotformFieldDefaultDto[];
+  }
+) {
+  return apiJson<{ form: NccJotformFormDetailDto }>(
+    `/api/ncc/settings/jotform/forms/${encodeURIComponent(rowId)}/fields`,
+    { method: "PUT", body: JSON.stringify(input) }
+  );
+}
+
+export function deleteNccJotformFormFieldRequest(
+  rowId: string,
+  fieldMapId: string
+) {
+  return apiJson<{ done: boolean }>(
+    `/api/ncc/settings/jotform/forms/${encodeURIComponent(rowId)}/fields/${encodeURIComponent(fieldMapId)}`,
+    { method: "DELETE" }
+  );
+}
+
+export function fetchNccJotformSubmissionsRequest(
+  rowId: string,
+  query: { page?: number; pageSize?: number } = {}
+) {
+  const params = new URLSearchParams();
+  if (query.page !== undefined) params.set("page", String(query.page));
+  if (query.pageSize !== undefined) {
+    params.set("pageSize", String(query.pageSize));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return apiJson<NccPageDto<NccJotformSubmissionDto>>(
+    `/api/ncc/settings/jotform/forms/${encodeURIComponent(rowId)}/submissions${suffix}`
+  );
+}
+
+export function fetchNccJotformSubmissionRequest(
+  rowId: string,
+  submissionId: string
+) {
+  return apiJson<{ submission: NccJotformSubmissionDto }>(
+    `/api/ncc/settings/jotform/forms/${encodeURIComponent(rowId)}/submissions/${encodeURIComponent(submissionId)}`
+  );
+}
+
+export function fetchNccJotformAnswerMapsRequest(filters: {
+  formId?: string;
+  role?: NccJotformAnswerRoleDto;
+} = {}) {
+  const params = new URLSearchParams();
+  if (filters.formId?.trim()) params.set("formId", filters.formId.trim());
+  if (filters.role) params.set("role", filters.role);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return apiJson<{ items: NccJotformAnswerMapDto[] }>(
+    `/api/ncc/settings/jotform/answer-maps${suffix}`
+  );
+}
+
+export function createNccJotformAnswerMapRequest(input: {
+  /** Jotform numeric form id. */
+  formId: string;
+  fieldMapId: string;
+  role: NccJotformAnswerRoleDto;
+  answerText: string;
+  targetId?: string | null;
+  targetValue?: string | null;
+}) {
+  return apiJson<{ map: NccJotformAnswerMapDto }>(
+    "/api/ncc/settings/jotform/answer-maps",
+    { method: "POST", body: JSON.stringify(input) }
+  );
+}
+
+export function patchNccJotformAnswerMapRequest(
+  mapId: string,
+  input: {
+    answerText?: string;
+    targetId?: string | null;
+    targetValue?: string | null;
+  }
+) {
+  return apiJson<{ map: NccJotformAnswerMapDto }>(
+    `/api/ncc/settings/jotform/answer-maps/${encodeURIComponent(mapId)}`,
+    { method: "PATCH", body: JSON.stringify(input) }
+  );
+}
+
+export function deleteNccJotformAnswerMapRequest(mapId: string) {
+  return apiJson<{ done: boolean }>(
+    `/api/ncc/settings/jotform/answer-maps/${encodeURIComponent(mapId)}`,
+    { method: "DELETE" }
+  );
+}
+
 export type NccStaffProfileInput = {
   firstName: string;
   lastName: string;
@@ -1280,6 +1528,10 @@ export type NccLeadDto = {
   lostReasonName?: string | null;
   areaOfStudyId?: string | null;
   areaOfStudyName?: string | null;
+  dateOfBirth?: string | null;
+  nationality?: string | null;
+  /** Jotform submission that created this lead, when known. */
+  jotform?: NccJotformRecordLinkDto | null;
   registration?: NccRegistrationDto | null;
   createdAt: string;
   updatedAt: string;
@@ -1289,6 +1541,8 @@ export type NccLeadStatusDto = NccLeadDto["status"];
 export type NccLeadTypeDto = NccLeadDto["leadType"];
 
 export type NccBookingIntakeDto = {
+  /** Registry row uuid (Jotform_Record_Link.form_id), not the Jotform id. */
+  formRowId: string | null;
   formName: string | null;
   submissionId: string | null;
   appointmentText: string | null;
@@ -2283,6 +2537,10 @@ export type NccLeadWriteInput = {
   lostActionReasonId?: string | null;
   areaOfStudyId?: string | null;
   assignedSsaId?: string | null;
+  /** YYYY-MM-DD. */
+  dateOfBirth?: string | null;
+  /** Three-letter code, uppercase. */
+  nationality?: string | null;
 };
 
 export type NccStudentWriteInput = {
@@ -2397,6 +2655,7 @@ export function patchNccPlacementTestRequest(
     scheduledAt?: string;
     roomId?: string | null;
     branchId?: string;
+    placementMoodleCourseId?: number | null;
     status?: "no_show" | "scheduled";
   }
 ) {
@@ -2474,6 +2733,7 @@ export function rescheduleNccPlacementTestRequest(
     roomId?: string | null;
     meetingUrl?: string | null;
     areaOfStudyId?: string | null;
+    placementMoodleCourseId?: number | null;
     branchId?: string;
     status?: "no_show" | "scheduled";
   }

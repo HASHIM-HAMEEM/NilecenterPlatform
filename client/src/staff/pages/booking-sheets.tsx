@@ -11,6 +11,7 @@ import {
   recordNccTrialLessonResultRequest,
   rescheduleNccPlacementTestRequest,
   type NccBranchDto,
+  type NccLeadDto,
   type NccPlacementTestDto,
   type NccRegistrationDto,
   type NccStudentDto,
@@ -30,6 +31,10 @@ import {
   validateIdentity,
   type IdentityInput,
 } from "../admissions";
+import {
+  parseAppointmentText,
+  requestedStartOnBranchChange,
+} from "../appointment-text";
 import { zonedDateHour, zonedInstant } from "../hour-cells";
 import { intlLocale } from "../i18n";
 import { staffWrite, useInvalidate } from "../api";
@@ -48,6 +53,7 @@ import {
   useMentorTeachers,
 } from "./admissions-ui";
 import { useStaffSession } from "../session";
+import { PossibleMatches, usePeopleMatches } from "../ui/possible-matches";
 
 const B = copy.admissions.booking;
 const L = copy.admissions.leads;
@@ -63,6 +69,16 @@ type Subject = {
 type Booking =
   | { kind: "placement"; item: NccPlacementTestDto }
   | { kind: "trial"; item: NccTrialLessonDto };
+
+function matchByName(
+  items: { id: string; name: string }[],
+  label?: string | null
+) {
+  const wanted = label?.trim().toLowerCase();
+  return wanted
+    ? (items.find(item => item.name.trim().toLowerCase() === wanted)?.id ?? "")
+    : "";
+}
 
 function isHttps(value: string) {
   try {
@@ -120,13 +136,21 @@ export function BookingSheet({
   const workspaceBranchId = session?.ncc?.workspaceBranchId ?? null;
   const branches = useBranches();
   const scheduleMode = booking?.item.status === "review";
-  // A request under review may carry no branch. Schedule mode owns a branch
-  // draft; booking and rescheduling keep using the subject's branch.
-  const initialBranchId =
-    booking?.item.branchId ?? (scheduleMode ? (workspaceBranchId ?? "") : "");
   const existing = booking?.item ?? null;
   const areas = useActiveAreas(open);
   const courses = useActiveCourses(open && kind === "trial");
+  const intake = scheduleMode ? (existing?.intake ?? null) : null;
+  // A request under review may carry no branch. Schedule mode owns a branch
+  // draft; booking and rescheduling keep using the subject's branch. When
+  // EMS kept the visitor's branch answer as a label, preselect the branch
+  // whose name matches it.
+  const intakeBranchId =
+    scheduleMode && !existing?.branchId && activeRole === "super_admin"
+      ? matchByName(branches.active, intake?.branchLabel)
+      : "";
+  const initialBranchId =
+    existing?.branchId ??
+    (scheduleMode ? intakeBranchId || (workspaceBranchId ?? "") : "");
   const initialZone =
     branches.get(scheduleMode ? initialBranchId : null)?.timezone ??
     subject.branch?.timezone ??
@@ -134,22 +158,42 @@ export function BookingSheet({
 
   const initial = useMemo(() => {
     const trial = booking?.kind === "trial" ? booking.item : null;
+    const subjectAreaId = scheduleMode
+      ? matchByName(areas, intake?.subjectLabel)
+      : "";
+    const requested =
+      scheduleMode && !existing?.scheduledAt
+        ? parseAppointmentText(intake?.appointmentText, initialZone)
+        : null;
     const start =
       (existing?.scheduledAt &&
         zonedDateHour(existing.scheduledAt, initialZone)) ||
+      requested ||
       zonedDateHour(new Date(Date.now() + 864e5).toISOString(), initialZone);
     return {
       branchId: scheduleMode ? initialBranchId : "",
       date: start?.date ?? "",
-      hour: existing?.scheduledAt && start ? String(start.hour) : "10",
+      hour:
+        existing?.scheduledAt && start
+          ? String(start.hour)
+          : requested
+            ? String(requested.hour)
+            : "10",
       roomId: existing?.roomId ?? "",
       meetingUrl: existing?.meetingUrl ?? "",
-      areaOfStudyId: existing?.areaOfStudyId ?? defaultAreaId ?? "",
+      areaOfStudyId:
+        existing?.areaOfStudyId ?? defaultAreaId ?? subjectAreaId,
       courseId:
         trial?.courseId ?? (kind === "trial" ? (defaultCourseId ?? "") : ""),
+      placementMoodleCourseId:
+        booking?.kind === "placement" && booking.item.placementMoodleCourseId
+          ? String(booking.item.placementMoodleCourseId)
+          : "",
       topic: (trial?.areaOfStudyId && !trial.courseId
         ? "area"
-        : kind === "trial" && !defaultCourseId && defaultAreaId
+        : kind === "trial" &&
+            !defaultCourseId &&
+            (defaultAreaId || subjectAreaId)
           ? "area"
           : "course") as "course" | "area",
     };
@@ -162,6 +206,8 @@ export function BookingSheet({
     initialZone,
     scheduleMode,
     initialBranchId,
+    intake,
+    areas,
   ]);
   const [draft, setDraft] = useState(initial);
   const activeBranch = scheduleMode
@@ -176,12 +222,16 @@ export function BookingSheet({
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>();
+  // True once the user edits date or hour; until then a branch change may
+  // re-derive them from the intake appointment text in the new branch's zone.
+  const [timeEdited, setTimeEdited] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setDraft(initial);
     setAttempted(false);
     setFieldErrors(undefined);
+    setTimeEdited(false);
   }, [open, initial]);
 
   const set = <K extends keyof typeof draft>(
@@ -216,6 +266,14 @@ export function BookingSheet({
           : draft.areaOfStudyId
             ? null
             : B.chooseArea,
+    placementCourse:
+      kind === "placement" &&
+      scheduleMode &&
+      area &&
+      area.placementCourses.length > 1 &&
+      !draft.placementMoodleCourseId
+        ? B.choosePlacementCourse
+        : null,
   };
   const placementCourseMissing =
     kind === "placement" && area && area.placementCourses.length === 0;
@@ -232,10 +290,20 @@ export function BookingSheet({
     setFieldErrors(undefined);
     try {
       if (kind === "placement") {
+        const placementMoodleCourseId = scheduleMode
+          ? area?.placementCourses.length === 1
+            ? area.placementCourses[0].moodleCourseId
+            : draft.placementMoodleCourseId
+              ? Number(draft.placementMoodleCourseId)
+              : null
+          : null;
         const fields = {
           scheduledAt,
           ...place,
           areaOfStudyId: draft.areaOfStudyId || null,
+          ...(placementMoodleCourseId
+            ? { placementMoodleCourseId }
+            : {}),
         };
         if (existing && scheduleMode) {
           await staffWrite(
@@ -314,6 +382,20 @@ export function BookingSheet({
 
   const show = (message: string | null) => (attempted ? message : null);
 
+  const requestRows: { label: string; value: string }[] = [];
+  if (scheduleMode && intake) {
+    if (intake.appointmentText)
+      requestRows.push({ label: B.requestedTime, value: intake.appointmentText });
+    if (!existing?.branchId && intake.branchLabel)
+      requestRows.push({ label: B.requestedBranch, value: intake.branchLabel });
+    if (intake.subjectLabel)
+      requestRows.push({ label: B.requestedTopic, value: intake.subjectLabel });
+    if (intake.contactPreference)
+      requestRows.push({ label: B.contactBy, value: intake.contactPreference });
+    if (intake.comments)
+      requestRows.push({ label: B.visitorNote, value: intake.comments });
+  }
+
   return (
     <FormSheet
       open={open}
@@ -327,11 +409,14 @@ export function BookingSheet({
               ? B.placementTitle
               : B.trialTitle
       }
-      description={`${(scheduleMode ? activeBranch?.name : subject.branch?.name) ?? ""} · ${
+      description={[
+        (scheduleMode ? activeBranch?.name : subject.branch?.name) ?? "",
         online
           ? copy.admissions.mode.onlineBranch
-          : copy.admissions.mode.onsiteBranch
-      }`}
+          : copy.admissions.mode.onsiteBranch,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
       dirty={dirty}
       saving={saving}
       fieldErrors={fieldErrors}
@@ -348,6 +433,22 @@ export function BookingSheet({
     >
       {errorFor => (
         <>
+          {requestRows.length ? (
+            <section
+              className="staff-request"
+              aria-label={B.visitorRequest}
+            >
+              <p className="staff-request-title">{B.visitorRequest}</p>
+              <dl>
+                {requestRows.map(row => (
+                  <div key={row.label} className="staff-request-row">
+                    <dt>{row.label}</dt>
+                    <dd dir="auto">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ) : null}
           {scheduleMode ? (
             <StaffField
               label={B.branch}
@@ -356,7 +457,21 @@ export function BookingSheet({
               {activeRole === "super_admin" ? (
                 <Select
                   value={draft.branchId || undefined}
-                  onValueChange={value => set("branchId", value)}
+                  onValueChange={value =>
+                    setDraft(current => {
+                      const next = { ...current, branchId: value };
+                      const requested = requestedStartOnBranchChange(
+                        intake?.appointmentText,
+                        timeEdited,
+                        branches.get(value)?.timezone ?? "UTC"
+                      );
+                      if (requested) {
+                        next.date = requested.date;
+                        next.hour = requested.hour;
+                      }
+                      return next;
+                    })
+                  }
                 >
                   <SelectTrigger aria-label={B.branch}>
                     <SelectValue placeholder={B.chooseBranch} />
@@ -385,11 +500,17 @@ export function BookingSheet({
               <DatePicker
                 id="booking-date"
                 value={draft.date}
-                onChange={next => set("date", next)}
+                onChange={next => {
+                  setTimeEdited(true);
+                  set("date", next);
+                }}
               />
               <Select
                 value={draft.hour}
-                onValueChange={value => set("hour", value)}
+                onValueChange={value => {
+                  setTimeEdited(true);
+                  set("hour", value);
+                }}
               >
                 <SelectTrigger aria-label={B.hour}>
                   <SelectValue />
@@ -504,7 +625,11 @@ export function BookingSheet({
                   draft.areaOfStudyId || (kind === "trial" ? undefined : NONE)
                 }
                 onValueChange={value =>
-                  set("areaOfStudyId", value === NONE ? "" : value)
+                  setDraft(current => ({
+                    ...current,
+                    areaOfStudyId: value === NONE ? "" : value,
+                    placementMoodleCourseId: "",
+                  }))
                 }
               >
                 <SelectTrigger aria-label={L.areaOfStudy}>
@@ -528,6 +653,40 @@ export function BookingSheet({
               ) : null}
             </StaffField>
           )}
+
+          {kind === "placement" &&
+          scheduleMode &&
+          area &&
+          area.placementCourses.length > 1 ? (
+            <StaffField
+              label={B.placementCourse}
+              error={
+                show(errors.placementCourse) ??
+                errorFor("placement_moodle_course_id")
+              }
+            >
+              <Select
+                value={draft.placementMoodleCourseId || undefined}
+                onValueChange={value =>
+                  set("placementMoodleCourseId", value)
+                }
+              >
+                <SelectTrigger aria-label={B.placementCourse}>
+                  <SelectValue placeholder={B.choosePlacementCourse} />
+                </SelectTrigger>
+                <SelectContent>
+                  {area.placementCourses.map(course => (
+                    <SelectItem
+                      key={course.moodleCourseId}
+                      value={String(course.moodleCourseId)}
+                    >
+                      {course.fullname}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </StaffField>
+          ) : null}
         </>
       )}
     </FormSheet>
@@ -1070,26 +1229,39 @@ export function IdentityFields({
 export function ConvertSheet({
   open,
   onOpenChange,
-  leadId,
+  lead,
   onConverted,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  leadId: string;
+  lead: NccLeadDto;
   onConverted: (student: NccStudentDto) => void;
 }) {
   const invalidate = useInvalidate();
-  const [identity, setIdentity] = useState<IdentityInput>(EMPTY_IDENTITY);
+  const initial = useMemo(
+    () => ({
+      ...EMPTY_IDENTITY,
+      dateOfBirth: lead.dateOfBirth ?? "",
+      nationality: lead.nationality ?? "",
+    }),
+    [lead]
+  );
+  const [identity, setIdentity] = useState<IdentityInput>(initial);
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>();
+  // A student with this lead's email would become a second record.
+  const existing = usePeopleMatches(
+    { email: lead.email, firstName: "", lastName: "" },
+    { enabled: open, kinds: ["student"], byName: false, exclude: { studentId: lead.studentId } }
+  );
 
   useEffect(() => {
     if (!open) return;
-    setIdentity(EMPTY_IDENTITY);
+    setIdentity(initial);
     setAttempted(false);
     setFieldErrors(undefined);
-  }, [open]);
+  }, [open, initial]);
 
   async function submit() {
     setAttempted(true);
@@ -1100,7 +1272,7 @@ export function ConvertSheet({
     setFieldErrors(undefined);
     try {
       const result = await staffWrite(
-        convertNccLeadRequest(leadId, identityPayload(identity))
+        convertNccLeadRequest(lead.id, identityPayload(identity))
       );
       await refreshAdmissions(invalidate);
       onOpenChange(false);
@@ -1120,19 +1292,22 @@ export function ConvertSheet({
       onOpenChange={onOpenChange}
       title={L.convertTitle}
       description={L.convertDescription}
-      dirty={JSON.stringify(identity) !== JSON.stringify(EMPTY_IDENTITY)}
+      dirty={JSON.stringify(identity) !== JSON.stringify(initial)}
       saving={saving}
       fieldErrors={fieldErrors}
       saveLabel={L.convert}
       onSubmit={() => runAction(submit, { success: L.convertToast })}
     >
       {errorFor => (
-        <IdentityFields
-          value={identity}
-          onChange={setIdentity}
-          attempted={attempted}
-          errorFor={errorFor}
-        />
+        <>
+          <PossibleMatches matches={existing.matches} context="convert" />
+          <IdentityFields
+            value={identity}
+            onChange={setIdentity}
+            attempted={attempted}
+            errorFor={errorFor}
+          />
+        </>
       )}
     </FormSheet>
   );

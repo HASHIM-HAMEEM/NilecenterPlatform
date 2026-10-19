@@ -106,7 +106,6 @@ export default function CoursesPage() {
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={C.title}
-        description={C.description}
         actions={
           superAdmin ? (
             <>
