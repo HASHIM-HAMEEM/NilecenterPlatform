@@ -69,6 +69,7 @@ import { registerIntegrationHealthRoutes } from "./integrationHealthRoutes.js";
 import { registerEmsStagingRoutes } from "./emsStagingRoutes.js";
 import { registerNccDirectoryRoutes } from "./nccDirectoryRoutes.js";
 import { registerNccOperationalRoutes } from "./nccOperationalRoutes.js";
+import { registerNccFilesRoutes } from "./nccFilesRoutes.js";
 import { registerNccSettingsRoutes } from "./nccSettingsRoutes.js";
 import { registerNccJotformSettingsRoutes } from "./nccJotformSettingsRoutes.js";
 import { registerEmailRoutes } from "./emailRoutes.js";
@@ -339,6 +340,7 @@ export function registerApiRoutes(app: ApiApp) {
   registerEmsStagingRoutes(app);
   registerNccDirectoryRoutes(app);
   registerNccOperationalRoutes(app);
+  registerNccFilesRoutes(app);
   registerNccSettingsRoutes(app);
   registerNccJotformSettingsRoutes(app);
   registerUserInvitationRoutes(app);

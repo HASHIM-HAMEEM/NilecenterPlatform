@@ -8,6 +8,7 @@ import {
   updateNccUserCoursesRequest,
   type NccBranchDto,
   type NccCourseDto,
+  type NccCustomFieldDefinitionDto,
   type NccHourCellOpDto,
   type NccHourCellRangeDto,
   type NccStaffStatisticsDto,
@@ -15,8 +16,15 @@ import {
 } from "@/lib/backend/api";
 import { staffWrite, useInvalidate, useNcc } from "../api";
 import { copy } from "../copy";
+import { nationalityName } from "../countries";
+import { intlLocale } from "../i18n";
 import { formatDob } from "../date-of-birth";
-import { isStaffManager, roleLabel } from "../roles";
+import { canManageStaffTarget, isStaffManager, roleLabel } from "../roles";
+import {
+  customFieldDefinition,
+  customFieldLabel,
+  formatCustomFieldValue,
+} from "../custom-fields";
 import { runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { useStaffCrumb } from "../shell/staff-shell";
@@ -136,6 +144,10 @@ export default function StaffDetailPage() {
   const branches = useNcc<{ items: NccBranchDto[] }>(
     canManage ? "/api/ncc/directory/branches" : null
   );
+  const customFieldDefs = useNcc<{ items: NccCustomFieldDefinitionDto[] }>(
+    canManage ? "/api/ncc/settings/custom-fields" : null,
+    { entityType: "user_profile", isActive: "true" }
+  );
   const isTeacher = user.data?.user.emsRole === "teacher";
   const courses = useNcc<{ items: NccCourseDto[] }>(
     canManage && isTeacher ? "/api/ncc/delivery/courses" : null
@@ -212,9 +224,7 @@ export default function StaffDetailPage() {
   const teacher = current.emsRole === "teacher";
   const hasAdmissions =
     admissions != null &&
-    (admissions.leadsCreated > 0 ||
-      admissions.leadsAssigned > 0 ||
-      admissions.studentsAssigned > 0);
+    (admissions.leadsCreated > 0 || admissions.studentsAssigned > 0);
   const hasTeaching =
     admissions != null &&
     (admissions.classesTeaching > 0 ||
@@ -281,7 +291,8 @@ export default function StaffDetailPage() {
             </div>
           </div>
         </div>
-        {canManage ? (
+        {canManage &&
+        canManageStaffTarget(session?.ncc?.assignedRole, current.emsRole) ? (
           <div className="staff-detail-actions">
             <button
               type="button"
@@ -338,7 +349,15 @@ export default function StaffDetailPage() {
               <Field label={C.lastName} value={current.lastName || null} />
               <Field label={C.email} value={current.email} />
               <Field label={C.phone} value={current.phone} />
-              <Field label={C.nationality} value={current.nationality} />
+              <Field
+                label={C.nationality}
+                value={
+                  current.nationality
+                    ? (nationalityName(current.nationality, intlLocale()) ??
+                      current.nationality)
+                    : null
+                }
+              />
               <Field label={C.dateOfBirth} value={formatDob(current.dateOfBirth)} />
               <Field label={C.address} value={current.address} />
             </dl>
@@ -363,8 +382,15 @@ export default function StaffDetailPage() {
                 {Object.entries(current.customFields).map(([key, value]) => (
                   <Field
                     key={key}
-                    label={key}
-                    value={value === null ? null : String(value)}
+                    label={customFieldLabel(customFieldDefs.data?.items, key)}
+                    value={
+                      value === null
+                        ? null
+                        : formatCustomFieldValue(
+                            customFieldDefinition(customFieldDefs.data?.items, key),
+                            value
+                          )
+                    }
                   />
                 ))}
               </dl>
@@ -438,16 +464,6 @@ export default function StaffDetailPage() {
                       label={C.statLeadsCreated}
                       value={admissions.leadsCreated}
                     />
-                    <Stat
-                      label={C.statLeadsAssigned}
-                      value={admissions.leadsAssigned}
-                    />
-                    <Stat label={C.statLeadsOpen} value={admissions.leadsOpen} />
-                    <Stat
-                      label={C.statLeadsRegistered}
-                      value={admissions.leadsRegistered}
-                    />
-                    <Stat label={C.statLeadsLost} value={admissions.leadsLost} />
                     <Stat
                       label={C.statStudentsAssigned}
                       value={admissions.studentsAssigned}

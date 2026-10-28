@@ -23,6 +23,7 @@ import {
   normalizeEmsPage,
   type EmsStagingListQuery,
   normalizeEmsCourse,
+  normalizeEmsMoodleCategories,
   normalizeEmsMoodleCoursePicker,
   normalizeEmsMoodleGroups,
   normalizeEmsMoodleSite,
@@ -394,7 +395,7 @@ const LEAD_REFERENCE_KEYS = [
   "lostReasonId",
   "lostActionReasonId",
   "areaOfStudyId",
-  "assignedSsaId",
+  "gender",
   "dateOfBirth",
   "nationality",
 ] as const;
@@ -422,11 +423,17 @@ function leadReferenceError(body: Record<string, unknown>): string | null {
   ) {
     return "nationality is invalid.";
   }
+  if (
+    body.gender !== undefined &&
+    body.gender !== null &&
+    !STUDENT_GENDERS.includes(String(body.gender))
+  ) {
+    return "gender is invalid.";
+  }
   for (const key of [
     "lostReasonId",
     "lostActionReasonId",
     "areaOfStudyId",
-    "assignedSsaId",
   ] as const) {
     const value = body[key];
     if (
@@ -447,7 +454,7 @@ function leadReferenceUpstream(body: Record<string, unknown>) {
     ["lostReasonId", "lost_reason_id"],
     ["lostActionReasonId", "lost_action_reason_id"],
     ["areaOfStudyId", "area_of_study_id"],
-    ["assignedSsaId", "assigned_ssa_id"],
+    ["gender", "gender"],
     ["dateOfBirth", "date_of_birth"],
     ["nationality", "nationality"],
   ] as const) {
@@ -1206,8 +1213,6 @@ export function registerNccOperationalRoutes(
       { name: "wantsOnsite", ems: "wants_onsite", kind: "boolean" },
       { name: "groupId", ems: "group_id", kind: "string" },
       { name: "ungrouped", ems: "ungrouped", kind: "boolean" },
-      { name: "assignedSsaId", ems: "assigned_ssa_id", kind: "array" },
-      { name: "unassigned", ems: "unassigned", kind: "boolean" },
       { name: "areaOfStudyId", ems: "area_of_study_id", kind: "array" },
     ]);
     if (!query) return;
@@ -2009,9 +2014,18 @@ export function registerNccOperationalRoutes(
         "passportNumber",
         "nationalId",
         "guardians",
+        "assignedSsaId",
       ]);
       if (unknown) {
         response.status(400).json({ error: `${unknown} is not allowed.` });
+        return;
+      }
+      if (
+        body.assignedSsaId !== undefined &&
+        body.assignedSsaId !== null &&
+        !isNonBlankString(body.assignedSsaId)
+      ) {
+        response.status(400).json({ error: "assignedSsaId is invalid." });
         return;
       }
       const invalid = identityError(body, true);
@@ -2026,7 +2040,22 @@ export function registerNccOperationalRoutes(
         response.status(400).json({ error: "guardians is invalid." });
         return;
       }
-      const identity = identityUpstream(body);
+      if (
+        body.assignedSsaId !== undefined &&
+        getNccRequestSession(request, dependencies.env ?? process.env)?.ncc
+          ?.activeRole === "registrar"
+      ) {
+        response
+          .status(403)
+          .json({ error: "assignedSsaId is not allowed for this role." });
+        return;
+      }
+      const identity = {
+        ...identityUpstream(body),
+        ...(body.assignedSsaId !== undefined
+          ? { assigned_ssa_id: body.assignedSsaId }
+          : {}),
+      };
       try {
         const payload = await runNccWrite(
           request,
@@ -3056,7 +3085,6 @@ export function registerNccOperationalRoutes(
     const unknown = hasOnlyKeys(body, [
       "branchId",
       "label",
-      "assignedSsaId",
       "memberLeadIds",
       "primaryLeadId",
     ]);
@@ -3081,10 +3109,7 @@ export function registerNccOperationalRoutes(
       }
       upstream.primary_lead_id = body.primaryLeadId;
     }
-    for (const [source, target] of [
-      ["label", "label"],
-      ["assignedSsaId", "assigned_ssa_id"],
-    ] as const) {
+    for (const [source, target] of [["label", "label"]] as const) {
       const value = body[source];
       if (value === undefined) continue;
       if (value !== null && (typeof value !== "string" || value.length > 200)) {
@@ -3440,12 +3465,15 @@ export function registerNccOperationalRoutes(
     const q = request.query?.q;
     const refresh = request.query?.refresh;
     const unmapped = request.query?.unmapped;
+    const categoryId = request.query?.categoryId;
     if (
       (q !== undefined && typeof q !== "string") ||
       (refresh !== undefined && refresh !== "true" && refresh !== "false") ||
       (unmapped !== undefined &&
         unmapped !== "true" &&
-        unmapped !== "false")
+        unmapped !== "false") ||
+      (categoryId !== undefined &&
+        (typeof categoryId !== "string" || !/^\d+$/.test(categoryId)))
     ) {
       response.status(400).json({ error: "Request query is invalid." });
       return;
@@ -3460,7 +3488,8 @@ export function registerNccOperationalRoutes(
               token,
               typeof q === "string" ? q : undefined,
               refresh === "true",
-              unmapped === undefined ? undefined : unmapped === "true"
+              unmapped === undefined ? undefined : unmapped === "true",
+              categoryId === undefined ? undefined : Number(categoryId)
             ),
           dependencies
         )
@@ -3476,6 +3505,83 @@ export function registerNccOperationalRoutes(
       if (!sendNccAuthError(error, response)) throw error;
     }
   });
+
+  app.get("/api/ncc/delivery/moodle-categories", async (request, response) => {
+    response.setHeader("Vary", "Cookie");
+    if (!prepareDeliveryWrite(request, response, dependencies)) return;
+    const refresh = request.query?.refresh;
+    if (refresh !== undefined && refresh !== "true" && refresh !== "false") {
+      response.status(400).json({ error: "Request query is invalid." });
+      return;
+    }
+    try {
+      const categories = normalizeEmsMoodleCategories(
+        await runNccRead(
+          request,
+          response,
+          (api, token): Promise<RemoteResult> =>
+            api.moodleCategories(token, refresh === "true"),
+          dependencies
+        )
+      );
+      if (!categories) {
+        response
+          .status(502)
+          .json({ error: "NCC EMS returned invalid delivery data." });
+        return;
+      }
+      response.json(categories);
+    } catch (error) {
+      if (!sendNccAuthError(error, response)) throw error;
+    }
+  });
+
+  app.post?.(
+    "/api/ncc/delivery/moodle-courses/refresh",
+    async (request, response) => {
+      response.setHeader("Vary", "Cookie");
+      if (!prepareDeliveryWrite(request, response, dependencies)) return;
+      const q = request.query?.q;
+      const unmapped = request.query?.unmapped;
+      const categoryId = request.query?.categoryId;
+      if (
+        (q !== undefined && typeof q !== "string") ||
+        (unmapped !== undefined &&
+          unmapped !== "true" &&
+          unmapped !== "false") ||
+        (categoryId !== undefined &&
+          (typeof categoryId !== "string" || !/^\d+$/.test(categoryId)))
+      ) {
+        response.status(400).json({ error: "Request query is invalid." });
+        return;
+      }
+      try {
+        const picker = normalizeEmsMoodleCoursePicker(
+          await runNccWrite(
+            request,
+            response,
+            (api, token): Promise<RemoteResult> =>
+              api.refreshMoodleCourses(token, {
+                categoryId:
+                  categoryId === undefined ? undefined : Number(categoryId),
+                query: typeof q === "string" ? q : undefined,
+                unmapped: unmapped === undefined ? undefined : unmapped === "true",
+              }),
+            dependencies
+          )
+        );
+        if (!picker) {
+          response
+            .status(502)
+            .json({ error: "NCC EMS returned invalid delivery data." });
+          return;
+        }
+        response.json(picker);
+      } catch (error) {
+        if (!sendNccAuthError(error, response)) throw error;
+      }
+    }
+  );
 
   app.get("/api/ncc/delivery/moodle-groups", async (request, response) => {
     response.setHeader("Vary", "Cookie");

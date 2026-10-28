@@ -19,7 +19,7 @@ import {
 import { staffWrite, useInvalidate, useNcc } from "../api";
 import { copy } from "../copy";
 import { toIsoDate, weekDates } from "../hour-cells";
-import { isClassCatalogWriter } from "../roles";
+import { canManageSessions, isRoomCatalogWriter } from "../roles";
 import { runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { useStaffCrumb } from "../shell/staff-shell";
@@ -33,7 +33,8 @@ const R = copy.teaching.rooms;
 export default function RoomDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { session } = useStaffSession();
-  const canWrite = isClassCatalogWriter(session?.ncc?.activeRole);
+  const canWrite = isRoomCatalogWriter(session?.ncc?.activeRole);
+  const canPaint = canManageSessions(session?.ncc?.activeRole);
   const invalidate = useInvalidate();
   const [pending, setPending] = useState<"edit" | "disable" | "enable" | null>(null);
   const [anchor, setAnchor] = useState(() => toIsoDate(new Date()));
@@ -111,7 +112,7 @@ export default function RoomDetailPage() {
           <HourCellsGrid
             range={range.data?.range ?? null}
             loading={range.isLoading}
-            canPaint={canWrite && room.status === "active"}
+            canPaint={canPaint && room.status === "active"}
             anchor={anchor}
             onAnchorChange={setAnchor}
             onSave={save}

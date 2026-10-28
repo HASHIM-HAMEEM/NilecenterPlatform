@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   createNccCourseRequest,
+  fetchNccMoodleCategoriesRequest,
   patchNccCourseRequest,
+  refreshNccMoodleCoursesRequest,
   type NccCourseDto,
   type NccDepartmentDto,
+  type NccMoodleCategoriesDto,
   type NccMoodleCoursePickerDto,
 } from "@/lib/backend/api";
 import {
@@ -19,11 +22,47 @@ import { canReadDepartments } from "../roles";
 import { FormValidationError, runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { FormSheet, StaffField } from "../ui/form-sheet";
+import { MultiSelect } from "../ui/multi-select";
+import { intlLocale } from "../i18n";
 import { useActiveAreas } from "./admissions-ui";
 
 const C = copy.teaching.courses;
 const T = copy.teaching;
 const NONE = "__none";
+
+/** Selected category ids plus every descendant category of each parent. */
+export function expandCategorySelection(
+  categories: { id: number; parentId: number | null }[],
+  selected: readonly number[]
+): Set<number> {
+  const byParent = new Map<number | null, number[]>();
+  for (const category of categories) {
+    const list = byParent.get(category.parentId) ?? [];
+    list.push(category.id);
+    byParent.set(category.parentId, list);
+  }
+  const expanded = new Set(selected);
+  const queue = [...selected];
+  while (queue.length) {
+    const id = queue.pop()!;
+    for (const child of byParent.get(id) ?? []) {
+      if (!expanded.has(child)) {
+        expanded.add(child);
+        queue.push(child);
+      }
+    }
+  }
+  return expanded;
+}
+
+function relativeTime(iso: string) {
+  const rtf = new Intl.RelativeTimeFormat(intlLocale(), { numeric: "auto" });
+  const minutes = Math.round((Date.parse(iso) - Date.now()) / 60000);
+  if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (Math.abs(hours) < 24) return rtf.format(hours, "hour");
+  return rtf.format(Math.round(hours / 24), "day");
+}
 
 export function useDepartments(enabled = true) {
   const { session } = useStaffSession();
@@ -66,10 +105,17 @@ export function CourseForm({
     pageSize: 100,
   });
   const [search, setSearch] = useState("");
+  const [categorySel, setCategorySel] = useState<string[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [catOverride, setCatOverride] =
+    useState<NccMoodleCategoriesDto | null>(null);
   const picker = useNcc<NccMoodleCoursePickerDto>(
     open && !course ? "/api/ncc/delivery/moodle-courses" : null,
     { unmapped: true, ...(search.trim() ? { q: search.trim() } : {}) },
     { keepPreviousData: true }
+  );
+  const moodleCategories = useNcc<NccMoodleCategoriesDto>(
+    open && !course ? "/api/ncc/delivery/moodle-categories" : null
   );
   const initial = useMemo<Draft>(
     () => ({
@@ -152,7 +198,44 @@ export function CourseForm({
   }
 
   const previousOptions = (others.data?.items ?? []).filter(item => item.id !== course?.id);
-  const moodle = picker.data?.courses ?? [];
+  const categories = (catOverride ?? moodleCategories.data)?.categories ?? [];
+  const expandedCategories = useMemo(
+    () => expandCategorySelection(categories, categorySel.map(Number)),
+    [categories, categorySel]
+  );
+  const moodle = (picker.data?.courses ?? []).filter(
+    item =>
+      categorySel.length === 0 ||
+      (item.categoryId !== null && expandedCategories.has(item.categoryId))
+  );
+  // A course the refresh dropped can no longer stay selected.
+  useEffect(() => {
+    if (
+      draft.moodleCourseId !== null &&
+      picker.data &&
+      !picker.data.courses.some(item => item.id === draft.moodleCourseId)
+    )
+      set("moodleCourseId", null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picker.data]);
+
+  async function refreshMoodle() {
+    setRefreshing(true);
+    try {
+      const refreshed = await refreshNccMoodleCoursesRequest({
+        unmapped: true,
+        ...(search.trim() ? { q: search.trim() } : {}),
+      });
+      if (!refreshed.ok)
+        throw new Error(refreshed.error ?? copy.state.errorGeneric);
+      const categoriesResult = await fetchNccMoodleCategoriesRequest(true);
+      if (categoriesResult.ok && categoriesResult.data)
+        setCatOverride(categoriesResult.data);
+      await picker.mutate();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   return (
     <FormSheet
@@ -170,15 +253,81 @@ export function CourseForm({
         <>
           {!course ? (
             <StaffField label={copy.teaching.courses.moodle} error={show(errors.moodleCourseId) ?? errorFor("moodle_course_id")}>
-              <input
-                type="search"
-                className="staff-input"
-                placeholder={C.searchMoodle}
-                value={search}
-                onChange={event => setSearch(event.target.value)}
-              />
+              {categories.length > 0 ? (
+                <MultiSelect
+                  options={[...categories]
+                    .sort((a, b) => a.sortOrder - b.sortOrder)
+                    .map(category => ({
+                      value: String(category.id),
+                      label: `${"  ".repeat(Math.max(0, category.depth - 1))}${category.name}`,
+                    }))}
+                  value={categorySel}
+                  onChange={setCategorySel}
+                  allLabel={C.moodleCategories}
+                  noun={C.moodleCategories}
+                  size="sm"
+                  ariaLabel={C.moodleCategories}
+                />
+              ) : null}
+              <div className="flex items-center gap-2">
+                <input
+                  type="search"
+                  className="staff-input"
+                  placeholder={C.searchMoodle}
+                  value={search}
+                  onChange={event => setSearch(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="staff-btn"
+                  data-size="sm"
+                  data-busy={refreshing || undefined}
+                  disabled={refreshing}
+                  onClick={() =>
+                    void runAction(refreshMoodle, {
+                      error: copy.state.errorGeneric,
+                    })
+                  }
+                >
+                  {C.refreshMoodle}
+                </button>
+              </div>
+              {picker.data?.refreshedAt ? (
+                <span className="staff-muted text-xs">
+                  {C.moodleUpdated.replace(
+                    "{time}",
+                    relativeTime(picker.data.refreshedAt)
+                  )}
+                </span>
+              ) : null}
+              {picker.data?.error || picker.data?.warnings.length ? (
+                <p className="staff-banner" data-tone="caution" role="status">
+                  {[picker.data.error, ...(picker.data.warnings ?? [])]
+                    .filter(Boolean)
+                    .join(" ")}
+                </p>
+              ) : null}
               {picker.data && moodle.length === 0 ? (
-                <span className="staff-hint">{C.noUnmapped}</span>
+                <span className="staff-hint">
+                  {categorySel.length || search.trim()
+                    ? C.noMoodleMatch
+                    : C.noUnmapped}
+                  {categorySel.length || search.trim() ? (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        className="staff-link"
+                        onClick={() => {
+                          setCategorySel([]);
+                          setSearch("");
+                        }}
+                      >
+                        {C.clearFilters}
+                      </button>
+                    </>
+                  ) : null}
+                </span>
               ) : (
                 <div className="staff-choice-list staff-choice-scroll" role="radiogroup" aria-label={C.moodle}>
                   {moodle.map(item => (

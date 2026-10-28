@@ -22,36 +22,101 @@ export function isBranchOperator(role: NccRole | null | undefined): boolean {
   return role === "branch_admin" || role === "vice_manager";
 }
 
+/** Leads, placement tests, and trial lessons. Registrar yes, SSA no. */
 export function isAdmissionsRole(role: NccRole | null | undefined): boolean {
   return (
     role === "super_admin" ||
     isBranchOperator(role) ||
-    role === "registrar" ||
-    role === "ssa"
+    role === "registrar"
   );
 }
 
+/** Student catalogue readers. Registrar is view-only. */
+export function canReadStudents(role: NccRole | null | undefined): boolean {
+  return isAdmissionsRole(role) || role === "ssa";
+}
+
+/** Student and enrolment writers. Registrar cannot write. */
+export function canManageStudents(role: NccRole | null | undefined): boolean {
+  return (
+    role === "super_admin" || isBranchOperator(role) || role === "ssa"
+  );
+}
+
+/** Class catalogue writers. SSA yes, Registrar no. */
 export function isClassCatalogWriter(
   role: NccRole | null | undefined
 ): boolean {
-  return (
-    role === "super_admin" || isBranchOperator(role) || role === "registrar"
-  );
+  return canManageStudents(role);
 }
 
+/** Class session writers (propose, create, edit, cancel). */
+export function canManageSessions(
+  role: NccRole | null | undefined
+): boolean {
+  return canManageStudents(role);
+}
+
+/** Room catalogue writers. Registrar yes, SSA no. */
+export function isRoomCatalogWriter(
+  role: NccRole | null | undefined
+): boolean {
+  return isAdmissionsRole(role);
+}
+
+/** Who may set/clear assigned_ssa_id in the UI (matches backend). */
 export function canSetAssignee(role: NccRole | null | undefined): boolean {
-  return (
-    role === "super_admin" || isBranchOperator(role) || role === "registrar"
-  );
+  return isAdmissionsRole(role);
+}
+
+/** Who may set the SSA on the student a lead conversion creates. */
+export function canSetLeadAssignee(
+  role: NccRole | null | undefined
+): boolean {
+  return canSetAssignee(role) && role !== "registrar";
 }
 
 export function isStaffManager(role: NccRole | null | undefined): boolean {
   return role === "super_admin" || isBranchOperator(role);
 }
 
+/** Global audit streams (auth, catalogs). Vice manager reads branch only. */
+export function canReadGlobalAuditStreams(
+  role: NccRole | null | undefined
+): boolean {
+  return role === "super_admin" || role === "branch_admin";
+}
+
+const BRANCH_ADMIN_MANAGEABLE: readonly NccRole[] = [
+  "vice_manager",
+  "hod",
+  "registrar",
+  "ssa",
+  "teacher",
+];
+const VICE_MANAGER_MANAGEABLE: readonly NccRole[] = [
+  "hod",
+  "registrar",
+  "ssa",
+  "teacher",
+];
+
+/** Edit, reset, disable, enable and invite on another staff account. */
+export function canManageStaffTarget(
+  assigned: NccRole | null | undefined,
+  target: NccRole
+): boolean {
+  if (assigned === "super_admin") return true;
+  if (assigned === "branch_admin")
+    return BRANCH_ADMIN_MANAGEABLE.includes(target);
+  if (assigned === "vice_manager")
+    return VICE_MANAGER_MANAGEABLE.includes(target);
+  return false;
+}
+
 /** Roles EMS allows to read the branch directory (HOD and teacher get 403). */
 export function canReadBranches(role: NccRole | null | undefined): boolean {
-  return isAdmissionsRole(role);
+  return canReadStudents(role);
 }
 
 /** Roles EMS allows to read the department directory (everyone else gets 403). */

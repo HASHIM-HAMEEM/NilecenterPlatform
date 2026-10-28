@@ -36,6 +36,7 @@ import {
   normalizeEmsSessionSlots,
   normalizeEmsSessions,
   normalizeEmsStaffUsers,
+  normalizeEmsUserStatistics,
   normalizeEmsStudent,
   normalizeEmsStudentEnrolments,
   normalizeEmsAuditEvents,
@@ -621,6 +622,9 @@ describe("EMS operational payload guards", () => {
     branch_name: "Cairo",
     lead_type: "new",
     status: "in_process",
+    assigned_registrar_id: "reg-1",
+    assigned_registrar_name: "Nile Registrar",
+    gender: "female",
     created_at: "2026-09-01T10:00:00Z",
     updated_at: "2026-09-12T10:00:00Z",
   };
@@ -784,6 +788,20 @@ describe("EMS operational payload guards", () => {
       studentId: null,
       leadType: "new",
       status: "in_process",
+      assignedRegistrarId: "reg-1",
+      assignedRegistrarName: "Nile Registrar",
+      gender: "female",
+    });
+    const {
+      assigned_registrar_id: _regId,
+      assigned_registrar_name: _regName,
+      gender: _gender,
+      ...unassigned
+    } = minimal;
+    expect(normalizeEmsLead(unassigned)).toMatchObject({
+      assignedRegistrarId: null,
+      assignedRegistrarName: null,
+      gender: null,
     });
     expect(normalizeEmsLead(lead)).toMatchObject({
       preferredCourses: [{ id: "course-1", name: "Arabic" }],
@@ -797,6 +815,33 @@ describe("EMS operational payload guards", () => {
     ).toBeNull();
     expect(
       normalizeEmsLead({ ...lead, entry_path: "unknown" })
+    ).toBeNull();
+    expect(normalizeEmsLead({ ...lead, gender: "other" })).toBeNull();
+  });
+
+  it("normalizes user statistics with the current five-count shape", () => {
+    const stats = {
+      user_id: "user-1",
+      assigned_role: "registrar",
+      leads_created: 3,
+      students_assigned: 2,
+      classes_teaching: 1,
+      sessions_scheduled: 4,
+      students_taught: 9,
+    };
+    expect(normalizeEmsUserStatistics(stats)).toEqual({
+      userId: "user-1",
+      emsRole: "registrar",
+      leadsCreated: 3,
+      studentsAssigned: 2,
+      classesTeaching: 1,
+      sessionsScheduled: 4,
+      studentsTaught: 9,
+    });
+    const { sessions_scheduled: _sessions, ...missing } = stats;
+    expect(normalizeEmsUserStatistics(missing)).toBeNull();
+    expect(
+      normalizeEmsUserStatistics({ ...stats, assigned_role: "bogus" })
     ).toBeNull();
   });
 
@@ -2420,7 +2465,8 @@ describe("EMS audit events payload guard", () => {
   it("rejects malformed rows", () => {
     const bad = (patch: Record<string, unknown>) =>
       normalizeEmsAuditEvents([{ ...auditEventRow, ...patch }]);
-    expect(bad({ stream: "payments" })).toBeNull();
+    // Unknown streams are skipped, so a lone unknown row yields an empty feed.
+    expect(bad({ stream: "payments" })).toEqual([]);
     expect(bad({ created_at: "not-a-date" })).toBeNull();
     expect(bad({ id: "" })).toBeNull();
     expect(bad({ event_type: "" })).toBeNull();
@@ -2429,6 +2475,16 @@ describe("EMS audit events payload guard", () => {
     expect(bad({ actor_display_name: "" })).toBeNull();
     expect(bad({ entity_label: 7 })).toBeNull();
     expect(normalizeEmsAuditEvents({ items: [] })).toBeNull();
+  });
+
+  it("parses trial_lesson rows and skips streams we do not model yet", () => {
+    const items = normalizeEmsAuditEvents([
+      { ...auditEventRow, id: "evt-t", stream: "trial_lesson" },
+      { ...auditEventRow, id: "evt-x", stream: "future_x" },
+      { ...auditEventRow, id: "evt-a", stream: "auth" },
+    ]);
+    expect(items?.map(item => item.id)).toEqual(["evt-t", "evt-a"]);
+    expect(items?.[0].stream).toBe("trial_lesson");
   });
 });
 

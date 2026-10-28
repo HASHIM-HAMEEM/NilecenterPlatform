@@ -27,12 +27,14 @@ import {
 
 export class StaffApiError extends Error {
   status?: number;
+  code?: string;
   details?: Record<string, string[]>;
-  constructor(message: string, status?: number, details?: Record<string, string[]>) {
+  constructor(message: string, status?: number, details?: Record<string, string[]>, code?: string) {
     super(message);
     this.name = "StaffApiError";
     this.status = status;
     this.details = details;
+    this.code = code;
   }
 }
 
@@ -41,13 +43,15 @@ export function resultOrThrow<T>(result: {
   data?: T;
   error?: string;
   status?: number;
+  code?: string;
   details?: Record<string, string[]>;
 }): T {
   if (!result.ok) {
     throw new StaffApiError(
       result.error ?? copy.state.errorGeneric,
       result.status,
-      result.details
+      result.details,
+      result.code
     );
   }
   return result.data as T;

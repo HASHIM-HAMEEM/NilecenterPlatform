@@ -26,7 +26,8 @@ import {
 } from "../dashboard";
 import { canManageForms } from "../forms/model";
 import { intlLocale } from "../i18n";
-import { canSetAssignee, isAdmissionsRole } from "../roles";
+import { canManageStudents, canReadStudents, isAdmissionsRole } from "../roles";
+import { canAccess } from "../nav";
 import { useStaffSession } from "../session";
 import { Columns, Donut, Funnel, Sparkline, SplitBar } from "../ui/charts";
 import { Change, Panel, PanelLink, PeriodSwitch, Tile, fmt } from "../ui/insights";
@@ -111,36 +112,44 @@ function AdmissionsDashboard() {
   // Eight weekly windows in one request batch for the intake chart.
   const weeksKey = weekWindows(8);
   const weeks = useSWR(
-    session ? ["dashboard-weeks", session.userId, role, branchFilter, weeksKey[0].createdFrom] : null,
+    session && isAdmissionsRole(role) ? ["dashboard-weeks", session.userId, role, branchFilter, weeksKey[0].createdFrom] : null,
     () =>
       Promise.all(
         weeksKey.map(window => staffGet<{ summary: NccDashboardSummaryDto }>(SUMMARY, { ...scope, ...window }))
       ),
     { revalidateOnFocus: false }
   );
+  const admissions = isAdmissionsRole(role);
+  const manageStudents = canManageStudents(role);
+  const link = (href: string) =>
+    role && canAccess(href, role) ? href : undefined;
+  const panelLink = (href: string, label: string) =>
+    role && canAccess(href, role) ? (
+      <PanelLink href={href} label={label} />
+    ) : undefined;
   const bookingQuery = { status: "scheduled", sort: "scheduled_at", order: "asc", pageSize: 100 };
   const placements = useNcc<NccPageDto<NccPlacementTestDto>>(
-    "/api/ncc/admissions/placement-tests",
+    admissions ? "/api/ncc/admissions/placement-tests" : null,
     bookingQuery
   );
   const trials = useNcc<NccPageDto<NccTrialLessonDto>>(
-    "/api/ncc/admissions/trial-lessons",
+    admissions ? "/api/ncc/admissions/trial-lessons" : null,
     bookingQuery
   );
-  const reviewPlacements = useTotal("/api/ncc/admissions/placement-tests", {
+  const reviewPlacements = useTotal(admissions ? "/api/ncc/admissions/placement-tests" : null, {
     status: "review",
   });
-  const reviewTrials = useTotal("/api/ncc/admissions/trial-lessons", {
+  const reviewTrials = useTotal(admissions ? "/api/ncc/admissions/trial-lessons" : null, {
     status: "review",
   });
   const toReview =
     reviewPlacements === null || reviewTrials === null
       ? null
       : reviewPlacements + reviewTrials;
-  const unpaid = useTotal("/api/ncc/admissions/enrolments", { status: "pending_payment" });
+  const unpaid = useTotal(manageStudents ? "/api/ncc/admissions/enrolments" : null, { status: "pending_payment" });
   // The enrolment status filter takes one value; paid sales wait in two.
-  const pendingClass = useTotal("/api/ncc/admissions/enrolments", { status: "pending_class" });
-  const pendingGroup = useTotal("/api/ncc/admissions/enrolments", { status: "pending_group" });
+  const pendingClass = useTotal(manageStudents ? "/api/ncc/admissions/enrolments" : null, { status: "pending_class" });
+  const pendingGroup = useTotal(manageStudents ? "/api/ncc/admissions/enrolments" : null, { status: "pending_group" });
   const waitingClass =
     pendingClass === null || pendingGroup === null ? null : pendingClass + pendingGroup;
   // Our own forms: new responses waiting for a decision.
@@ -150,10 +159,6 @@ function AdmissionsDashboard() {
   const newResponses = formResponses.data
     ? formResponses.data.filter(item => item.submission.status === "submitted").length
     : null;
-  const unowned = useTotal(
-    canSetAssignee(role) ? "/api/ncc/admissions/leads" : null,
-    { unassigned: true, status: OPEN_STAGES }
-  );
 
   const zone = (branchId: string | null) =>
     branchId ? branches.get(branchId)?.timezone : undefined;
@@ -181,19 +186,24 @@ function AdmissionsDashboard() {
     new Date(`${from}T12:00:00Z`).toLocaleDateString(intlLocale(), { day: "numeric", month: "short", timeZone: "UTC" });
 
   const attention = [
-    {
-      label: D.toReview,
-      count: toReview,
-      href:
-        (reviewPlacements ?? 0) > 0
-          ? "/app/placement-tests?status=review"
-          : "/app/trial-lessons?status=review",
-    },
-    { label: D.resultsToRecord, count: placements.data && trials.data ? overdue.length : null, href: "/app/placement-tests" },
-    { label: D.unpaid, count: unpaid, href: "/app/enrolments?status=pending_payment" },
-    { label: D.waitingClass, count: waitingClass, href: "/app/enrolments" },
-    ...(canSetAssignee(role)
-      ? [{ label: D.unowned, count: unowned, href: "/app/leads?owner=none" }]
+    ...(admissions
+      ? [
+          {
+            label: D.toReview,
+            count: toReview,
+            href:
+              (reviewPlacements ?? 0) > 0
+                ? "/app/placement-tests?status=review"
+                : "/app/trial-lessons?status=review",
+          },
+          { label: D.resultsToRecord, count: placements.data && trials.data ? overdue.length : null, href: "/app/placement-tests" },
+        ]
+      : []),
+    ...(manageStudents
+      ? [
+          { label: D.unpaid, count: unpaid, href: "/app/enrolments?status=pending_payment" },
+          { label: D.waitingClass, count: waitingClass, href: "/app/enrolments" },
+        ]
       : []),
     ...(canManageForms(session?.activeRole)
       ? [{ label: D.formResponses, count: newResponses, href: "/app/forms?tab=responses" }]
@@ -229,6 +239,7 @@ function AdmissionsDashboard() {
         <ErrorState error={summary.error} onRetry={() => void summary.mutate()} />
       ) : (
         <div className="staff-tiles staff-tiles-insight">
+          {admissions ? (<>
           <Tile
             label={D.newLeads}
             value={now ? fmt(now.total) : "–"}
@@ -238,7 +249,7 @@ function AdmissionsDashboard() {
                 {weekly.length ? <Sparkline values={weekly} label={D.intakeNote} /> : null}
               </>
             }
-            href="/app/leads"
+            href={link("/app/leads")}
           />
           <Tile
             label={D.conversion}
@@ -258,8 +269,26 @@ function AdmissionsDashboard() {
                 ? `${fmt(cards.scheduledPlacements)} ${D.tests} · ${fmt(cards.scheduledTrials)} ${D.trials}`
                 : null
             }
-            href="/app/placement-tests"
+            href={link("/app/placement-tests")}
           />
+          </>) : (<>
+          <Tile
+            label={D.activeStudents}
+            value={cards ? fmt(cards.activeStudents) : "–"}
+            note={<span className="staff-tile-note">{D.activeStudentsNote}</span>}
+            href={link("/app/students")}
+          />
+          <Tile
+            label={D.unpaid}
+            value={unpaid !== null ? fmt(unpaid) : "–"}
+            href={link("/app/enrolments?status=pending_payment")}
+          />
+          <Tile
+            label={D.waitingClass}
+            value={waitingClass !== null ? fmt(waitingClass) : "–"}
+            href={link("/app/enrolments")}
+          />
+          </>)}
           <Tile
             label={D.classFill}
             value={cards ? `${fill}%` : "–"}
@@ -269,11 +298,13 @@ function AdmissionsDashboard() {
                 ? `${fmt(cards.enrolmentFill)} ${D.seatsOf} ${fmt(cards.enrolmentCapacity)} ${D.seats}`
                 : null
             }
+            href={link("/app/classes")}
           />
         </div>
       )}
 
-      <div className="staff-dash-board">
+      <div className="staff-dash-board" data-variant={admissions ? undefined : "compact"}>
+        {admissions ? (<>
         <Panel area="intake" title={D.intake} action={<span className="staff-muted staff-panel-note">{D.intakeNote}</span>}>
           {!weeks.data ? (
             <LoadingRows rows={4} />
@@ -307,7 +338,7 @@ function AdmissionsDashboard() {
           )}
         </Panel>
 
-        <Panel area="today" title={D.today} action={<PanelLink href="/app/placement-tests" label={D.openAgenda} />}>
+        <Panel area="today" title={D.today} action={panelLink("/app/placement-tests", D.openAgenda)}>
           {!placements.data || !trials.data ? (
             <LoadingRows rows={3} />
           ) : today.length === 0 ? (
@@ -340,6 +371,7 @@ function AdmissionsDashboard() {
             </ul>
           )}
         </Panel>
+        </>) : null}
 
         <Panel area="attention" title={D.attention}>
           {clear ? (
@@ -351,15 +383,23 @@ function AdmissionsDashboard() {
           <ul className="staff-attention">
             {attention.map(item => (
               <li key={item.label}>
-                <Link href={item.href} className="staff-attention-row" data-zero={item.count === 0 || undefined}>
-                  <span>{item.label}</span>
-                  <span className="staff-attention-count">{item.count === null ? "–" : fmt(item.count)}</span>
-                </Link>
+                {role && canAccess(item.href, role) ? (
+                  <Link href={item.href} className="staff-attention-row" data-zero={item.count === 0 || undefined}>
+                    <span>{item.label}</span>
+                    <span className="staff-attention-count">{item.count === null ? "–" : fmt(item.count)}</span>
+                  </Link>
+                ) : (
+                  <span className="staff-attention-row" data-zero={item.count === 0 || undefined}>
+                    <span>{item.label}</span>
+                    <span className="staff-attention-count">{item.count === null ? "–" : fmt(item.count)}</span>
+                  </span>
+                )}
               </li>
             ))}
           </ul>
         </Panel>
 
+        {admissions ? (<>
         <Panel area="funnel" title={D.funnel} action={<span className="staff-muted staff-panel-note">{D.periods[period]}</span>}>
           {!now || !outcomes ? (
             <LoadingRows rows={3} />
@@ -405,7 +445,7 @@ function AdmissionsDashboard() {
           )}
         </Panel>
 
-        <Panel area="pipeline" title={D.pipeline} action={<PanelLink href="/app/leads" label={copy.admissions.leads.title} />}>
+        <Panel area="pipeline" title={D.pipeline} action={panelLink("/app/leads", copy.admissions.leads.title)}>
           {!summary.data ? (
             <LoadingRows rows={4} />
           ) : pipeline.every(item => item.count === 0) ? (
@@ -428,8 +468,9 @@ function AdmissionsDashboard() {
             </ul>
           )}
         </Panel>
+        </>) : null}
 
-        <Panel area="students" title={D.activeStudents} action={<PanelLink href="/app/students" label={copy.admissions.students.title} />}>
+        <Panel area="students" title={D.activeStudents} action={panelLink("/app/students", copy.admissions.students.title)}>
           <div className="staff-bignum">
             <span>{cards ? fmt(cards.activeStudents) : "–"}</span>
             <span className="staff-muted">{D.activeStudentsNote}</span>
@@ -713,6 +754,6 @@ export default function DashboardPage() {
   const role = session?.ncc?.activeRole ?? null;
   if (role === "teacher") return <TeacherDashboard />;
   if (role === "hod") return <DepartmentDashboard />;
-  if (isAdmissionsRole(role)) return <AdmissionsDashboard />;
+  if (canReadStudents(role)) return <AdmissionsDashboard />;
   return <EmptyState title={copy.shell.noAccess} />;
 }

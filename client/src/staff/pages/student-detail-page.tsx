@@ -25,12 +25,19 @@ import { formatAmount, recommendedNext } from "../admissions";
 import { staffGet, staffWrite, useInvalidate, useNcc } from "../api";
 import { copy } from "../copy";
 import { formatDob } from "../date-of-birth";
-import { formatDateTime } from "../i18n";
-import { isAdmissionsRole } from "../roles";
+import { nationalityName } from "../countries";
+import { formatDateTime, intlLocale } from "../i18n";
+import {
+  canManageStudents,
+  canMutateAssignedRecord,
+  canReadStudents,
+  isAdmissionsRole,
+} from "../roles";
 import { runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { useStaffCrumb } from "../shell/staff-shell";
 import { ConfirmDialog } from "../ui/confirm-dialog";
+import { DocumentsSection } from "../ui/documents";
 import { MoodleBindDialog } from "../ui/moodle-bind-dialog";
 import {
   ActiveMark,
@@ -108,7 +115,7 @@ function EnrolmentTable({
   menu,
 }: {
   items: NccEnrolmentDto[];
-  menu: (e: NccEnrolmentDto) => React.ReactNode;
+  menu?: (e: NccEnrolmentDto) => React.ReactNode;
 }) {
   return (
     <>
@@ -121,7 +128,9 @@ function EnrolmentTable({
                 {kindLabel(item.kind)} · {item.className ?? E.noClass}
               </span>
             </span>
-            <span className="staff-cell-top">{menu(item)}</span>
+            {menu ? (
+              <span className="staff-cell-top">{menu(item)}</span>
+            ) : null}
             <span className="staff-rowcard-badges">
               <StatusBadge status={item.status} />
               <BalanceCell enrolment={item} />
@@ -138,7 +147,9 @@ function EnrolmentTable({
               <th scope="col">{E.class}</th>
               <th scope="col">{E.balance}</th>
               <th scope="col">{E.opened}</th>
-              <th scope="col" aria-label={copy.actions.rowActions} />
+              {menu ? (
+                <th scope="col" aria-label={copy.actions.rowActions} />
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -167,7 +178,9 @@ function EnrolmentTable({
                 <td>
                   {item.enrolledAt ? formatDate(item.enrolledAt) : <NotSet />}
                 </td>
-                <td className="staff-cell-actions">{menu(item)}</td>
+                {menu ? (
+                  <td className="staff-cell-actions">{menu(item)}</td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -242,7 +255,15 @@ function ReportView({ report }: { report: NccStudentReportDto }) {
         />
         <Field label={S.branch} value={identity.branchName} />
         <Field label={I.dateOfBirth} value={formatDob(identity.dateOfBirth)} />
-        <Field label={I.nationality} value={identity.nationality} />
+        <Field
+          label={I.nationality}
+          value={
+            identity.nationality
+              ? (nationalityName(identity.nationality, intlLocale()) ??
+                identity.nationality)
+              : null
+          }
+        />
         <Field
           label={I.nationalId}
           value={identity.nationalId ?? identity.passportNumber}
@@ -298,7 +319,8 @@ type Dialog =
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { session } = useStaffSession();
-  const allowed = isAdmissionsRole(session?.ncc?.activeRole);
+  const role = session?.ncc?.activeRole ?? null;
+  const allowed = canReadStudents(role);
   const invalidate = useInvalidate();
   const branches = useBranches();
   const search = useSearch();
@@ -313,10 +335,21 @@ export default function StudentDetailPage() {
       : null
   );
   const student = studentQuery.data?.student;
+  const canManage =
+    canManageStudents(role) &&
+    canMutateAssignedRecord(
+      role,
+      session?.userId,
+      student?.assignedSsaId
+    );
   useStaffCrumb(student?.name ?? null);
+  const admissions = isAdmissionsRole(role);
+  const visibleTabs: Tab[] = admissions
+    ? [...TABS]
+    : TABS.filter(value => value !== "bookings");
   const requested = new URLSearchParams(search).get("tab") as Tab | null;
   const tab: Tab =
-    requested && TABS.includes(requested) ? requested : "overview";
+    requested && visibleTabs.includes(requested) ? requested : "overview";
   // Overview also reads sales and results, for the recommended next course.
   const enrolments = useStudentEnrolments(
     tab === "courses" || tab === "overview" ? student : undefined
@@ -331,7 +364,8 @@ export default function StudentDetailPage() {
       ? `/api/ncc/admissions/students/${encodeURIComponent(student.id)}/report`
       : null
   );
-  const readsBookings = tab === "bookings" || tab === "overview";
+  const readsBookings =
+    admissions && (tab === "bookings" || tab === "overview");
   const placements = useNcc<NccPageDto<NccPlacementTestDto>>(
     student && readsBookings ? "/api/ncc/admissions/placement-tests" : null,
     { studentId: id, pageSize: 100 }
@@ -352,7 +386,8 @@ export default function StudentDetailPage() {
 
   // Arriving with ?enrol=1 (from a lead that just became a student) opens the
   // sale for the recommended course once it is known; the flag is dropped.
-  const wantsEnrol = new URLSearchParams(search).get("enrol") === "1";
+  const wantsEnrol =
+    canManage && new URLSearchParams(search).get("enrol") === "1";
   const ready = Boolean(placements.data && trials.data && !enrolments.loading);
   useEffect(() => {
     if (!wantsEnrol || !ready) return;
@@ -415,6 +450,7 @@ export default function StudentDetailPage() {
             </div>
           </div>
         </div>
+        {canManage ? (
         <div className="staff-detail-actions">
           <button
             type="button"
@@ -461,6 +497,7 @@ export default function StudentDetailPage() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        ) : null}
       </header>
 
       {student.warnings?.length ? (
@@ -491,16 +528,24 @@ export default function StudentDetailPage() {
           <dt>{S.registration}</dt>
           <dd>
             {student.registration ? (
-              <button
-                type="button"
-                className="staff-link"
-                onClick={() => setDialog("fee")}
-              >
-                {(student.registration.remaining ?? 0) <= 0
-                  ? copy.admissions.money.settled
-                  : `${formatAmount(student.registration.remaining)} ${copy.admissions.money.remaining.toLowerCase()}`}
-              </button>
-            ) : (
+              canManage ? (
+                <button
+                  type="button"
+                  className="staff-link"
+                  onClick={() => setDialog("fee")}
+                >
+                  {(student.registration.remaining ?? 0) <= 0
+                    ? copy.admissions.money.settled
+                    : `${formatAmount(student.registration.remaining)} ${copy.admissions.money.remaining.toLowerCase()}`}
+                </button>
+              ) : (
+                <span>
+                  {(student.registration.remaining ?? 0) <= 0
+                    ? copy.admissions.money.settled
+                    : `${formatAmount(student.registration.remaining)} ${copy.admissions.money.remaining.toLowerCase()}`}
+                </span>
+              )
+            ) : canManage ? (
               <button
                 type="button"
                 className="staff-link"
@@ -508,6 +553,8 @@ export default function StudentDetailPage() {
               >
                 {L.recordFee}
               </button>
+            ) : (
+              <span className="staff-muted">{L.noFee}</span>
             )}
           </dd>
         </div>
@@ -549,20 +596,22 @@ export default function StudentDetailPage() {
                 .join(" · ")}
             </p>
           </div>
-          <div className="staff-next-actions">
-            <button
-              type="button"
-              className="staff-btn"
-              data-variant="primary"
-              aria-label={R.enrolIn.replace("{course}", recommendation.courseName)}
-              onClick={() => {
-                setSaleCourse(recommendation.courseId);
-                setDialog("sale");
-              }}
-            >
-              {R.enrol}
-            </button>
-          </div>
+          {canManage ? (
+            <div className="staff-next-actions">
+              <button
+                type="button"
+                className="staff-btn"
+                data-variant="primary"
+                aria-label={R.enrolIn.replace("{course}", recommendation.courseName)}
+                onClick={() => {
+                  setSaleCourse(recommendation.courseId);
+                  setDialog("sale");
+                }}
+              >
+                {R.enrol}
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -571,7 +620,7 @@ export default function StudentDetailPage() {
         role="tablist"
         aria-label={student.name}
       >
-        {TABS.map(value => (
+        {visibleTabs.map(value => (
           <button
             key={value}
             type="button"
@@ -593,7 +642,15 @@ export default function StudentDetailPage() {
             <section className="staff-section">
               <h2 className="staff-section-title">{S.identity}</h2>
               <dl className="staff-dl">
-                <Field label={I.nationality} value={student.nationality} />
+                <Field
+                  label={I.nationality}
+                  value={
+                    student.nationality
+                      ? (nationalityName(student.nationality, intlLocale()) ??
+                        student.nationality)
+                      : null
+                  }
+                />
                 <Field
                   label={I.gender}
                   value={
@@ -638,24 +695,32 @@ export default function StudentDetailPage() {
                 </ul>
               )}
             </section>
+            <DocumentsSection
+              entityType="student"
+              entityId={student.id}
+              purposes={["passport", "national_id", "attachment"]}
+              canWrite={canManage}
+            />
           </div>
           <aside className="staff-detail-side">
             <section className="staff-section">
               <div className="staff-section-head">
                 <h2 className="staff-section-title">{S.registration}</h2>
-                <button
-                  type="button"
-                  className="staff-icon-btn"
-                  aria-label={student.registration ? L.editFee : L.recordFee}
-                  title={student.registration ? L.editFee : L.recordFee}
-                  onClick={() => setDialog("fee")}
-                >
-                  {student.registration ? (
-                    <Pencil strokeWidth={1.75} aria-hidden />
-                  ) : (
-                    <Plus strokeWidth={1.75} aria-hidden />
-                  )}
-                </button>
+                {canManage ? (
+                  <button
+                    type="button"
+                    className="staff-icon-btn"
+                    aria-label={student.registration ? L.editFee : L.recordFee}
+                    title={student.registration ? L.editFee : L.recordFee}
+                    onClick={() => setDialog("fee")}
+                  >
+                    {student.registration ? (
+                      <Pencil strokeWidth={1.75} aria-hidden />
+                    ) : (
+                      <Plus strokeWidth={1.75} aria-hidden />
+                    )}
+                  </button>
+                ) : null}
               </div>
               {student.registration ? (
                 <MoneyBar registration={student.registration} />
@@ -677,6 +742,7 @@ export default function StudentDetailPage() {
         <section className="staff-section">
           <div className="staff-section-head">
             <h2 className="staff-section-title">{S.tabCourses}</h2>
+            {canManage ? (
             <button
               type="button"
               className="staff-btn"
@@ -690,6 +756,7 @@ export default function StudentDetailPage() {
               <Plus strokeWidth={1.75} aria-hidden />
               {E.sell}
             </button>
+            ) : null}
           </div>
           {enrolments.error ? (
             <ErrorState error={enrolments.error} />
@@ -698,7 +765,10 @@ export default function StudentDetailPage() {
           ) : enrolments.items.length === 0 ? (
             <EmptyState title={E.empty} description={E.emptyHint} />
           ) : (
-            <EnrolmentTable items={enrolments.items} menu={actions.menu} />
+            <EnrolmentTable
+              items={enrolments.items}
+              menu={canManage ? actions.menu : undefined}
+            />
           )}
         </section>
       ) : null}

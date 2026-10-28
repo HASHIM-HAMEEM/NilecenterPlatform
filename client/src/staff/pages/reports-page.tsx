@@ -27,7 +27,7 @@ import { downloadCsv, toCsv, type CsvColumn, type CsvRow } from "../csv";
 import { REPORT_PERIODS, delta, fillPercent, type Period } from "../dashboard";
 import { intlLocale } from "../i18n";
 import { CLASS_READ } from "../nav";
-import { isAdmissionsRole } from "../roles";
+import { canManageStudents, isAdmissionsRole } from "../roles";
 import {
   admissionsReport,
   bookingsReport,
@@ -70,7 +70,8 @@ type ReportId = (typeof REPORT_IDS)[number];
 /** Reports each role can see; classes is the only one open beyond admissions. */
 function visibleReports(role: NccRole | null): ReportId[] {
   const out: ReportId[] = [];
-  if (isAdmissionsRole(role)) out.push("admissions", "bookings", "enrolments");
+  if (isAdmissionsRole(role)) out.push("admissions", "bookings");
+  if (canManageStudents(role)) out.push("enrolments");
   if (role && (CLASS_READ as readonly NccRole[]).includes(role)) out.push("classes");
   return out;
 }
@@ -352,7 +353,7 @@ function AdmissionsBody({
             source: item.source,
             status: copy.status[item.status] ?? item.status,
             lostReason: item.lostReasonName ?? null,
-            owner: item.assignedSsaName,
+            owner: item.assignedRegistrarName,
             area: item.areaOfStudyName ?? null,
             studyMode:
               R.modes[

@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import type { NccRoomDto } from "@/lib/backend/api";
 import { useNcc } from "../api";
 import { copy } from "../copy";
-import { isClassCatalogWriter } from "../roles";
+import { isRoomCatalogWriter } from "../roles";
 import { useStaffSession } from "../session";
 import { ListPage, type ListColumn, type ListFilter } from "../ui/list-page";
 import { EmptyState, ErrorState, LoadingRows, PageHeader, StatusBadge } from "../ui/primitives";
@@ -16,7 +16,7 @@ const R = copy.teaching.rooms;
 export default function RoomsPage() {
   const { session } = useStaffSession();
   const role = session?.ncc?.activeRole ?? null;
-  const canWrite = isClassCatalogWriter(role);
+  const canWrite = isRoomCatalogWriter(role);
   const branches = useBranches();
   const [, navigate] = useLocation();
   const [formOpen, setFormOpen] = useState(false);

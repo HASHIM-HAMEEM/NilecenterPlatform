@@ -19,6 +19,7 @@ import {
 } from "@/lib/backend/api";
 import { staffWrite, useInvalidate } from "../api";
 import { copy } from "../copy";
+import { canManageStaffTarget } from "../roles";
 import { runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { CallerPasswordDialog } from "../ui/caller-password-dialog";
@@ -57,6 +58,10 @@ export function StaffActionsMenu({
   const [secrets, setSecrets] = useState<StaffSecret[] | null>(null);
   const [moodleBindUser, setMoodleBindUser] =
     useState<NccStaffUserDto | null>(null);
+
+  if (!canManageStaffTarget(session?.ncc?.assignedRole, user.emsRole)) {
+    return null;
+  }
 
   async function refreshUsers() {
     await invalidate("/api/ncc/directory/users");

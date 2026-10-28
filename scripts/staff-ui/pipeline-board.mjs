@@ -19,8 +19,9 @@ const suite = createSuite("pipeline-board");
 const { step, watch, shot, finish } = suite;
 
 const MARK = `NILE-QA-BOARD-${stamp()}`;
-const BRANCH = "ccab89aa-58a9-4db9-a413-61017ad9709b";
-const ROOM = "35742b60-df8c-4807-9dea-8b8c9d09d572";
+// Staging is reseeded; resolve a live branch and one of its rooms at runtime.
+let BRANCH = null;
+let ROOM = null;
 const EMS = (envVal("EMS_STAGING_BASE_URL") ?? "").replace(/\/+$/, "");
 
 async function emsLogin(role) {
@@ -85,6 +86,10 @@ const openBoard = async () => {
 
 try {
   token = await emsLogin("SUPER_ADMIN");
+  const { data: branches } = await ems(token, "GET", "/branches?page_size=1&status=active");
+  BRANCH = branches?.items?.[0]?.id ?? branches?.[0]?.id ?? null;
+  const { data: rooms } = await ems(token, "GET", `/rooms?branch_id=${BRANCH}&page_size=1`);
+  ROOM = rooms?.items?.[0]?.id ?? rooms?.[0]?.id ?? null;
   const lead = await ems(token, "POST", "/leads", {
     first_name: "Qa",
     last_name: MARK,

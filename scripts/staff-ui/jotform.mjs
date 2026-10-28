@@ -15,8 +15,10 @@ import {
 const suite = createSuite("jotform");
 const { step, watch, shot, finish } = suite;
 
-const QA_ROW = "08516608-14cb-403b-9ca1-b9f9567e432e";
-const QA_FALLBACK = "73df6659-4252-4d76-ad64-dab15de795cf";
+// Staging is reseeded; the QA row and its fallback branch are resolved (and
+// the row re-created if missing) in the preflight below.
+let QA_ROW = null;
+let QA_FALLBACK = null;
 const LIVE_FORM = "223611105769555"; // real form — read only, never submit
 // Distinct from the QA row's own formId (000000000000000) so the duplicate
 // check — which correctly takes precedence — does not mask the 400 error.
@@ -113,11 +115,41 @@ try {
   step("BFF super-admin login", login.status === 200, `status ${login.status}`);
   await api.pickWorkspace();
 
+  const branches = await api.call(
+    "GET",
+    "/api/ncc/directory/branches?pageSize=100"
+  );
+  QA_FALLBACK =
+    (branches.data?.items ?? []).find(
+      branch => /branch 1/i.test(branch.name) && branch.status === "active"
+    )?.id ??
+    (branches.data?.items ?? []).find(branch => branch.status === "active")
+      ?.id ??
+    null;
+
   const list = await api.call(
     "GET",
     "/api/ncc/settings/jotform/forms?pageSize=100"
   );
-  const qaListRow = (list.data?.items ?? []).find(row => row.id === QA_ROW);
+  let qaListRow = (list.data?.items ?? []).find(row =>
+    /NILE-QA/i.test(row.name ?? "")
+  );
+  if (!qaListRow && QA_FALLBACK) {
+    // The reseed wiped the pinned row; register a fresh QA form to drive.
+    const made = await api.call("POST", "/api/ncc/settings/jotform/forms", {
+      formId: `${Date.now()}0`.slice(0, 15),
+      name: `NILE-QA-JOTFORM-${Date.now()}`,
+      target: "contact",
+      fallbackBranchId: QA_FALLBACK,
+    });
+    const created = made.data?.form ?? made.data;
+    if (made.status < 300 && created?.id) {
+      qaListRow = created;
+      // The registry now includes the provisioned row.
+      list.data?.items?.push(created);
+    }
+  }
+  QA_ROW = qaListRow?.id ?? "missing-qa-row";
   qaFormId = qaListRow?.formId ?? null;
   step(
     "QA form row is connected on staging",

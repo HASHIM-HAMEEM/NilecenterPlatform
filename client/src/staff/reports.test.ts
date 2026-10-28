@@ -32,8 +32,9 @@ const lead = (over: Partial<NccLeadDto>): NccLeadDto => ({
   notes: null,
   leadType: "new",
   status: "in_process",
-  assignedSsaId: null,
-  assignedSsaName: null,
+  assignedRegistrarId: null,
+  assignedRegistrarName: null,
+  gender: null,
   groupId: null,
   groupLabel: null,
   studentId: null,
@@ -228,7 +229,7 @@ describe("admissionsReport", () => {
     const leads = [
       lead({ id: "1", status: "lost", lostReasonName: "Price" }),
       lead({ id: "2", status: "lost", lostReasonName: null }),
-      lead({ id: "3", status: "registered", assignedSsaName: "Sara" }),
+      lead({ id: "3", status: "registered", assignedRegistrarName: "Sara" }),
     ];
     const r = admissionsReport(leads, W, PREV, TODAY);
     expect(r.byLostReason.map(row => [row.label, row.count])).toEqual([

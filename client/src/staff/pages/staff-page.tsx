@@ -10,7 +10,11 @@ import {
 } from "@/lib/backend/api";
 import { staffWrite, useInvalidate, useNcc } from "../api";
 import { copy } from "../copy";
-import { isStaffManager, roleLabel } from "../roles";
+import {
+  canManageStaffTarget,
+  isStaffManager,
+  roleLabel,
+} from "../roles";
 import { runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { ConfirmDialog } from "../ui/confirm-dialog";
@@ -329,11 +333,12 @@ export default function StaffPage() {
             id: "actions",
             label: "",
             always: true,
-            render: (row: NccStaffUserDto) => (
-              <span className="staff-cell-top">
-                <StaffActionsMenu user={row} onEdit={() => openEdit(row)} />
-              </span>
-            ),
+            render: (row: NccStaffUserDto) =>
+              canManageStaffTarget(session?.ncc?.assignedRole, row.emsRole) ? (
+                <span className="staff-cell-top">
+                  <StaffActionsMenu user={row} onEdit={() => openEdit(row)} />
+                </span>
+              ) : null,
           } satisfies ListColumn<NccStaffUserDto>,
         ]
       : []),
@@ -433,7 +438,11 @@ export default function StaffPage() {
                       />
                     </div>
                   </div>
-                  {canManage ? (
+                  {canManage &&
+                  canManageStaffTarget(
+                    session?.ncc?.assignedRole,
+                    row.emsRole
+                  ) ? (
                     <span className="staff-cell-top">
                       <StaffActionsMenu
                         user={row}
@@ -448,7 +457,12 @@ export default function StaffPage() {
               canManage
                 ? (rows, clear) => {
                     const targets = rows.filter(
-                      row => row.email.toLowerCase() !== selfEmail
+                      row =>
+                        row.email.toLowerCase() !== selfEmail &&
+                        canManageStaffTarget(
+                          session?.ncc?.assignedRole,
+                          row.emsRole
+                        )
                     );
                     if (targets.length === 0) return null;
                     return (

@@ -9,6 +9,7 @@ import type {
 import { useNcc } from "../api";
 import { copy } from "../copy";
 import { intlLocale } from "../i18n";
+import { canReadGlobalAuditStreams } from "../roles";
 import { useStaffSession } from "../session";
 import {
   ActiveMark,
@@ -27,13 +28,23 @@ const AUDIT_ROLES: NccRole[] = ["super_admin", "branch_admin", "vice_manager"];
 /** Streams grouped the way staff think about them. Each group has at most four. */
 const GROUPS = {
   auth: ["auth"],
-  admissions: ["lead", "student", "placement_test", "enrolment"],
+  admissions: ["lead", "student", "placement_test", "trial_lesson", "enrolment"],
   teaching: ["course", "class", "session", "room"],
   setup: ["branch", "department", "custom_field", "moodle_site"],
 } satisfies Record<string, NccAuditStreamDto[]>;
 
 type Group = keyof typeof GROUPS;
-const GROUP_KEYS = Object.keys(GROUPS) as Group[];
+
+/** Vice Manager reads branch streams only; auth/setup and courses 403. */
+export function auditGroupsForRole(
+  role: NccRole | null
+): Record<string, NccAuditStreamDto[]> {
+  if (canReadGlobalAuditStreams(role)) return { ...GROUPS };
+  return {
+    admissions: GROUPS.admissions,
+    teaching: GROUPS.teaching.filter(stream => stream !== "course"),
+  };
+}
 
 type Tone = "positive" | "critical" | "neutral";
 
@@ -116,12 +127,14 @@ export default function AuditPage() {
   const { session } = useStaffSession();
   const role = session?.ncc?.activeRole ?? null;
   const allowed = role !== null && AUDIT_ROLES.includes(role);
+  const groups = auditGroupsForRole(role);
+  const groupKeys = Object.keys(groups) as Group[];
 
   const search = useSearch();
   const [, navigate] = useLocation();
   const params = useMemo(() => new URLSearchParams(search), [search]);
   const groupParam = params.get("group");
-  const group: Group | null = GROUP_KEYS.includes(groupParam as Group)
+  const group: Group | null = groupKeys.includes(groupParam as Group)
     ? (groupParam as Group)
     : null;
   const q = (params.get("q") ?? "").trim().toLowerCase();
@@ -129,8 +142,8 @@ export default function AuditPage() {
   // "All" reads the newest events. A group reads each of its streams, so busy
   // sign-in traffic never pushes admissions or teaching events out of view.
   const streams: (NccAuditStreamDto | null)[] = group
-    ? [...GROUPS[group], null, null, null].slice(0, 4)
-    : [null, null, null, null];
+    ? [...groups[group]!, null, null, null, null].slice(0, 5)
+    : [null, null, null, null, null];
   const path = (stream: NccAuditStreamDto | null) =>
     allowed && stream ? "/api/ncc/audit/events" : null;
   const all = useNcc<{ items: NccAuditEventDto[] }>(
@@ -141,7 +154,8 @@ export default function AuditPage() {
   const s1 = useNcc<{ items: NccAuditEventDto[] }>(path(streams[1]), { stream: streams[1] ?? undefined, limit: LIMIT });
   const s2 = useNcc<{ items: NccAuditEventDto[] }>(path(streams[2]), { stream: streams[2] ?? undefined, limit: LIMIT });
   const s3 = useNcc<{ items: NccAuditEventDto[] }>(path(streams[3]), { stream: streams[3] ?? undefined, limit: LIMIT });
-  const reads = group ? [s0, s1, s2, s3].filter((_, i) => streams[i]) : [all];
+  const s4 = useNcc<{ items: NccAuditEventDto[] }>(path(streams[4]), { stream: streams[4] ?? undefined, limit: LIMIT });
+  const reads = group ? [s0, s1, s2, s3, s4].filter((_, i) => streams[i]) : [all];
 
   function setParam(key: string, value: string | null) {
     const next = new URLSearchParams(search);
@@ -187,7 +201,7 @@ export default function AuditPage() {
 
       <div className="staff-toolbar">
         <div className="staff-segments" role="group" aria-label={C.stream}>
-          {([null, ...GROUP_KEYS] as (Group | null)[]).map(key => (
+          {([null, ...groupKeys] as (Group | null)[]).map(key => (
             <button
               key={key ?? "all"}
               type="button"

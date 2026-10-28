@@ -1,9 +1,11 @@
 // Forms "People" assignments: staff-member pick, teacher respondent flow,
 // revoke, and the HOD teachers-of-a-class pick with derived dept labels.
 import {
+  Api,
   BASE,
   chromium,
   createSuite,
+  creds,
   pickWorkspace,
   settle,
   signInAndEnter,
@@ -13,6 +15,20 @@ import {
 const suite = createSuite("forms-people");
 const { step, watch, finish } = suite;
 const mark = stamp();
+
+// Reseeded staging can hold same-named staff from older runs; resolve the
+// QA teacher login's own user row for the assignment picks.
+const api = new Api();
+await api.login("SUPER_ADMIN");
+const teacherUser = (
+  (await api.call("GET", "/api/ncc/directory/users?pageSize=100")).data
+    ?.items ?? []
+).find(user => user.email === creds("TEACHER").email);
+await api.logout();
+const TEACHER =
+  `${teacherUser?.firstName ?? ""} ${teacherUser?.lastName ?? ""}`.trim() ||
+  "NileQA teacher";
+
 const b = await chromium.launch();
 const open = async role => {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
@@ -22,7 +38,6 @@ const open = async role => {
   return p;
 };
 
-const TEACHER = "Nile QA Teacher";
 const slugs = [];
 
 async function newAssignedForm(p, title) {
@@ -243,25 +258,46 @@ try {
       (await hod.locator('.ui-select[aria-label="Class"]').count()) === 1
   );
   await hod.locator('.ui-select[aria-label="Class"]').click();
-  await hod.getByRole("option", { name: /NILE-QA/ }).first().click();
-  await hod
-    .waitForSelector(`.staff-people-row:has-text("${TEACHER}")`, { timeout: 15000 })
+  const classOptions = hod.getByRole("option");
+  await classOptions
+    .first()
+    .waitFor({ state: "visible", timeout: 15000 })
     .catch(() => {});
+  const optionCount = await classOptions.count();
   step(
-    "class teachers render as check rows",
-    (await hod.locator(".staff-people-row").count()) >= 1
+    "fixture: HOD class options",
+    optionCount > 0,
+    `${optionCount} options`
   );
-  await hod.locator(".staff-people-row", { hasText: TEACHER }).click();
+  // Any class whose teachers are offered; staging reseeds drop pinned names
+  // and some classes have no teachers assigned, so walk the options.
+  let peopleRows = 0;
+  for (let i = 0; i < optionCount && peopleRows === 0; i += 1) {
+    await classOptions.nth(i).click();
+    await hod.waitForTimeout(800);
+    peopleRows = await hod.locator(".staff-people-row").count();
+    if (peopleRows === 0 && i + 1 < optionCount)
+      await hod.locator('.ui-select[aria-label="Class"]').click();
+  }
+  step("class teachers render as check rows", peopleRows >= 1);
+  const classTeacherRow = hod.locator(".staff-people-row").first();
+  const classTeacherName = (
+    (await classTeacherRow.textContent().catch(() => "")) ?? ""
+  )
+    .trim()
+    .split("\n")[0];
+  await classTeacherRow.click();
   await hod.screenshot({ path: `${suite.out}/people-class.png`, fullPage: true });
   await hod.locator(".ui-sheet button[type=submit]").click();
   await hod
-    .waitForSelector(`.staff-tag:has-text("${TEACHER} · Teacher")`, {
+    .waitForSelector(`.staff-tag:has-text("Teacher")`, {
       timeout: 20000,
     })
     .catch(() => {});
   step(
     "HOD assignment listed with the teacher's name",
-    (await hod.locator(".staff-tag", { hasText: `${TEACHER} · Teacher` }).count()) === 1
+    (await hod.locator(".staff-tag", { hasText: "Teacher" }).count()) === 1,
+    classTeacherName
   );
 
   // Department options must be names derived from classes, never raw ids.

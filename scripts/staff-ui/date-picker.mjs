@@ -72,7 +72,11 @@ const disabled = pop().locator(".staff-dp-day[aria-disabled='true']").first();
 await disabled.click({ force: true });
 step("clicking an unavailable day does nothing", (await pop().count()) === 1);
 const enabledDays = pop().locator(".staff-dp-day:not([aria-disabled]):not([data-outside])");
-const later = enabledDays.nth(Math.min(10, (await enabledDays.count()) - 1));
+const enabledCount = await enabledDays.count();
+if (enabledCount === 0) {
+  step("range between start and end is shaded", false, "no enabled days in the open month");
+} else {
+const later = enabledDays.nth(Math.min(10, enabledCount - 1));
 const laterIso = await later.getAttribute("data-iso");
 await later.click();
 await page.waitForTimeout(200);
@@ -80,6 +84,7 @@ await page.locator("#class-end").click();
 await pop().waitFor();
 const between = await pop().locator(".staff-dp-cell[data-between]").count();
 step("range between start and end is shaded", between > 0, `${pickedIso} to ${laterIso}, ${between} days`);
+}
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${OUT}/en-range.png` });
 

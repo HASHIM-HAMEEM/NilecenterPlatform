@@ -14,7 +14,6 @@ import {
 } from "@/staff/ui/kit";
 import { staffWrite, useInvalidate } from "../api";
 import { copy } from "../copy";
-import { canSetAssignee } from "../roles";
 import { FormValidationError, runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { EMAIL_PATTERN, suggestedLeadType } from "../people-matches";
@@ -22,10 +21,10 @@ import { PossibleMatches, usePeopleMatches } from "../ui/possible-matches";
 import { DateOfBirthField } from "../ui/date-of-birth-field";
 import { FormSheet, StaffField } from "../ui/form-sheet";
 import { MultiSelect } from "../ui/multi-select";
+import { NationalitySelect } from "../ui/nationality-select";
 import {
   useActiveAreas,
   useActiveCourses,
-  useAssignees,
   useBranches,
 } from "./admissions-ui";
 
@@ -62,7 +61,7 @@ type Draft = {
   notes: string;
   dateOfBirth: string;
   nationality: string;
-  assignedSsaId: string;
+  gender: "" | "male" | "female";
   leadType: NccLeadDto["leadType"];
 };
 
@@ -81,7 +80,7 @@ function draftFrom(lead: NccLeadDto | null, branchId: string): Draft {
     notes: lead?.notes ?? "",
     dateOfBirth: lead?.dateOfBirth ?? "",
     nationality: lead?.nationality ?? "",
-    assignedSsaId: lead?.assignedSsaId ?? "",
+    gender: lead?.gender ?? "",
     leadType: lead?.leadType ?? "new",
   };
 }
@@ -115,8 +114,8 @@ export function leadPatch(before: Draft, after: Draft): NccLeadWriteInput {
   if (after.nationality !== before.nationality) {
     patch.nationality = after.nationality || null;
   }
-  if (after.assignedSsaId !== before.assignedSsaId) {
-    patch.assignedSsaId = after.assignedSsaId || null;
+  if (after.gender !== before.gender) {
+    patch.gender = after.gender || null;
   }
   if (after.leadType !== before.leadType) patch.leadType = after.leadType;
   return patch;
@@ -153,8 +152,6 @@ export function LeadForm({
   const [attempted, setAttempted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>();
-  const assignees = useAssignees(draft.branchId, open && canSetAssignee(role));
-
   useEffect(() => {
     if (!open) return;
     setDraft(initial);
@@ -236,9 +233,7 @@ export function LeadForm({
               ...(draft.areaOfStudyId
                 ? { areaOfStudyId: draft.areaOfStudyId }
                 : {}),
-              ...(draft.assignedSsaId
-                ? { assignedSsaId: draft.assignedSsaId }
-                : {}),
+              ...(draft.gender ? { gender: draft.gender } : {}),
               ...(pickBranch ? { branchId: draft.branchId } : {}),
             })
           )
@@ -366,18 +361,12 @@ export function LeadForm({
             />
             <StaffField
               label={L.nationality}
-              htmlFor="lead-nationality"
               error={show(errors.nationality) ?? errorFor("nationality")}
             >
-              <input
-                id="lead-nationality"
-                className="staff-input staff-ltr"
-                maxLength={3}
-                placeholder="EGY"
+              <NationalitySelect
                 value={draft.nationality}
-                onChange={event =>
-                  set("nationality", event.target.value.toUpperCase())
-                }
+                onChange={next => set("nationality", next)}
+                ariaLabel={L.nationality}
               />
             </StaffField>
           </div>
@@ -467,28 +456,30 @@ export function LeadForm({
             </Select>
           </StaffField>
 
-          {canSetAssignee(role) ? (
-            <StaffField label={L.owner} error={errorFor("assigned_ssa_id")}>
-              <Select
-                value={draft.assignedSsaId || NONE}
-                onValueChange={value =>
-                  set("assignedSsaId", value === NONE ? "" : value)
-                }
-              >
-                <SelectTrigger aria-label={L.owner}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>{L.unassigned}</SelectItem>
-                  {assignees.map(person => (
-                    <SelectItem key={person.id} value={person.id}>
-                      {person.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </StaffField>
-          ) : null}
+          <StaffField
+            label={copy.admissions.identity.gender}
+            error={errorFor("gender")}
+          >
+            <Select
+              value={draft.gender || NONE}
+              onValueChange={value =>
+                set("gender", value === NONE ? "" : (value as Draft["gender"]))
+              }
+            >
+              <SelectTrigger aria-label={copy.admissions.identity.gender}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>{copy.state.notSet}</SelectItem>
+                <SelectItem value="female">
+                  {copy.admissions.identity.female}
+                </SelectItem>
+                <SelectItem value="male">
+                  {copy.admissions.identity.male}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </StaffField>
 
           <div className="grid grid-cols-2 gap-3">
             <StaffField label={L.leadType}>

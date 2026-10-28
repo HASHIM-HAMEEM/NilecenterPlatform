@@ -44,14 +44,17 @@ import type { DobError } from "../date-of-birth";
 import { DateOfBirthField } from "../ui/date-of-birth-field";
 import { DatePicker } from "../ui/date-picker";
 import { FormSheet, StaffField } from "../ui/form-sheet";
+import { NationalitySelect } from "../ui/nationality-select";
 import type { StaffSecret } from "../ui/secret-dialog";
 import {
   useActiveAreas,
   useActiveCourses,
+  useAssignees,
   useBranches,
   useBranchRooms,
   useMentorTeachers,
 } from "./admissions-ui";
+import { canSetLeadAssignee } from "../roles";
 import { useStaffSession } from "../session";
 import { PossibleMatches, usePeopleMatches } from "../ui/possible-matches";
 
@@ -1050,18 +1053,12 @@ export function IdentityFields({
       <div className="grid grid-cols-2 gap-3">
         <StaffField
           label={I.nationality}
-          htmlFor="id-nationality"
           error={message("nationality") ?? errorFor("nationality")}
         >
-          <input
-            id="id-nationality"
-            className="staff-input staff-ltr"
-            maxLength={3}
-            placeholder="EGY"
+          <NationalitySelect
             value={value.nationality}
-            onChange={event =>
-              set("nationality", event.target.value.toUpperCase())
-            }
+            onChange={next => set("nationality", next)}
+            ariaLabel={I.nationality}
           />
         </StaffField>
         <StaffField
@@ -1238,11 +1235,16 @@ export function ConvertSheet({
   onConverted: (student: NccStudentDto) => void;
 }) {
   const invalidate = useInvalidate();
-  const initial = useMemo(
+  const { session } = useStaffSession();
+  const assigneeEditable = canSetLeadAssignee(session?.ncc?.activeRole);
+  const assignees = useAssignees(lead.branchId, open && assigneeEditable);
+  const [assignedSsaId, setAssignedSsaId] = useState("");
+  const initial = useMemo<IdentityInput>(
     () => ({
       ...EMPTY_IDENTITY,
       dateOfBirth: lead.dateOfBirth ?? "",
       nationality: lead.nationality ?? "",
+      gender: lead.gender ?? "",
     }),
     [lead]
   );
@@ -1259,6 +1261,7 @@ export function ConvertSheet({
   useEffect(() => {
     if (!open) return;
     setIdentity(initial);
+    setAssignedSsaId("");
     setAttempted(false);
     setFieldErrors(undefined);
   }, [open, initial]);
@@ -1272,7 +1275,10 @@ export function ConvertSheet({
     setFieldErrors(undefined);
     try {
       const result = await staffWrite(
-        convertNccLeadRequest(lead.id, identityPayload(identity))
+        convertNccLeadRequest(lead.id, {
+          ...identityPayload(identity),
+          ...(assigneeEditable ? { assignedSsaId: assignedSsaId || null } : {}),
+        })
       );
       await refreshAdmissions(invalidate);
       onOpenChange(false);
@@ -1301,6 +1307,31 @@ export function ConvertSheet({
       {errorFor => (
         <>
           <PossibleMatches matches={existing.matches} context="convert" />
+          {assigneeEditable ? (
+            <StaffField
+              label={copy.admissions.students.owner}
+              error={errorFor("assigned_ssa_id")}
+            >
+              <Select
+                value={assignedSsaId || NONE}
+                onValueChange={value =>
+                  setAssignedSsaId(value === NONE ? "" : value)
+                }
+              >
+                <SelectTrigger aria-label={copy.admissions.students.owner}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>{L.unassigned}</SelectItem>
+                  {assignees.map(person => (
+                    <SelectItem key={person.id} value={person.id}>
+                      {person.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </StaffField>
+          ) : null}
           <IdentityFields
             value={identity}
             onChange={setIdentity}

@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import type { NccEnrolmentDto, NccPageDto } from "@/lib/backend/api";
 import { useNcc, type StaffQuery } from "../api";
 import { copy } from "../copy";
-import { isAdmissionsRole } from "../roles";
+import { canManageStudents } from "../roles";
 import { useStaffSession } from "../session";
 import { ListPage, type ListColumn, type ListFilter } from "../ui/list-page";
 import {
@@ -46,7 +46,7 @@ function statusTab(value: (typeof STATUSES)[number]) {
 export default function EnrolmentsPage() {
   const { session } = useStaffSession();
   const role = session?.ncc?.activeRole ?? null;
-  const allowed = isAdmissionsRole(role);
+  const allowed = canManageStudents(role);
   const superAdmin = role === "super_admin";
   const branches = useBranches();
   const courses = useActiveCourses(allowed);

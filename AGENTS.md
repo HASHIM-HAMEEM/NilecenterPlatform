@@ -69,6 +69,11 @@ Current QA baseline:
   20 functional suites, the responsive gate in each of the six languages
   (en, ar, tr, zh, ru, ur), and the light/dark contrast gate in en and ar.
 - This baseline must not be broken.
+- The staff suites resolve branch, room, class and student fixtures from live
+  EMS data. After a staging reseed, `teaching`, `week` and two `students`
+  steps report an explicit `fixture:` failure until branch 1 has an active
+  class with sessions and free seats and a Moodle-linked student; those are
+  data gaps, not regressions.
 
 ### Frontend And Backend Team Boundary
 

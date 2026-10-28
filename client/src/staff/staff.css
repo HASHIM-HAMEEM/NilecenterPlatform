@@ -1426,7 +1426,8 @@ html[dir="rtl"].staff-ui input[type="tel"] {
 }
 
 /* A disabled destructive action reads as unavailable, not as a faded alarm. */
-.staff-btn[data-variant="destructive"]:disabled {
+.staff-btn[data-variant="destructive"]:disabled,
+.staff-btn[data-variant="destructive-outline"]:disabled {
   opacity: 1;
   border-color: var(--line-strong);
   background: var(--paper-sunk);
@@ -1833,6 +1834,36 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .staff-switch[data-on] .staff-switch-thum
   border-radius: var(--r-md);
   background: var(--paper-sunk);
   font-size: 0.9375rem;
+}
+
+.staff-document-rows {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.staff-document-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding-block: 0.5rem;
+  border-block-end: 1px solid var(--line-soft);
+}
+
+.staff-document-row:last-child {
+  border-block-end: 0;
+}
+
+.staff-document-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 /* "Already in Nile Learn": people who may be the one being added. The same
@@ -5988,6 +6019,18 @@ html.staff-ui:is(:lang(ar), :lang(ur)) .nile-form-renderer-header h1 {
 .staff-dash-board > [data-area="bookings"] { --area: bookings; }
 .staff-dash-board > [data-area="pipeline"] { --area: pipeline; }
 .staff-dash-board > [data-area="students"] { --area: students; }
+
+.staff-dash-board[data-variant="compact"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas: "attention students";
+}
+
+@container content (width < 56.25rem) {
+  .staff-dash-board[data-variant="compact"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "attention" "students";
+  }
+}
 
 @container content (width >= 85rem) {
   .staff-dash-board {

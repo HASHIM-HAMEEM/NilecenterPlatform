@@ -57,6 +57,7 @@ export type ApiResult<T> = {
   data?: T;
   error?: string;
   status?: number;
+  code?: string;
   details?: Record<string, string[]>;
 };
 
@@ -122,6 +123,13 @@ export async function apiJson<T>(
         error: errorMessage,
         status: response.status,
         details,
+        code:
+          data &&
+          typeof data === "object" &&
+          "code" in data &&
+          typeof data.code === "string"
+            ? data.code
+            : undefined,
       };
     }
     return { ok: true, data: data as T };
@@ -368,10 +376,6 @@ export type NccStaffStatisticsDto = {
   userId: string;
   emsRole: NccRole;
   leadsCreated: number;
-  leadsAssigned: number;
-  leadsOpen: number;
-  leadsRegistered: number;
-  leadsLost: number;
   studentsAssigned: number;
   classesTeaching: number;
   sessionsScheduled: number;
@@ -1517,8 +1521,9 @@ export type NccLeadDto = {
     | "trial_lesson"
     | "registered"
     | "lost";
-  assignedSsaId: string | null;
-  assignedSsaName: string | null;
+  assignedRegistrarId: string | null;
+  assignedRegistrarName: string | null;
+  gender: "male" | "female" | null;
   groupId: string | null;
   groupLabel: string | null;
   isGroupPrimary?: boolean;
@@ -1617,8 +1622,6 @@ export type NccLeadGroupDto = {
   branchId: string;
   branchName: string;
   label: string | null;
-  assignedSsaId: string | null;
-  assignedSsaName: string | null;
   members: Array<{
     leadId: string;
     name: string;
@@ -1879,15 +1882,59 @@ export function fetchNccTeacherWorkspaceRequest() {
 export function fetchNccMoodleCoursesRequest(
   q?: string,
   refresh?: boolean,
-  unmapped?: boolean
+  unmapped?: boolean,
+  categoryId?: number
 ) {
   const params = new URLSearchParams();
   if (q?.trim()) params.set("q", q.trim());
   if (refresh) params.set("refresh", "true");
   if (unmapped !== undefined) params.set("unmapped", String(unmapped));
+  if (categoryId !== undefined) params.set("categoryId", String(categoryId));
   const suffix = params.size ? `?${params.toString()}` : "";
   return apiJson<NccMoodleCoursePickerDto>(
     `/api/ncc/delivery/moodle-courses${suffix}`
+  );
+}
+
+export type NccMoodleCategoryDto = {
+  id: number;
+  name: string;
+  parentId: number | null;
+  idNumber: string | null;
+  sortOrder: number;
+  visible: boolean;
+  depth: number;
+  path: string | null;
+  courseCount: number;
+};
+
+export type NccMoodleCategoriesDto = {
+  refreshedAt: string | null;
+  warnings: string[];
+  error: string | null;
+  categories: NccMoodleCategoryDto[];
+};
+
+export function fetchNccMoodleCategoriesRequest(refresh?: boolean) {
+  return apiJson<NccMoodleCategoriesDto>(
+    `/api/ncc/delivery/moodle-categories${refresh ? "?refresh=true" : ""}`
+  );
+}
+
+export function refreshNccMoodleCoursesRequest(input: {
+  categoryId?: number;
+  q?: string;
+  unmapped?: boolean;
+}) {
+  const params = new URLSearchParams();
+  if (input.categoryId !== undefined)
+    params.set("categoryId", String(input.categoryId));
+  if (input.q?.trim()) params.set("q", input.q.trim());
+  if (input.unmapped !== undefined) params.set("unmapped", String(input.unmapped));
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return apiJson<NccMoodleCoursePickerDto>(
+    `/api/ncc/delivery/moodle-courses/refresh${suffix}`,
+    { method: "POST" }
   );
 }
 
@@ -2443,6 +2490,7 @@ export type NccAuditStreamDto =
   | "student"
   | "lead"
   | "placement_test"
+  | "trial_lesson"
   | "class"
   | "enrolment"
   | "room"
@@ -2536,7 +2584,7 @@ export type NccLeadWriteInput = {
   lostReasonId?: string | null;
   lostActionReasonId?: string | null;
   areaOfStudyId?: string | null;
-  assignedSsaId?: string | null;
+  gender?: "male" | "female" | null;
   /** YYYY-MM-DD. */
   dateOfBirth?: string | null;
   /** Three-letter code, uppercase. */
@@ -2580,7 +2628,7 @@ export function patchNccLeadRequest(leadId: string, input: NccLeadWriteInput) {
 
 export function convertNccLeadRequest(
   leadId: string,
-  input: NccStudentIdentityInput
+  input: NccStudentIdentityInput & { assignedSsaId?: string | null }
 ) {
   return apiJson<{ lead: NccLeadDto; student: NccStudentDto }>(
     `/api/ncc/admissions/leads/${encodeURIComponent(leadId)}/convert`,
@@ -2861,7 +2909,6 @@ export function closeNccEnrolmentRequest(
 export type NccLeadGroupInput = {
   branchId?: string;
   label?: string | null;
-  assignedSsaId?: string | null;
   memberLeadIds?: string[];
   primaryLeadId?: string | null;
 };
@@ -3671,4 +3718,165 @@ export function verifyPublicCertificateRequest(code: string) {
   return apiJson<PublicCertificateVerificationDto>(
     `/api/certificates/verify?code=${encodeURIComponent(code)}`
   );
+}
+
+/* ---------- NCC private files (documents) --------------------------------- */
+
+export type NccFileEntityType = "user_profile" | "student" | "lead";
+export type NccFilePurpose = "avatar" | "passport" | "national_id" | "attachment";
+export type NccFileStatus = "pending" | "ready" | "failed" | "archived";
+export type NccFileVariant = "original" | "w64" | "w256" | "w1600";
+
+export type NccFileVariantDto = {
+  kind: string;
+  contentType: string;
+  sizeBytes: number;
+  width: number | null;
+  height: number | null;
+};
+
+export type NccFileDto = {
+  id: string;
+  entityType: string;
+  entityId: string;
+  purpose: string;
+  status: NccFileStatus;
+  originalFilename: string;
+  contentType: string;
+  sizeBytes: number;
+  checksumSha256: string | null;
+  variants: NccFileVariantDto[];
+  createdAt: string;
+  updatedAt: string;
+  errorDetail: string | null;
+};
+
+export type NccFileUploadIntentDto = {
+  id: string;
+  uploadUrl: string;
+  expiresAt: string;
+  headers: Record<string, string>;
+  file: NccFileDto;
+};
+
+export type NccFileDownloadDto = {
+  url: string;
+  expiresAt: string;
+  variant: string;
+  contentType: string;
+};
+
+export function listNccFilesRequest(filters: {
+  entityType: NccFileEntityType;
+  entityId: string;
+  purpose?: NccFilePurpose;
+}) {
+  const params = new URLSearchParams({
+    entityType: filters.entityType,
+    entityId: filters.entityId,
+  });
+  if (filters.purpose) params.set("purpose", filters.purpose);
+  return apiJson<{ items: NccFileDto[] }>(`/api/ncc/files?${params.toString()}`);
+}
+
+export function createNccFileUploadRequest(input: {
+  entityType: NccFileEntityType;
+  entityId: string;
+  purpose: NccFilePurpose;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+}) {
+  return apiJson<NccFileUploadIntentDto>("/api/ncc/files/uploads", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function completeNccFileUploadRequest(fileId: string) {
+  return apiJson<{ file: NccFileDto }>(
+    `/api/ncc/files/uploads/${encodeURIComponent(fileId)}/complete`,
+    { method: "POST" }
+  );
+}
+
+export function downloadNccFileRequest(fileId: string, variant?: NccFileVariant) {
+  const suffix = variant ? `?variant=${variant}` : "";
+  return apiJson<NccFileDownloadDto>(
+    `/api/ncc/files/${encodeURIComponent(fileId)}/download${suffix}`
+  );
+}
+
+export function archiveNccFileRequest(fileId: string) {
+  return apiJson<{ file: NccFileDto }>(
+    `/api/ncc/files/${encodeURIComponent(fileId)}/archive`,
+    { method: "POST" }
+  );
+}
+
+export class NccFileUploadError extends Error {
+  code: string;
+  constructor(message: string, code = "upload_failed") {
+    super(message);
+    this.code = code;
+  }
+}
+
+/**
+ * Upload a private file through the intent → storage PUT → complete flow.
+ * If the storage PUT fails the pending file is parked (archived) before the
+ * error surfaces.
+ */
+export async function uploadNccFile(input: {
+  entityType: NccFileEntityType;
+  entityId: string;
+  purpose: NccFilePurpose;
+  file: File;
+}): Promise<NccFileDto> {
+  const intentResult = await createNccFileUploadRequest({
+    entityType: input.entityType,
+    entityId: input.entityId,
+    purpose: input.purpose,
+    filename: input.file.name,
+    contentType: input.file.type || "application/octet-stream",
+    sizeBytes: input.file.size,
+  });
+  if (!intentResult.ok || !intentResult.data)
+    throw new NccFileUploadError(
+      intentResult.error ?? "Upload intent failed.",
+      intentResult.code ?? "upload_failed"
+    );
+  const intent = intentResult.data;
+  try {
+    const put = await fetch(intent.uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": input.file.type || "application/octet-stream",
+        ...intent.headers,
+      },
+      body: input.file,
+    });
+    if (!put.ok) throw new NccFileUploadError(`Upload failed (${put.status}).`);
+  } catch (error) {
+    await archiveNccFileRequest(intent.id).catch(() => null);
+    throw error;
+  }
+  const done = await completeNccFileUploadRequest(intent.id);
+  if (!done.ok || !done.data)
+    throw new NccFileUploadError(done.error ?? "Upload did not complete.");
+  return done.data.file;
+}
+
+/** Get a short-lived https download URL, then open it in a new tab. */
+export async function openNccFileDownload(
+  fileId: string,
+  variant?: NccFileVariant
+) {
+  const result = await downloadNccFileRequest(fileId, variant);
+  if (!result.ok || !result.data)
+    throw new NccFileUploadError(
+      result.error ?? "Download failed.",
+      result.code ?? "download_failed"
+    );
+  window.open(result.data.url, "_blank", "noopener");
 }

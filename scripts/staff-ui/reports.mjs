@@ -152,8 +152,8 @@ try {
   await settle(p, ".staff-segment, .staff-empty, .staff-tile");
   const regTabs = await tabNames(p);
   step(
-    "registrar sees admissions, bookings, enrolments, classes",
-    regTabs.length === 4,
+    "registrar sees admissions and bookings",
+    regTabs.length === 2,
     regTabs.join(", ")
   );
   step(

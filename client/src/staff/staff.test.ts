@@ -26,10 +26,18 @@ import {
 } from "./nav";
 import { staffStatusCounts } from "./pages/staff-page";
 import {
+  canManageStaffTarget,
+  canManageStudents,
   canReadBranches,
   canReadDepartments,
+  canReadGlobalAuditStreams,
   canReadStaffDirectory,
+  canReadStudents,
+  canSetLeadAssignee,
   canSwitchRoles,
+  isAdmissionsRole,
+  isClassCatalogWriter,
+  isRoomCatalogWriter,
   needsWorkspaceBranch,
   ROLE_ORDER,
   roleLabel,
@@ -167,6 +175,56 @@ describe("staff roles", () => {
     expect(canSwitchRoles("ssa")).toBe(false);
     expect(canSwitchRoles("teacher")).toBe(false);
   });
+
+  it("splits admissions readers from student managers", () => {
+    for (const role of ["super_admin", "branch_admin", "vice_manager", "registrar"] as const) {
+      expect(isAdmissionsRole(role), role).toBe(true);
+      expect(canReadStudents(role), role).toBe(true);
+    }
+    expect(isAdmissionsRole("ssa")).toBe(false);
+    expect(canReadStudents("ssa")).toBe(true);
+    expect(canReadStudents("hod")).toBe(false);
+    expect(canReadStudents("teacher")).toBe(false);
+    for (const role of ["super_admin", "branch_admin", "vice_manager", "ssa"] as const) {
+      expect(canManageStudents(role), role).toBe(true);
+    }
+    expect(canManageStudents("registrar")).toBe(false);
+    expect(canManageStudents("hod")).toBe(false);
+    expect(canManageStudents("teacher")).toBe(false);
+    expect(isClassCatalogWriter("ssa")).toBe(true);
+    expect(isClassCatalogWriter("registrar")).toBe(false);
+    expect(isRoomCatalogWriter("registrar")).toBe(true);
+    expect(isRoomCatalogWriter("ssa")).toBe(false);
+    expect(canSetLeadAssignee("vice_manager")).toBe(true);
+    expect(canSetLeadAssignee("registrar")).toBe(false);
+    expect(canSetLeadAssignee("ssa")).toBe(false);
+  });
+
+  it("limits staff target management to the EMS rank tables", () => {
+    for (const target of ROLE_ORDER) {
+      expect(canManageStaffTarget("super_admin", target)).toBe(true);
+    }
+    for (const target of ["vice_manager", "hod", "registrar", "ssa", "teacher"] as const) {
+      expect(canManageStaffTarget("branch_admin", target)).toBe(true);
+    }
+    for (const target of ["hod", "registrar", "ssa", "teacher"] as const) {
+      expect(canManageStaffTarget("vice_manager", target)).toBe(true);
+    }
+    for (const target of ["super_admin", "branch_admin"] as const) {
+      expect(canManageStaffTarget("branch_admin", target)).toBe(false);
+      expect(canManageStaffTarget("vice_manager", target)).toBe(false);
+    }
+    expect(canManageStaffTarget("vice_manager", "vice_manager")).toBe(false);
+    expect(canManageStaffTarget("registrar", "teacher")).toBe(false);
+    expect(canManageStaffTarget(null, "teacher")).toBe(false);
+  });
+
+  it("limits global audit streams to super and branch admins", () => {
+    expect(canReadGlobalAuditStreams("super_admin")).toBe(true);
+    expect(canReadGlobalAuditStreams("branch_admin")).toBe(true);
+    expect(canReadGlobalAuditStreams("vice_manager")).toBe(false);
+    expect(canReadGlobalAuditStreams("registrar")).toBe(false);
+  });
 });
 
 describe("switchableRoles", () => {
@@ -282,7 +340,21 @@ describe("canAccess matrix", () => {
     "branch_admin",
     "vice_manager",
     "registrar",
+  ];
+  const STUDENTS: NccRole[] = [...ADMISSIONS, "ssa"];
+  const ENROLMENTS: NccRole[] = [
+    "super_admin",
+    "branch_admin",
+    "vice_manager",
     "ssa",
+  ];
+  const CLASS_READ: NccRole[] = [
+    "super_admin",
+    "branch_admin",
+    "vice_manager",
+    "hod",
+    "ssa",
+    "teacher",
   ];
   const BRANCH_PICKER: NccRole[] = [
     "super_admin",
@@ -310,16 +382,16 @@ describe("canAccess matrix", () => {
     { path: "/app/profile", allow: ALL_ROLES },
     { path: "/app/dashboard", allow: ALL_ROLES },
     { path: "/app/students/stu-1/report", allow: ALL_ROLES },
-    { path: "/app/students", allow: ADMISSIONS },
-    { path: "/app/students/stu-1", allow: ADMISSIONS },
-    { path: "/app/enrolments", allow: ADMISSIONS },
+    { path: "/app/students", allow: STUDENTS },
+    { path: "/app/students/stu-1", allow: STUDENTS },
+    { path: "/app/enrolments", allow: ENROLMENTS },
     { path: "/app/leads", allow: ADMISSIONS },
     { path: "/app/leads/lead-1", allow: ADMISSIONS },
     { path: "/app/placement-tests", allow: ADMISSIONS },
     { path: "/app/trial-lessons", allow: ADMISSIONS },
     { path: "/app/courses/course-1", allow: ALL_ROLES },
-    { path: "/app/classes/class-1", allow: ALL_ROLES },
-    { path: "/app/rooms/room-1", allow: ALL_ROLES.filter(role => role !== "teacher") },
+    { path: "/app/classes/class-1", allow: CLASS_READ },
+    { path: "/app/rooms/room-1", allow: ALL_ROLES },
     { path: "/app/unknown", allow: [] },
   ];
 
@@ -388,8 +460,8 @@ describe("staffNavForRole", () => {
       expect(hrefs).not.toContain("/app/profile");
       expect(canAccess("/app/profile", role)).toBe(true);
       expect(hrefs.includes("/app/sessions")).toBe(role === "teacher");
-      expect(hrefs.includes("/app/classes")).toBe(true);
-      expect(hrefs.includes("/app/rooms")).toBe(role !== "teacher");
+      expect(hrefs.includes("/app/classes")).toBe(role !== "registrar");
+      expect(hrefs.includes("/app/rooms")).toBe(true);
       expect(hrefs.includes("/app/students")).toBe(
         ["super_admin", "branch_admin", "vice_manager", "registrar", "ssa"].includes(role)
       );

@@ -1,4 +1,5 @@
-// Browser walk-through of the students UI as Registrar. Synthetic, marker-bound data.
+// Browser walk-through of the students UI as Vice Manager (registrars are read-only).
+// Synthetic, marker-bound data.
 import {
   Api,
   BASE,
@@ -28,20 +29,40 @@ await reasonOf("cancel_enrolment");
 await reasonOf("disable_student");
 await reasonOf("left_enrolment");
 const courses = (await admin.call("GET", "/api/ncc/delivery/courses")).data.items;
-const QA_BRANCH = "ccab89aa-58a9-4db9-a413-61017ad9709b";
-// The add-to-class step needs a course with an active class in the QA branch.
-let course = courses[0];
-for (const candidate of courses) {
-  const classes =
+// Staging is reseeded; resolve branch 1 at runtime instead of pinning its id.
+const QA_BRANCH = (
+  (await admin.call("GET", "/api/ncc/directory/branches")).data?.items ?? []
+).find(branch => /branch 1/i.test(branch.name) && branch.status === "active")?.id;
+// The add-to-class step needs a course whose branch-1 class has free seats
+// (and a room). Checked via live enrolment counts, not a pinned fixture.
+let course = null;
+let suitable = false;
+if (QA_BRANCH) {
+  const branchClasses =
     (await admin.call(
       "GET",
-      `/api/ncc/delivery/classes?courseId=${candidate.id}&branchId=${QA_BRANCH}&status=active&pageSize=100`
+      `/api/ncc/delivery/classes?branchId=${QA_BRANCH}&status=active&pageSize=100`
     )).data?.items ?? [];
-  if (classes.length) {
-    course = candidate;
-    break;
+  for (const cls of branchClasses) {
+    if (!cls.roomId) continue;
+    const enrolments =
+      (await admin.call(
+        "GET",
+        `/api/ncc/delivery/classes/${cls.id}/enrolments`
+      )).data?.items ?? [];
+    const capacity = cls.capacity ?? null;
+    const seatsFree = capacity == null || enrolments.length < capacity;
+    const candidate = courses.find(item => item.id === cls.courseId);
+    if (!candidate) continue;
+    if (seatsFree) {
+      course = candidate;
+      suitable = true;
+      break;
+    }
+    if (!course) course = candidate;
   }
 }
+if (!course) course = courses[0];
 await admin.call("POST", `/api/ncc/delivery/courses/${course.id}/enable`);
 const courseName = course.displayName ?? course.fullname;
 
@@ -53,7 +74,7 @@ const wait = selector => page.waitForSelector(selector, { timeout: 20000 }).catc
 let studentId = null;
 try {
   watch(page);
-  await signInAndEnter(page, "REGISTRAR");
+  await signInAndEnter(page, "VICE_MANAGER");
   await page.goto(`${BASE}/app/students`);
   await page.waitForSelector(".staff-content, .staff-gate-option", { timeout: 30000 }).catch(() => {});
   await pickWorkspace(page);
@@ -68,7 +89,9 @@ try {
   await page.fill("#student-email", `nile.qa.direct.${MARK.slice(-12).toLowerCase()}@example.com`);
   await page.fill("#student-fee", "300");
   await page.fill("#student-paid", "100");
-  await page.fill("#id-nationality", "EGY");
+  await page.getByRole("button", { name: /nationality/i }).click();
+  await page.locator(".ui-popover").getByPlaceholder(/search/i).fill("Egypt");
+  await page.getByRole("option", { name: /Egypt/i }).first().click();
   await chooseOption(page, "Gender", "Male");
   await page.fill(".staff-dob-part[data-part='day'] input", "5");
   await chooseOption(page, "Month", "May");
@@ -128,6 +151,9 @@ try {
     afterPay.replace(/\s+/g, " ").slice(0, 120)
   );
   await shot("en-laptop-student-courses");
+  if (!suitable) {
+    step("fixture: active class with free seats", false, MARK);
+  } else {
   await page.getByRole("button", { name: "Add to class" }).first().click();
   await wait(".staff-choice");
   await wait('.staff-banner:has-text("Moodle account")');
@@ -136,6 +162,7 @@ try {
     (await page.locator(".staff-choice").count()) >= 1 &&
       (await page.locator(".staff-banner", { hasText: "Moodle account" }).count()) === 1
   );
+  }
   await shot("en-laptop-attach");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(500);
@@ -163,23 +190,30 @@ try {
   await settle(page);
   await shot("en-laptop-enrolments");
 
-  // Moodle-linked QA student: learning and report
-  const linked = (await admin.call("GET", "/api/ncc/admissions/students?q=nile.qa.student&status=active")).data.items[0];
-  await page.goto(`${BASE}/app/students/${linked.id}?tab=learning`);
-  await wait(".staff-table, .staff-muted");
-  await settle(page);
-  step(
-    "learning tab shows grades or the empty state",
-    (await page.locator(".staff-table tbody tr").count()) >= 1 ||
-      (await page.locator("p.staff-muted", { hasText: "No Moodle grades" }).count()) === 1
+  // Any active Moodle-linked student in the QA branch: learning and report
+  const linked = (
+    (await admin.call("GET", "/api/ncc/admissions/students?status=active&pageSize=100")).data?.items ?? []
+  ).find(
+    item => item.moodleUserId && (!QA_BRANCH || item.homeBranchId === QA_BRANCH)
   );
-  await page.goto(`${BASE}/app/students/${linked.id}?tab=report`);
-  await wait(".staff-report");
-  step("report tab renders the printable report", (await page.locator(".staff-report-title").count()) === 1);
-  await shot("en-laptop-report");
-  await page.emulateMedia({ media: "print" });
-  await shot("en-print-report");
-  await page.emulateMedia({ media: "screen" });
+  step("moodle-linked QA student exists in staging", Boolean(linked), MARK);
+  if (linked) {
+    await page.goto(`${BASE}/app/students/${linked.id}?tab=learning`);
+    await wait(".staff-table, .staff-muted");
+    await settle(page);
+    step(
+      "learning tab shows grades or the empty state",
+      (await page.locator(".staff-table tbody tr").count()) >= 1 ||
+        (await page.locator("p.staff-muted", { hasText: "No Moodle grades" }).count()) === 1
+    );
+    await page.goto(`${BASE}/app/students/${linked.id}?tab=report`);
+    await wait(".staff-report");
+    step("report tab renders the printable report", (await page.locator(".staff-report-title").count()) === 1);
+    await shot("en-laptop-report");
+    await page.emulateMedia({ media: "print" });
+    await shot("en-print-report");
+    await page.emulateMedia({ media: "screen" });
+  }
 
   const probe = new Api();
   await probe.login("REGISTRAR");
@@ -200,13 +234,13 @@ try {
   await page.getByRole("button", { name: "Disable student", exact: true }).last().click();
   await page.waitForURL(/\/app\/students$/, { timeout: 20000 }).catch(() => {});
   step(
-    "disable student returns a registrar to the list",
+    "disable student returns a manager to the list",
     /\/app\/students$/.test(new URL(page.url()).pathname) && (await page.locator(".staff-error").count()) === 0,
     page.url()
   );
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${BASE}/app/students/${linked.id}?tab=courses`);
+  await page.goto(`${BASE}/app/students/${linked?.id ?? studentId}?tab=courses`);
   await settle(page);
   await shot("en-phone-student-courses");
   await page.evaluate(() => localStorage.setItem("nilelearn.locale", "ar"));

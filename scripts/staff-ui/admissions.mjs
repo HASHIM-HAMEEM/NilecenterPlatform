@@ -163,8 +163,9 @@ try {
 
   // Convert to student
   await page.locator(".staff-next .staff-btn[data-variant='primary']").click();
-  await waitFor("#id-nationality");
-  await page.fill("#id-nationality", "EGY");
+  await page.getByRole("button", { name: /nationality/i }).click();
+  await page.locator(".ui-popover").getByPlaceholder(/search/i).fill("Egypt");
+  await page.getByRole("option", { name: /Egypt/i }).first().click();
   await chooseOption(page, "Gender", "Female");
   await page.fill(".staff-dob-part[data-part='day'] input", "4");
   await chooseOption(page, "Month", "March");

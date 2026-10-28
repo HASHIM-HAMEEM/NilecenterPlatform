@@ -52,10 +52,20 @@ const ADMISSIONS: NccRole[] = [
   "branch_admin",
   "vice_manager",
   "registrar",
+];
+
+const STUDENTS: NccRole[] = [...ADMISSIONS, "ssa"];
+
+const ENROLMENTS: NccRole[] = [
+  "super_admin",
+  "branch_admin",
+  "vice_manager",
   "ssa",
 ];
 
-const ROOM_READ: NccRole[] = [
+const ROOM_READ: NccRole[] = [...ALL];
+
+const REPORT_READ: NccRole[] = [
   "super_admin",
   "branch_admin",
   "vice_manager",
@@ -64,7 +74,14 @@ const ROOM_READ: NccRole[] = [
   "ssa",
 ];
 
-export const CLASS_READ: NccRole[] = [...ROOM_READ, "teacher"];
+export const CLASS_READ: NccRole[] = [
+  "super_admin",
+  "branch_admin",
+  "vice_manager",
+  "hod",
+  "ssa",
+  "teacher",
+];
 
 const STAFF_AUDIT: NccRole[] = ["super_admin", "branch_admin", "vice_manager"];
 
@@ -93,7 +110,7 @@ export function staffNav(): StaffNavGroup[] {
         {
           label: copy.nav.reports,
           href: "/app/reports",
-          roles: ROOM_READ,
+          roles: REPORT_READ,
           available: true,
           icon: BarChart3,
         },
@@ -120,7 +137,7 @@ export function staffNav(): StaffNavGroup[] {
         {
           label: copy.nav.students,
           href: "/app/students",
-          roles: ADMISSIONS,
+          roles: STUDENTS,
           available: true,
           icon: GraduationCap,
         },
@@ -134,7 +151,7 @@ export function staffNav(): StaffNavGroup[] {
         {
           label: copy.nav.enrolments,
           href: "/app/enrolments",
-          roles: ADMISSIONS,
+          roles: ENROLMENTS,
           available: true,
           icon: ClipboardList,
         },

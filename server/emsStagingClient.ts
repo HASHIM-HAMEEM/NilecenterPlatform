@@ -481,8 +481,9 @@ export type EmsStagingLead = {
   notes: string | null;
   leadType: EmsStagingLeadType;
   status: EmsStagingLeadStatus;
-  assignedSsaId: string | null;
-  assignedSsaName: string | null;
+  assignedRegistrarId: string | null;
+  assignedRegistrarName: string | null;
+  gender: "male" | "female" | null;
   groupId: string | null;
   groupLabel: string | null;
   isGroupPrimary: boolean;
@@ -581,8 +582,6 @@ export type EmsStagingLeadGroup = {
   branchId: string;
   branchName: string;
   label: string | null;
-  assignedSsaId: string | null;
-  assignedSsaName: string | null;
   members: Array<{
     leadId: string;
     name: string;
@@ -752,6 +751,25 @@ export type EmsStagingMoodleCoursePicker = {
   warnings: string[];
   error: string | null;
   courses: EmsStagingMoodleCourse[];
+};
+
+export type EmsStagingMoodleCategory = {
+  id: number;
+  name: string;
+  parentId: number | null;
+  idNumber: string | null;
+  sortOrder: number;
+  visible: boolean;
+  depth: number;
+  path: string | null;
+  courseCount: number;
+};
+
+export type EmsStagingMoodleCategories = {
+  refreshedAt: string | null;
+  warnings: string[];
+  error: string | null;
+  categories: EmsStagingMoodleCategory[];
 };
 
 export type EmsStagingMoodleGroup = {
@@ -929,6 +947,7 @@ export type EmsStagingAuditStream =
   | "student"
   | "lead"
   | "placement_test"
+  | "trial_lesson"
   | "class"
   | "enrolment"
   | "room"
@@ -1439,10 +1458,6 @@ export type EmsStagingUserStatistics = {
   userId: string;
   emsRole: EmsStagingRole;
   leadsCreated: number;
-  leadsAssigned: number;
-  leadsOpen: number;
-  leadsRegistered: number;
-  leadsLost: number;
   studentsAssigned: number;
   classesTeaching: number;
   sessionsScheduled: number;
@@ -1458,10 +1473,6 @@ export function normalizeEmsUserStatistics(
   const record = payload as Record<string, unknown>;
   const counts = [
     "leads_created",
-    "leads_assigned",
-    "leads_open",
-    "leads_registered",
-    "leads_lost",
     "students_assigned",
     "classes_teaching",
     "sessions_scheduled",
@@ -1486,10 +1497,6 @@ export function normalizeEmsUserStatistics(
     userId: record.user_id,
     emsRole: record.assigned_role,
     leadsCreated: int("leads_created"),
-    leadsAssigned: int("leads_assigned"),
-    leadsOpen: int("leads_open"),
-    leadsRegistered: int("leads_registered"),
-    leadsLost: int("leads_lost"),
     studentsAssigned: int("students_assigned"),
     classesTeaching: int("classes_teaching"),
     sessionsScheduled: int("sessions_scheduled"),
@@ -2656,8 +2663,12 @@ export function normalizeEmsLead(payload: unknown): EmsStagingLead | null {
     !EMS_LEAD_STATUSES.includes(
       record.status as EmsStagingLeadStatus
     ) ||
-    !isNullableString(record.assigned_ssa_id) ||
-    !isNullableString(record.assigned_ssa_name) ||
+    !isNullableString(record.assigned_registrar_id) ||
+    !isNullableString(record.assigned_registrar_name) ||
+    (record.gender !== undefined &&
+      record.gender !== null &&
+      record.gender !== "male" &&
+      record.gender !== "female") ||
     !isNullableString(record.group_id) ||
     !isNullableString(record.group_label) ||
     !isNullableString(record.date_of_birth) ||
@@ -2703,8 +2714,9 @@ export function normalizeEmsLead(payload: unknown): EmsStagingLead | null {
     notes: nullableString(record.notes),
     leadType: record.lead_type as EmsStagingLeadType,
     status: record.status as EmsStagingLeadStatus,
-    assignedSsaId: nullableString(record.assigned_ssa_id),
-    assignedSsaName: nullableString(record.assigned_ssa_name),
+    assignedRegistrarId: nullableString(record.assigned_registrar_id),
+    assignedRegistrarName: nullableString(record.assigned_registrar_name),
+    gender: (record.gender as "male" | "female" | null | undefined) ?? null,
     groupId: nullableString(record.group_id),
     groupLabel: nullableString(record.group_label),
     isGroupPrimary: record.is_group_primary === true,
@@ -3239,8 +3251,6 @@ export function normalizeEmsLeadGroup(
     !record.branch_id ||
     typeof record.branch_name !== "string" ||
     !isNullableString(record.label) ||
-    !isNullableString(record.assigned_ssa_id) ||
-    !isNullableString(record.assigned_ssa_name) ||
     (record.members !== undefined && !Array.isArray(record.members)) ||
     typeof record.created_at !== "string" ||
     typeof record.updated_at !== "string"
@@ -3277,8 +3287,6 @@ export function normalizeEmsLeadGroup(
     branchId: record.branch_id,
     branchName: record.branch_name,
     label: nullableString(record.label),
-    assignedSsaId: nullableString(record.assigned_ssa_id),
-    assignedSsaName: nullableString(record.assigned_ssa_name),
     members,
     createdAt: record.created_at,
     updatedAt: record.updated_at,
@@ -3881,6 +3889,66 @@ export function normalizeEmsMoodleCoursePicker(
     warnings: record.warnings as string[],
     error: nullableString(record.error),
     courses,
+  };
+}
+
+export function normalizeEmsMoodleCategories(
+  payload: unknown
+): EmsStagingMoodleCategories | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  const categories = Array.isArray(record.categories)
+    ? record.categories.map(item => {
+        if (!item || typeof item !== "object") return null;
+        const category = item as Record<string, unknown>;
+        if (
+          typeof category.id !== "number" ||
+          !Number.isSafeInteger(category.id) ||
+          typeof category.name !== "string" ||
+          !category.name ||
+          (category.parent_id !== null &&
+            category.parent_id !== undefined &&
+            !Number.isSafeInteger(category.parent_id)) ||
+          !isNullableString(category.idnumber) ||
+          typeof category.sort_order !== "number" ||
+          !Number.isSafeInteger(category.sort_order) ||
+          typeof category.visible !== "boolean" ||
+          typeof category.depth !== "number" ||
+          !Number.isSafeInteger(category.depth) ||
+          !isNullableString(category.path) ||
+          typeof category.coursecount !== "number" ||
+          !Number.isSafeInteger(category.coursecount)
+        )
+          return null;
+        return {
+          id: category.id,
+          name: category.name,
+          parentId:
+            typeof category.parent_id === "number" ? category.parent_id : null,
+          idNumber: nullableString(category.idnumber),
+          sortOrder: category.sort_order,
+          visible: category.visible,
+          depth: category.depth,
+          path: nullableString(category.path),
+          courseCount: category.coursecount,
+        } as EmsStagingMoodleCategory;
+      })
+    : null;
+  if (
+    !categories ||
+    categories.some(item => item === null) ||
+    !isNullableString(record.catalog_refreshed_at) ||
+    !Array.isArray(record.warnings) ||
+    !record.warnings.every(item => typeof item === "string") ||
+    !isNullableString(record.error)
+  ) {
+    return null;
+  }
+  return {
+    refreshedAt: nullableString(record.catalog_refreshed_at),
+    warnings: record.warnings as string[],
+    error: nullableString(record.error),
+    categories: categories as EmsStagingMoodleCategory[],
   };
 }
 
@@ -4543,6 +4611,7 @@ export const EMS_AUDIT_STREAMS: EmsStagingAuditStream[] = [
   "student",
   "lead",
   "placement_test",
+  "trial_lesson",
   "class",
   "enrolment",
   "room",
@@ -4565,10 +4634,12 @@ export function normalizeEmsAuditEvents(
   for (const row of payload) {
     if (!row || typeof row !== "object") return null;
     const record = row as Record<string, unknown>;
+    // Streams we don't model yet are skipped, not fatal to the whole feed.
+    if (!EMS_AUDIT_STREAMS.includes(record.stream as EmsStagingAuditStream))
+      continue;
     if (
       typeof record.id !== "string" ||
       !record.id ||
-      !EMS_AUDIT_STREAMS.includes(record.stream as EmsStagingAuditStream) ||
       typeof record.event_type !== "string" ||
       !record.event_type ||
       typeof record.created_at !== "string" ||
@@ -4601,6 +4672,199 @@ export function normalizeEmsAuditEvents(
     });
   }
   return items;
+}
+
+export const EMS_FILE_STATUSES = [
+  "pending",
+  "ready",
+  "failed",
+  "archived",
+] as const;
+
+export type EmsStagingFileStatus = (typeof EMS_FILE_STATUSES)[number];
+
+export type EmsStagingFileVariant = {
+  kind: string;
+  contentType: string;
+  sizeBytes: number;
+  width: number | null;
+  height: number | null;
+};
+
+export type EmsStagingFile = {
+  id: string;
+  entityType: string;
+  entityId: string;
+  purpose: string;
+  status: EmsStagingFileStatus;
+  originalFilename: string;
+  contentType: string;
+  sizeBytes: number;
+  checksumSha256: string | null;
+  variants: EmsStagingFileVariant[];
+  createdAt: string;
+  updatedAt: string;
+  errorDetail: string | null;
+};
+
+export type EmsStagingFileUploadIntent = {
+  id: string;
+  uploadUrl: string;
+  expiresAt: string;
+  headers: Record<string, string>;
+  file: EmsStagingFile;
+};
+
+export type EmsStagingFileDownload = {
+  url: string;
+  expiresAt: string;
+  variant: string;
+  contentType: string;
+};
+
+function isNullableNumber(value: unknown) {
+  return value === null || (typeof value === "number" && Number.isFinite(value));
+}
+
+export function normalizeEmsFile(payload: unknown): EmsStagingFile | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  const variants = Array.isArray(record.variants)
+    ? record.variants.map(item => {
+        if (!item || typeof item !== "object") return null;
+        const variant = item as Record<string, unknown>;
+        if (
+          typeof variant.kind !== "string" ||
+          !variant.kind ||
+          typeof variant.content_type !== "string" ||
+          !variant.content_type ||
+          typeof variant.size_bytes !== "number" ||
+          !Number.isFinite(variant.size_bytes) ||
+          !isNullableNumber(variant.width) ||
+          !isNullableNumber(variant.height)
+        )
+          return null;
+        return {
+          kind: variant.kind,
+          contentType: variant.content_type,
+          sizeBytes: variant.size_bytes,
+          width: variant.width,
+          height: variant.height,
+        } as EmsStagingFileVariant;
+      })
+    : null;
+  if (!variants || variants.some(item => item === null)) return null;
+  if (
+    typeof record.id !== "string" ||
+    !record.id ||
+    typeof record.entity_type !== "string" ||
+    !record.entity_type ||
+    typeof record.entity_id !== "string" ||
+    !record.entity_id ||
+    typeof record.purpose !== "string" ||
+    !record.purpose ||
+    !EMS_FILE_STATUSES.includes(
+      record.status as (typeof EMS_FILE_STATUSES)[number]
+    ) ||
+    typeof record.original_filename !== "string" ||
+    !record.original_filename ||
+    typeof record.content_type !== "string" ||
+    !record.content_type ||
+    typeof record.size_bytes !== "number" ||
+    !Number.isFinite(record.size_bytes) ||
+    !isNullableString(record.checksum_sha256) ||
+    typeof record.created_at !== "string" ||
+    !record.created_at ||
+    typeof record.updated_at !== "string" ||
+    !record.updated_at ||
+    (record.error_detail !== undefined &&
+      !isNullableString(record.error_detail))
+  ) {
+    return null;
+  }
+  return {
+    id: record.id,
+    entityType: record.entity_type,
+    entityId: record.entity_id,
+    purpose: record.purpose,
+    status: record.status as EmsStagingFileStatus,
+    originalFilename: record.original_filename,
+    contentType: record.content_type,
+    sizeBytes: record.size_bytes,
+    checksumSha256: nullableString(record.checksum_sha256),
+    variants: variants as EmsStagingFileVariant[],
+    createdAt: record.created_at,
+    updatedAt: record.updated_at,
+    errorDetail: nullableString(record.error_detail),
+  };
+}
+
+export function normalizeEmsFiles(payload: unknown): EmsStagingFile[] | null {
+  if (!Array.isArray(payload)) return null;
+  const items = payload.map(normalizeEmsFile);
+  return items.some(item => item === null)
+    ? null
+    : (items as EmsStagingFile[]);
+}
+
+export function normalizeEmsFileUploadIntent(
+  payload: unknown
+): EmsStagingFileUploadIntent | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  const headers =
+    record.headers && typeof record.headers === "object"
+      ? Object.fromEntries(
+          Object.entries(record.headers as Record<string, unknown>).filter(
+            ([, value]) => typeof value === "string"
+          )
+        )
+      : null;
+  const file = normalizeEmsFile(record.file);
+  if (
+    typeof record.id !== "string" ||
+    !record.id ||
+    typeof record.upload_url !== "string" ||
+    !record.upload_url ||
+    typeof record.expires_at !== "string" ||
+    !record.expires_at ||
+    !headers ||
+    !file
+  ) {
+    return null;
+  }
+  return {
+    id: record.id,
+    uploadUrl: record.upload_url,
+    expiresAt: record.expires_at,
+    headers: headers as Record<string, string>,
+    file,
+  };
+}
+
+export function normalizeEmsFileDownload(
+  payload: unknown
+): EmsStagingFileDownload | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  if (
+    typeof record.url !== "string" ||
+    !record.url ||
+    typeof record.expires_at !== "string" ||
+    !record.expires_at ||
+    typeof record.variant !== "string" ||
+    !record.variant ||
+    typeof record.content_type !== "string" ||
+    !record.content_type
+  ) {
+    return null;
+  }
+  return {
+    url: record.url,
+    expiresAt: record.expires_at,
+    variant: record.variant,
+    contentType: record.content_type,
+  };
 }
 
 export function normalizeEmsNotification(
@@ -5682,14 +5946,36 @@ export function createEmsStagingClient(options: EmsStagingClientOptions) {
       token: string,
       query?: string,
       refresh?: boolean,
-      unmapped?: boolean
+      unmapped?: boolean,
+      categoryId?: number
     ) {
       const params = new URLSearchParams();
       if (query?.trim()) params.set("q", query.trim());
       if (refresh) params.set("refresh", "true");
       if (unmapped !== undefined) params.set("unmapped", String(unmapped));
+      if (categoryId !== undefined) params.set("category_id", String(categoryId));
       const suffix = params.size ? `?${params.toString()}` : "";
       return request<unknown>(`/moodle/courses${suffix}`, { token });
+    },
+    refreshMoodleCourses(
+      token: string,
+      options: { categoryId?: number; query?: string; unmapped?: boolean } = {}
+    ) {
+      const params = new URLSearchParams();
+      if (options.categoryId !== undefined)
+        params.set("category_id", String(options.categoryId));
+      if (options.query?.trim()) params.set("q", options.query.trim());
+      if (options.unmapped !== undefined)
+        params.set("unmapped", String(options.unmapped));
+      const suffix = params.size ? `?${params.toString()}` : "";
+      return request<unknown>(`/moodle/courses/refresh${suffix}`, {
+        method: "POST",
+        token,
+      });
+    },
+    moodleCategories(token: string, refresh?: boolean) {
+      const suffix = refresh ? "?refresh=true" : "";
+      return request<unknown>(`/moodle/categories${suffix}`, { token });
     },
     moodleGroups(token: string, courseId: string, query: string) {
       const params = new URLSearchParams({
@@ -5699,6 +5985,47 @@ export function createEmsStagingClient(options: EmsStagingClientOptions) {
       return request<unknown>(`/moodle/groups?${params.toString()}`, {
         token,
       });
+    },
+    files(
+      token: string,
+      filters: {
+        entityType?: string;
+        entityId?: string;
+        purpose?: string;
+      } = {}
+    ) {
+      const params = new URLSearchParams();
+      if (filters.entityType) params.set("entity_type", filters.entityType);
+      if (filters.entityId) params.set("entity_id", filters.entityId);
+      if (filters.purpose) params.set("purpose", filters.purpose);
+      const suffix = params.size ? `?${params.toString()}` : "";
+      return request<unknown>(`/files${suffix}`, { token });
+    },
+    createFileUpload(token: string, body: Record<string, unknown>) {
+      return request<unknown>("/files/uploads", {
+        method: "POST",
+        token,
+        body,
+      });
+    },
+    completeFileUpload(token: string, fileId: string) {
+      return request<unknown>(
+        `/files/uploads/${encodeURIComponent(fileId)}/complete`,
+        { method: "POST", token }
+      );
+    },
+    fileDownload(token: string, fileId: string, variant?: string) {
+      const suffix = variant ? `?variant=${encodeURIComponent(variant)}` : "";
+      return request<unknown>(
+        `/files/${encodeURIComponent(fileId)}/download${suffix}`,
+        { token }
+      );
+    },
+    archiveFile(token: string, fileId: string) {
+      return request<unknown>(
+        `/files/${encodeURIComponent(fileId)}/archive`,
+        { method: "POST", token }
+      );
     },
     course(token: string, courseId: string) {
       return request<unknown>(`/courses/${encodeURIComponent(courseId)}`, {

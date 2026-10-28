@@ -4,7 +4,7 @@ import { Columns3, List, Plus } from "lucide-react";
 import type { NccLeadDto, NccPageDto } from "@/lib/backend/api";
 import { useNcc, type StaffQuery } from "../api";
 import { copy } from "../copy";
-import { canSetAssignee, isAdmissionsRole } from "../roles";
+import { isAdmissionsRole } from "../roles";
 import { useStaffSession } from "../session";
 import { ListPage, type ListColumn, type ListFilter } from "../ui/list-page";
 import {
@@ -22,7 +22,6 @@ import { formatDate } from "./catalog-shared";
 import {
   ModeTags,
   useActiveAreas,
-  useAssignees,
   useBranches,
 } from "./admissions-ui";
 import { LeadsBoard } from "./leads-board";
@@ -76,7 +75,6 @@ export const LEAD_STAGES: NccLeadDto["status"][] = [
 const FILTER_KEYS = [
   "status",
   "mode",
-  "owner",
   "area",
   "type",
   "branch",
@@ -95,8 +93,6 @@ export function leadListQuery(url: StaffQuery): StaffQuery {
   };
   if (url.mode === "online") query.wantsOnline = true;
   if (url.mode === "onsite") query.wantsOnsite = true;
-  if (url.owner === "none") query.unassigned = true;
-  else if (url.owner) query.assignedSsaId = url.owner;
   return query;
 }
 
@@ -107,10 +103,6 @@ export default function LeadsPage() {
   const superAdmin = role === "super_admin";
   const branches = useBranches();
   const areas = useActiveAreas(allowed);
-  const assignees = useAssignees(
-    session?.ncc?.workspaceBranchId,
-    allowed && canSetAssignee(role)
-  );
   const [formOpen, setFormOpen] = useState(false);
   const [, navigate] = useLocation();
   const [view, setView] = useLeadsView();
@@ -135,22 +127,6 @@ export default function LeadsPage() {
         { value: "online", label: M.online },
       ],
     },
-    ...(assignees.length
-      ? [
-          {
-            key: "owner",
-            label: L.owner,
-            allLabel: L.anyOwner,
-            options: [
-              { value: "none", label: L.unassigned },
-              ...assignees.map(person => ({
-                value: person.id,
-                label: person.name,
-              })),
-            ],
-          },
-        ]
-      : []),
     ...(areas.length
       ? [
           {
@@ -242,10 +218,10 @@ export default function LeadsPage() {
     },
     {
       id: "owner",
-      label: L.owner,
+      label: copy.roles.registrar,
       render: row =>
-        row.assignedSsaName ?? (
-          <span className="staff-muted">{L.unassigned}</span>
+        row.assignedRegistrarName ?? (
+          <span className="staff-muted">{copy.state.notSet}</span>
         ),
     },
     {

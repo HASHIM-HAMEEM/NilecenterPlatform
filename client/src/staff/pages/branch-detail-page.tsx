@@ -2,9 +2,15 @@ import { useParams } from "wouter";
 import type {
   NccBranchDto,
   NccBranchStatisticsDto,
+  NccCustomFieldDefinitionDto,
 } from "@/lib/backend/api";
 import { useNcc } from "../api";
 import { copy } from "../copy";
+import {
+  customFieldDefinition,
+  customFieldLabel,
+  formatCustomFieldValue,
+} from "../custom-fields";
 import { ErrorState, LoadingRows, PageHeader } from "../ui/primitives";
 import { CatalogStatus, formatDate } from "./catalog-shared";
 
@@ -29,6 +35,10 @@ export default function BranchDetailPage() {
     id
       ? `/api/ncc/directory/branches/${encodeURIComponent(id)}/statistics`
       : null
+  );
+  const customFieldDefs = useNcc<{ items: NccCustomFieldDefinitionDto[] }>(
+    id ? "/api/ncc/settings/custom-fields" : null,
+    { entityType: "branch", isActive: "true" }
   );
 
   if (branch.error) {
@@ -100,8 +110,15 @@ export default function BranchDetailPage() {
           <dl className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2">
             {Object.entries(item.customFields).map(([key, value]) => (
               <div key={key}>
-                <dt className="staff-muted">{key}</dt>
-                <dd>{value === null ? copy.state.notSet : String(value)}</dd>
+                <dt className="staff-muted">
+                  {customFieldLabel(customFieldDefs.data?.items, key)}
+                </dt>
+                <dd>
+                  {formatCustomFieldValue(
+                    customFieldDefinition(customFieldDefs.data?.items, key),
+                    value
+                  )}
+                </dd>
               </div>
             ))}
           </dl>

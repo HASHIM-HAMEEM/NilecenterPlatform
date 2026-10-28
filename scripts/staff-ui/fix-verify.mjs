@@ -99,7 +99,9 @@ async function newPage() {
   await regApi.login("SUPER_ADMIN");
   const students = await regApi.call("GET", `/api/ncc/admissions/students?pageSize=100`);
   const courses = await regApi.call("GET", "/api/ncc/delivery/courses?pageSize=5");
-  const course = courses.data?.items?.[0];
+  const course =
+    courses.data?.items?.find(item => item.status === "active") ??
+    courses.data?.items?.[0];
   // Other suites restore the sandbox course to disabled; enable it for this
   // check only and restore it in cleanup, as admissions.mjs does.
   let courseEnabled = false;
@@ -115,10 +117,26 @@ async function newPage() {
     });
     return e.data?.enrolment?.id ?? null;
   };
+  // SSA sees only enrolments of students assigned to them; pin whichever
+  // student we enrol to the QA SSA account.
+  const assignees = await regApi.call(
+    "GET",
+    `/api/ncc/admissions/assignees?branchId=${branchId}`
+  );
+  const ssaId = (assignees.data?.items ?? []).find(
+    a => a.email === creds("SSA").email
+  )?.id;
+  const enrolForSsa = async studentId => {
+    if (ssaId)
+      await regApi.call("PATCH", `/api/ncc/admissions/students/${studentId}`, {
+        assignedSsaId: ssaId,
+      });
+    return tryEnrol(studentId);
+  };
   const existing = (students.data?.items ?? []).find(
     s => s.status === "active" && (s.homeBranchId ?? branchId) === branchId
   );
-  if (existing && course) enrolmentId = await tryEnrol(existing.id);
+  if (existing && course) enrolmentId = await enrolForSsa(existing.id);
   if (!enrolmentId && course) {
     // Existing students already hold an enrolment for this course (409), or
     // none are active — create a disposable student instead.
@@ -131,13 +149,13 @@ async function newPage() {
       registration: { toBePaid: 0, paid: 0 },
     });
     createdStudent = mk.data?.student?.id ?? null;
-    if (createdStudent) enrolmentId = await tryEnrol(createdStudent);
+    if (createdStudent) enrolmentId = await enrolForSsa(createdStudent);
   }
   await regApi.logout();
 
   const { ctx, page } = await newPage();
   await page.goto(`${BASE}/auth/administration-login`);
-  const account = creds("REGISTRAR");
+  const account = creds("SSA");
   await page.fill('input[type="email"]', account.email);
   await page.fill('input[type="password"]', account.password);
   await page.click('button[type="submit"]');

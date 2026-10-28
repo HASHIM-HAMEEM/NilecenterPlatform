@@ -30,7 +30,11 @@ import {
 import { staffWrite, useInvalidate, useNcc } from "../api";
 import { copy } from "../copy";
 import { formatDateTime } from "../i18n";
-import { isAdmissionsRole, isClassCatalogWriter } from "../roles";
+import {
+  canManageSessions,
+  canReadStudents,
+  isClassCatalogWriter,
+} from "../roles";
 import { runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { useStaffCrumb } from "../shell/staff-shell";
@@ -62,7 +66,7 @@ type Tab = (typeof TABS)[number];
 
 function ClassStudents({ item, canWrite }: { item: NccClassDto; canWrite: boolean }) {
   const { session } = useStaffSession();
-  const canOpenStudents = isAdmissionsRole(session?.ncc?.activeRole);
+  const canOpenStudents = canReadStudents(session?.ncc?.activeRole);
   const invalidate = useInvalidate();
   const roster = useNcc<{ items: NccEnrolmentDto[] }>(
     `/api/ncc/delivery/classes/${encodeURIComponent(item.id)}/enrolments`
@@ -561,7 +565,7 @@ export default function ClassDetailPage() {
         ))}
       </div>
 
-      {tab === "sessions" ? <ClassSessions item={item} branch={branch} canWrite={canWrite} /> : null}
+      {tab === "sessions" ? <ClassSessions item={item} branch={branch} canWrite={canManageSessions(role)} /> : null}
       {tab === "students" ? <ClassStudents item={item} canWrite={canWrite} /> : null}
       {tab === "attendance" ? <ClassAttendance item={item} timeZone={branch?.timezone} /> : null}
       {tab === "grades" ? <ClassGrades item={item} /> : null}

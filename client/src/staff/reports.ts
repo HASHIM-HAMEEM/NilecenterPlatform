@@ -244,7 +244,7 @@ export function admissionsReport(
       lost.length,
       countBy(lost, lead => lead.lostReasonName ?? null)
     ),
-    byOwner: breakdown(inPeriod, lead => lead.assignedSsaName),
+    byOwner: breakdown(inPeriod, lead => lead.assignedRegistrarName),
     byArea: breakdown(inPeriod, lead => lead.areaOfStudyName ?? null),
     byBranch:
       branches.size > 1

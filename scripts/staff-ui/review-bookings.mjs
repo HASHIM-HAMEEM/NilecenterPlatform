@@ -19,7 +19,8 @@ const suite = createSuite("review-bookings");
 const { step, watch, shot, finish } = suite;
 
 const MARK = `NILE-QA-REVIEW-${stamp()}`;
-const REGISTRAR_BRANCH = "ccab89aa-58a9-4db9-a413-61017ad9709b";
+// Staging is reseeded; resolved live from EMS in setup below.
+let REGISTRAR_BRANCH = null;
 const EMS = (envVal("EMS_STAGING_BASE_URL") ?? "").replace(/\/+$/, "");
 
 /* ---------- Direct EMS calls (setup/cleanup need EMS-only writes) -------- */
@@ -123,6 +124,15 @@ try {
   step("EMS super-admin token for setup", Boolean(saToken));
 
   if (saToken) {
+    const branches = await ems(saToken, "GET", "/branches?page_size=100");
+    const branchRows = branches.data?.items ?? branches.data ?? [];
+    REGISTRAR_BRANCH =
+      branchRows.find(
+        branch => /branch 1/i.test(branch.name) && branch.status === "active"
+      )?.id ??
+      branchRows.find(branch => branch.status === "active")?.id ??
+      null;
+    step("fixture: registrar branch", Boolean(REGISTRAR_BRANCH));
     const lead = await ems(saToken, "POST", "/leads", {
       first_name: "Qa",
       last_name: MARK,
@@ -227,7 +237,7 @@ try {
     if (await branchTrigger.isVisible().catch(() => false)) {
       await branchTrigger.click();
       await page
-        .getByRole("option", { name: /nile-qa-20260914/i })
+        .getByRole("option", { name: /branch 1/i })
         .first()
         .click();
     }
@@ -237,7 +247,8 @@ try {
     if (await roomTrigger.isVisible().catch(() => false)) {
       await roomTrigger.click();
       await page
-        .getByRole("option", { name: /NILE-QA-20260914 Room/i })
+        .getByRole("option")
+        .first()
         .first()
         .click()
         .catch(async () => {
@@ -290,7 +301,7 @@ try {
     const pBranch = pSheet.getByRole("combobox", { name: "Branch" });
     if (await pBranch.isVisible().catch(() => false)) {
       await pBranch.click();
-      await page.getByRole("option", { name: /nile-qa-20260914/i }).first().click();
+      await page.getByRole("option", { name: /branch 1/i }).first().click();
     }
     await pickDate(page, "#booking-date", day);
     const pRoom = pSheet.getByRole("combobox", { name: "Room" });

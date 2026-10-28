@@ -21,7 +21,8 @@ export async function staffGet<T>(path: string, query?: StaffQuery): Promise<T> 
     throw new StaffApiError(
       result.error ?? "The request failed. Try again.",
       result.status,
-      result.details
+      result.details,
+      result.code
     );
   }
   return result.data as T;
@@ -36,7 +37,8 @@ export async function staffWrite<T>(
     throw new StaffApiError(
       resolved.error ?? "The request failed. Try again.",
       resolved.status,
-      resolved.details
+      resolved.details,
+      resolved.code
     );
   }
   return resolved.data as T;

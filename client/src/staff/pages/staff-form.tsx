@@ -29,6 +29,7 @@ import {
 import { DateOfBirthField } from "../ui/date-of-birth-field";
 import { FormSheet, StaffField } from "../ui/form-sheet";
 import { MultiSelect } from "../ui/multi-select";
+import { NationalitySelect } from "../ui/nationality-select";
 import type { StaffSecret } from "../ui/secret-dialog";
 
 const C = copy.staffUsers;
@@ -329,7 +330,10 @@ export function StaffForm({
             branchIds: role === "super_admin" ? undefined : branchScopes,
             departmentIds: needsDepartments ? deptIds : undefined,
             courseIds: needsCourses ? courseIds : undefined,
-            canTakePlacementTest: canTakePlacement,
+            canTakePlacementTest:
+              role === "teacher"
+                ? canTakePlacement
+                : role === "vice_manager" || role === "hod",
             customFields: customValues,
             callerPassword: callerPassword || undefined,
           })
@@ -344,7 +348,10 @@ export function StaffForm({
             branchIds: role === "super_admin" ? undefined : branchScopes,
             departmentIds: needsDepartments ? deptIds : undefined,
             courseIds: needsCourses ? courseIds : undefined,
-            canTakePlacementTest: canTakePlacement,
+            canTakePlacementTest:
+              role === "teacher"
+                ? canTakePlacement
+                : role === "vice_manager" || role === "hod",
             customFields: customValues,
             callerPassword: callerPassword || undefined,
           })
@@ -529,16 +536,18 @@ export function StaffForm({
             </StaffField>
           )}
 
-          <StaffField label={C.canTakePlacementTest}>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={canTakePlacement}
-                onChange={event => setCanTakePlacement(event.target.checked)}
-              />
-              {C.placementYes}
-            </label>
-          </StaffField>
+          {role === "teacher" ? (
+            <StaffField label={C.canTakePlacementTest}>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={canTakePlacement}
+                  onChange={event => setCanTakePlacement(event.target.checked)}
+                />
+                {C.placementYes}
+              </label>
+            </StaffField>
+          ) : null}
 
           <StaffField label={C.phone} error={errorFor("profile")}>
             <input
@@ -549,13 +558,11 @@ export function StaffForm({
             />
           </StaffField>
           <StaffField label={C.nationality}>
-            <input
-              className="staff-input"
+            <NationalitySelect
               value={nationality}
-              maxLength={3}
-              onChange={event => setNationality(event.target.value)}
+              onChange={setNationality}
+              ariaLabel={C.nationality}
             />
-            <span className="staff-muted text-xs">{C.nationalityHint}</span>
           </StaffField>
           <DateOfBirthField
             label={C.dateOfBirth}

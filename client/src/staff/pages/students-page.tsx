@@ -5,7 +5,7 @@ import type { NccPageDto, NccStudentDto } from "@/lib/backend/api";
 import { formatAmount } from "../admissions";
 import { useNcc, type StaffQuery } from "../api";
 import { copy } from "../copy";
-import { isAdmissionsRole } from "../roles";
+import { canManageStudents, canReadStudents } from "../roles";
 import { useStaffSession } from "../session";
 import { ListPage, type ListColumn, type ListFilter } from "../ui/list-page";
 import {
@@ -52,7 +52,8 @@ export function FeeCell({
 export default function StudentsPage() {
   const { session } = useStaffSession();
   const role = session?.ncc?.activeRole ?? null;
-  const allowed = isAdmissionsRole(role);
+  const allowed = canReadStudents(role);
+  const canManage = canManageStudents(role);
   const superAdmin = role === "super_admin";
   const branches = useBranches();
   const [, navigate] = useLocation();
@@ -155,15 +156,17 @@ export default function StudentsPage() {
       <PageHeader
         title={S.title}
         actions={
-          <button
-            type="button"
-            className="staff-btn"
-            data-variant="primary"
-            onClick={() => setFormOpen(true)}
-          >
-            <Plus strokeWidth={1.75} aria-hidden />
-            {S.add}
-          </button>
+          canManage ? (
+            <button
+              type="button"
+              className="staff-btn"
+              data-variant="primary"
+              onClick={() => setFormOpen(true)}
+            >
+              <Plus strokeWidth={1.75} aria-hidden />
+              {S.add}
+            </button>
+          ) : undefined
         }
       />
       <ServerSegments

@@ -13,7 +13,6 @@ import {
 } from "@/lib/backend/api";
 import { staffWrite, useInvalidate, useNcc, type StaffQuery } from "../api";
 import { copy } from "../copy";
-import { canAccess } from "../nav";
 import {
   dropAction,
   moveTargets,
@@ -22,7 +21,7 @@ import {
   type LeadStage,
 } from "../pipeline";
 import { intlLocale } from "../i18n";
-import { canSetAssignee } from "../roles";
+import { canAccess } from "../nav";
 import { runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { ConfirmDialog } from "../ui/confirm-dialog";
@@ -42,14 +41,13 @@ import {
 import type { ListFilter } from "../ui/list-page";
 import { Avatar, ErrorState } from "../ui/primitives";
 import { GlyphSearch } from "../ui/glyphs";
-import { useAssignees, useBranches } from "./admissions-ui";
+import { useBranches } from "./admissions-ui";
 import { BookingSheet } from "./booking-sheets";
 import { LEAD_STAGES } from "./leads-page";
 
 const L = copy.admissions.leads;
 const K = copy.admissions.board;
 const PAGE = 20;
-const NONE = "__none";
 
 const stageLabel = (stage: LeadStage) =>
   copy.status[stage as keyof typeof copy.status] ?? stage;
@@ -114,10 +112,6 @@ export function LeadsBoard({
   const superAdmin = role === "super_admin";
   const invalidate = useInvalidate();
   const branches = useBranches();
-  const assignees = useAssignees(
-    session?.ncc?.workspaceBranchId,
-    canSetAssignee(role)
-  );
   const [limits, setLimits] = useState<Record<string, number>>({});
   const [moved, setMoved] = useState<Record<string, LeadStage>>({});
   const [dragging, setDragging] = useState<NccLeadDto | null>(null);
@@ -274,15 +268,6 @@ export function LeadsBoard({
       lead => ({ status: to, ...(lead.status === "lost" ? { lostReasonId: null } : {}) }),
       fill(K.movedMany, { n: leads.length, stage: stageLabel(to) }),
       to
-    ).then(() => setSelected(new Map()));
-  }
-
-  function bulkOwner(ownerId: string) {
-    const leads = Array.from(selected.values());
-    void patchMany(
-      leads,
-      () => ({ assignedSsaId: ownerId === NONE ? null : ownerId }),
-      fill(K.ownerSet, { n: leads.length })
     ).then(() => setSelected(new Map()));
   }
 
@@ -493,21 +478,6 @@ export function LeadsBoard({
                   ))}
                 </SelectContent>
               </Select>
-              {canSetAssignee(role) && assignees.length ? (
-                <Select value="" onValueChange={bulkOwner}>
-                  <SelectTrigger size="sm" aria-label={K.setOwner}>
-                    <SelectValue placeholder={K.setOwner} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE}>{L.unassigned}</SelectItem>
-                    {assignees.map(person => (
-                      <SelectItem key={person.id} value={person.id}>
-                        {person.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
               <button
                 type="button"
                 className="staff-btn"
@@ -664,9 +634,11 @@ function BoardCard({
         ) : null}
       </div>
       <div className="staff-board-meta">
-        <span className="staff-board-owner" data-none={lead.assignedSsaName ? undefined : ""}>
-          {lead.assignedSsaName ?? L.unassigned}
-        </span>
+        {lead.assignedRegistrarName ? (
+          <span className="staff-board-owner">
+            {lead.assignedRegistrarName}
+          </span>
+        ) : null}
         {branchLabel ? (
           <span className="staff-board-branch" title={lead.branchName}>
             {branchLabel}

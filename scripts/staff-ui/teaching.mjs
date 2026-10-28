@@ -14,8 +14,37 @@ const { step, watch, finish } = suite;
 
 const admin = new Api();
 await admin.login("SUPER_ADMIN");
-const CLASS = "916369b8-384a-4fc2-943c-0dc3aa7cd89e";
-const cls = (await admin.call("GET", `/api/ncc/delivery/classes/${CLASS}`)).data.class;
+// Staging is reseeded; resolve an active branch-1 class that has sessions
+// (and a teacher to schedule against) instead of a pinned id.
+const BRANCH_ID = (
+  (await admin.call("GET", "/api/ncc/directory/branches")).data?.items ?? []
+).find(branch => /branch 1/i.test(branch.name) && branch.status === "active")?.id;
+let cls = null;
+if (BRANCH_ID) {
+  const rows =
+    (await admin.call("GET", "/api/ncc/delivery/classes?status=active&pageSize=100"))
+      .data?.items ?? [];
+  for (const row of rows.filter(item => item.branchId === BRANCH_ID)) {
+    const detail = (
+      await admin.call("GET", `/api/ncc/delivery/classes/${row.id}`)
+    ).data?.class;
+    if (!detail) continue;
+    const sessions = (
+      await admin.call("GET", `/api/ncc/delivery/classes/${row.id}/sessions`)
+    ).data?.items ?? [];
+    if (sessions.length && detail.teacherIds?.[0]) {
+      cls = detail;
+      break;
+    }
+    if (sessions.length && !cls) cls = detail;
+  }
+}
+step("fixture: active class with sessions", Boolean(cls));
+if (!cls) {
+  await finish();
+  process.exit(1);
+}
+const CLASS = cls.id;
 const TEACHER = cls.teacherIds[0];
 const ROOM = (await admin.call("GET", "/api/ncc/delivery/rooms")).data.items.find(
   r => r.branchId === cls.branchId

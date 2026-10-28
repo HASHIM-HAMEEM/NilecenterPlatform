@@ -1046,6 +1046,145 @@ describe("NCC operational routes", () => {
     });
   });
 
+  it("rejects removed lead owner filters and fields instead of forwarding them", async () => {
+    const cookie = await login("registrar", "branch-1");
+    const leads = vi.fn(async () => ({ ok: true, data: paged([lead()]) }));
+    const createLead = vi.fn(async () => ({ ok: true, data: lead() }));
+    const createLeadGroup = vi.fn(async () => ({
+      ok: true,
+      data: { id: "group-1" },
+    }));
+    const routes = captureRoutes({
+      env: env(),
+      api: { leads, createLead, createLeadGroup },
+    });
+    const handler = routes.get("/api/ncc/admissions/leads");
+    for (const query of [
+      { unassigned: "true" },
+      { assignedSsaId: "ssa-1" },
+    ]) {
+      const bad = responseRecorder();
+      await handler?.(
+        request(cookie, undefined, undefined, query),
+        bad.response
+      );
+      expect(bad.result.status, JSON.stringify(query)).toBe(400);
+      expect(bad.result.body.error).toContain("is not a supported filter");
+    }
+    expect(leads).not.toHaveBeenCalled();
+
+    const created = responseRecorder();
+    await routes.get("POST /api/ncc/admissions/leads")?.(
+      request(cookie, undefined, {
+        firstName: "Nile",
+        lastName: "Lead",
+        email: "lead@example.test",
+        assignedSsaId: "ssa-1",
+      }),
+      created.response
+    );
+    expect(created.result.status).toBe(400);
+    expect(createLead).not.toHaveBeenCalled();
+
+    const grouped = responseRecorder();
+    await routes.get("POST /api/ncc/admissions/lead-groups")?.(
+      request(cookie, undefined, {
+        memberLeadIds: ["lead-1", "lead-2"],
+        assignedSsaId: "ssa-1",
+      }),
+      grouped.response
+    );
+    expect(grouped.result.status).toBe(400);
+    expect(createLeadGroup).not.toHaveBeenCalled();
+  });
+
+  it("forwards lead gender on create and patch and validates its values", async () => {
+    const cookie = await login("registrar", "branch-1");
+    const createLead = vi.fn(async () => ({ ok: true, data: lead() }));
+    const patchLead = vi.fn(async () => ({ ok: true, data: lead() }));
+    const routes = captureRoutes({
+      env: env(),
+      api: { createLead, patchLead },
+    });
+    const created = responseRecorder();
+    const patched = responseRecorder();
+    await routes.get("POST /api/ncc/admissions/leads")?.(
+      request(cookie, undefined, {
+        firstName: "Nile",
+        lastName: "Lead",
+        email: "lead@example.test",
+        gender: "female",
+      }),
+      created.response
+    );
+    await routes.get("PATCH /api/ncc/admissions/leads/:leadId")?.(
+      request(cookie, { leadId: "lead-1" }, { gender: null }),
+      patched.response
+    );
+    expect(createLead.mock.calls[0]?.[1]).toMatchObject({ gender: "female" });
+    expect(patchLead).toHaveBeenCalledWith("access-ncc-session-1", "lead-1", {
+      gender: null,
+    });
+    const bad = responseRecorder();
+    await routes.get("PATCH /api/ncc/admissions/leads/:leadId")?.(
+      request(cookie, { leadId: "lead-1" }, { gender: "other" }),
+      bad.response
+    );
+    expect(bad.result).toEqual({
+      status: 400,
+      body: { error: "gender is invalid." },
+    });
+    expect(patchLead).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards convert assignedSsaId for super admin but forbids it for registrar", async () => {
+    const superCookie = await login();
+    const registrarCookie = await login("registrar", "branch-1");
+    const convertLead = vi.fn(async () => ({
+      ok: true,
+      data: {
+        lead: lead({ status: "registered", student_id: "student-1" }),
+        student: student(),
+      },
+    }));
+    const routes = captureRoutes({ env: env(), api: { convertLead } });
+    const identity = {
+      nationality: "EGY",
+      address: "12 Nile St",
+      gender: "female",
+      dateOfBirth: "2010-05-01",
+    };
+    const ok = responseRecorder();
+    const denied = responseRecorder();
+    await routes.get("POST /api/ncc/admissions/leads/:leadId/convert")?.(
+      request(
+        superCookie,
+        { leadId: "lead-1" },
+        { ...identity, assignedSsaId: "ssa-1" }
+      ),
+      ok.response
+    );
+    await routes.get("POST /api/ncc/admissions/leads/:leadId/convert")?.(
+      request(
+        registrarCookie,
+        { leadId: "lead-1" },
+        { ...identity, assignedSsaId: "ssa-1" }
+      ),
+      denied.response
+    );
+    expect(ok.result.status).toBe(200);
+    expect(convertLead).toHaveBeenCalledTimes(1);
+    expect(convertLead).toHaveBeenCalledWith(
+      "access-ncc-session-1",
+      "lead-1",
+      expect.objectContaining({ assigned_ssa_id: "ssa-1" })
+    );
+    expect(denied.result).toEqual({
+      status: 403,
+      body: { error: "assignedSsaId is not allowed for this role." },
+    });
+  });
+
   it("maps student identity create and null-clearing PATCH fields", async () => {
     const cookie = await login("registrar", "branch-1");
     const createStudent = vi.fn(
@@ -1868,7 +2007,8 @@ describe("NCC delivery write routes", () => {
       "access-ncc-session-1",
       "arab",
       true,
-      true
+      true,
+      undefined
     );
     expect(moodleGroups).toHaveBeenCalledWith(
       "access-ncc-session-1",
@@ -3665,9 +3805,11 @@ describe("NCC audit events route", () => {
       body: { error: "Forbidden" },
     });
 
+    // A row whose required fields are missing still fails the whole feed;
+    // unknown streams are skipped instead (covered in the client guard test).
     const malformed = vi.fn(async () => ({
       ok: true,
-      data: [{ id: "evt-1", stream: "payments" }],
+      data: [{ id: "evt-1", stream: "auth" }],
     }));
     const badRoutes = captureRoutes({
       env: auditEnv(),

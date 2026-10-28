@@ -244,7 +244,6 @@ describe("agenda helpers", async () => {
         pageSize: 25,
         q: "sara",
         mode: "online",
-        owner: "none",
         area: "a-1",
         page: 2,
       })
@@ -254,13 +253,9 @@ describe("agenda helpers", async () => {
       q: "sara",
       areaOfStudyId: "a-1",
       wantsOnline: true,
-      unassigned: true,
     });
-    expect(
-      leadListQuery({ pageSize: 25, owner: "ssa-1", mode: "onsite" })
-    ).toEqual({
+    expect(leadListQuery({ pageSize: 25, mode: "onsite" })).toEqual({
       pageSize: 25,
-      assignedSsaId: "ssa-1",
       wantsOnsite: true,
     });
   });

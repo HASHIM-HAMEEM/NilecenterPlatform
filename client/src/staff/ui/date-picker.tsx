@@ -278,6 +278,7 @@ export function DatePicker({
                           aria-current={iso === today ? "date" : undefined}
                           aria-label={allowed ? formatLongDate(iso) : `${formatLongDate(iso)}, ${D.unavailable}`}
                           onClick={() => {
+                            if (!allowed) return;
                             setCursor(iso);
                             pick(iso);
                           }}

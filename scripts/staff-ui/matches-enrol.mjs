@@ -22,10 +22,13 @@ const suite = createSuite("matches-enrol");
 const { step, watch, shot, finish } = suite;
 
 const MARK = `NILE-QA-MATCH-${stamp()}`;
-const BRANCH = "ccab89aa-58a9-4db9-a413-61017ad9709b";
-const ROOM = "35742b60-df8c-4807-9dea-8b8c9d09d572";
-const COURSE = "defc89e1-2561-4a30-83d0-f536d1b6854c";
-const CLASS_NAME = "NILE-QA-20260914 Arabic Foundations";
+// Staging is reseeded; branch, room, course and the class row are resolved
+// live below once the Super Admin token exists.
+let BRANCH = null;
+let ROOM = null;
+let COURSE = null;
+let CLASS_NAME = "";
+let COURSE_NAME = "";
 const EMS = (envVal("EMS_STAGING_BASE_URL") ?? "").replace(/\/+$/, "");
 
 async function emsLogin(role) {
@@ -62,9 +65,13 @@ let saToken = null;
 
 async function liveSales() {
   if (!created.studentId) return [];
-  const { data } = await ems(saToken, "GET", `/enrolments?q=${encodeURIComponent(STUDENT_EMAIL)}&page_size=100`);
-  return (data?.items ?? []).filter(
-    item => item.student_id === created.studentId && !["cancelled", "left", "completed"].includes(item.status)
+  const { data } = await ems(
+    saToken,
+    "GET",
+    `/students/${created.studentId}/enrolments?page_size=100`
+  );
+  return (data?.items ?? data ?? []).filter(
+    item => !["cancelled", "left", "completed"].includes(item.status)
   );
 }
 
@@ -127,6 +134,57 @@ const openAddLead = async () => {
 
 try {
   saToken = await emsLogin("SUPER_ADMIN");
+  if (saToken) {
+    const branches = await ems(saToken, "GET", "/branches?page_size=100");
+    const branchRows = branches.data?.items ?? branches.data ?? [];
+    BRANCH =
+      branchRows.find(
+        branch => /branch 1/i.test(branch.name) && branch.status === "active"
+      )?.id ??
+      branchRows.find(branch => branch.status === "active")?.id ??
+      null;
+    if (BRANCH) {
+      const classes = await ems(
+        saToken,
+        "GET",
+        `/classes?branch_id=${BRANCH}&status=active&page_size=100`
+      );
+      const classRows = classes.data?.items ?? classes.data ?? [];
+      const cls = classRows[0] ?? null;
+      if (cls) {
+        CLASS_NAME = cls.name ?? "";
+        COURSE = cls.course_id ?? null;
+        COURSE_NAME = cls.course_name ?? "";
+        ROOM = cls.room_id ?? null;
+      }
+      if (!ROOM) {
+        const rooms = await ems(
+          saToken,
+          "GET",
+          `/rooms?branch_id=${BRANCH}&status=active&page_size=100`
+        );
+        const roomRows = rooms.data?.items ?? rooms.data ?? [];
+        ROOM = roomRows[0]?.id ?? null;
+      }
+      if (!COURSE) {
+        const courses = await ems(
+          saToken,
+          "GET",
+          "/courses?status=active&page_size=100"
+        );
+        const courseRows = courses.data?.items ?? courses.data ?? [];
+        COURSE = courseRows[0]?.id ?? null;
+      }
+      if (COURSE && !COURSE_NAME) {
+        const course = await ems(saToken, "GET", `/courses/${COURSE}`);
+        COURSE_NAME = course.data?.display_name ?? course.data?.name ?? "";
+      }
+    }
+    step(
+      "fixture: branch, room, course and class row",
+      Boolean(BRANCH && ROOM && COURSE && CLASS_NAME)
+    );
+  }
   step("EMS super-admin token for setup", Boolean(saToken));
 
   const student = await ems(saToken, "POST", "/students", {
@@ -277,7 +335,7 @@ try {
     const cardText = (await card.textContent().catch(() => "")) ?? "";
     step(
       "student page offers the recommended course with its reason",
-      /Recommended next/.test(cardText) && /Arabic Foundations/.test(cardText) && /trial lesson/.test(cardText) && /Score 82/.test(cardText),
+      /Recommended next/.test(cardText) && new RegExp(COURSE_NAME).test(cardText) && /trial lesson/.test(cardText) && /Score 82/.test(cardText),
       cardText.slice(0, 160)
     );
     await page.waitForTimeout(300);
@@ -308,7 +366,7 @@ try {
     await page.waitForSelector("#sale-total", { timeout: 10000 });
     await page.waitForTimeout(800);
     const courseText = (await page.getByRole("combobox", { name: "Course" }).textContent().catch(() => "")) ?? "";
-    step("the sale starts on the recommended course, marked Recommended", /Arabic Foundations/.test(courseText) && /Recommended/.test(courseText), courseText);
+    step("the sale starts on the recommended course, marked Recommended", new RegExp(COURSE_NAME).test(courseText) && /Recommended/.test(courseText), courseText);
     const classRow = page.locator(".staff-choice", { hasText: CLASS_NAME });
     await classRow.waitFor({ state: "visible", timeout: 15000 }).catch(() => {});
     const later = page.getByRole("radio", { name: "Choose a class later" });

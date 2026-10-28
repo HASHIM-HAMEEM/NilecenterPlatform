@@ -25,12 +25,15 @@ import {
 } from "../admissions";
 import { staffWrite, useInvalidate, useNcc } from "../api";
 import { copy } from "../copy";
+import { nationalityName } from "../countries";
+import { intlLocale } from "../i18n";
 import { canAccess } from "../nav";
 import { isAdmissionsRole } from "../roles";
 import { runAction } from "../run-action";
 import { useStaffSession } from "../session";
 import { useStaffCrumb } from "../shell/staff-shell";
 import { ConfirmDialog } from "../ui/confirm-dialog";
+import { DocumentsSection } from "../ui/documents";
 import {
   Avatar,
   EmptyState,
@@ -510,10 +513,20 @@ export default function LeadDetailPage() {
                 <dd>{lead.areaOfStudyName ?? <NotSet />}</dd>
               </div>
               <div>
-                <dt>{L.owner}</dt>
+                <dt>{copy.roles.registrar}</dt>
                 <dd>
-                  {lead.assignedSsaName ?? (
-                    <span className="staff-muted">{L.unassigned}</span>
+                  {lead.assignedRegistrarName ?? <NotSet />}
+                </dd>
+              </div>
+              <div>
+                <dt>{copy.admissions.identity.gender}</dt>
+                <dd>
+                  {lead.gender === "male" ? (
+                    copy.admissions.identity.male
+                  ) : lead.gender === "female" ? (
+                    copy.admissions.identity.female
+                  ) : (
+                    <NotSet />
                   )}
                 </dd>
               </div>
@@ -555,7 +568,12 @@ export default function LeadDetailPage() {
               </div>
               <div>
                 <dt>{L.nationality}</dt>
-                <dd className="staff-ltr">{lead.nationality ?? <NotSet />}</dd>
+                <dd>
+                  {lead.nationality
+                    ? (nationalityName(lead.nationality, intlLocale()) ??
+                      lead.nationality)
+                    : <NotSet />}
+                </dd>
               </div>
               <div>
                 <dt>{L.added}</dt>
@@ -569,6 +587,12 @@ export default function LeadDetailPage() {
               ) : null}
             </dl>
           </section>
+          <DocumentsSection
+            entityType="lead"
+            entityId={lead.id}
+            purposes={["attachment"]}
+            canWrite={allowed}
+          />
           {group.data ? (
             <section className="staff-section">
               <h2 className="staff-section-title">
