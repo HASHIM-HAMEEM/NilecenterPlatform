@@ -10,8 +10,8 @@
 // 24px (WCAG 2.5.8). Optional: STAFF_UI_LANG=ar, STAFF_UI_WIDTHS=320,1440.
 import { BASE, chromium, createSuite, creds } from "./lib.mjs";
 
-const suite = createSuite("responsive");
 const LANG = process.env.STAFF_UI_LANG ?? "en";
+const suite = createSuite(`responsive-${LANG}`);
 const TOUCH = [320, 390, 768, 1024];
 const DESK = [1280, 1440, 1920, 2560, 3840];
 const pick = process.env.STAFF_UI_WIDTHS?.split(",").map(Number);
@@ -20,12 +20,17 @@ const height = w => (w <= 430 ? 844 : w <= 1024 ? 1180 : Math.round(w * 0.5625))
 
 const PAGES = [
   "/app/dashboard", "/app/reports", "/app/forms", "/app/notifications", "/app/profile",
+  "/app/guide", "/app/guide/read-reports",
   "/app/students", "/app/leads", "/app/leads?view=board", "/app/enrolments", "/app/placement-tests", "/app/trial-lessons",
   "/app/courses", "/app/classes", "/app/rooms", "/app/staff", "/app/branches", "/app/departments",
   "/app/lost-reasons", "/app/action-reasons", "/app/areas-of-study", "/app/custom-fields",
   "/app/moodle", "/app/system", "/app/audit", "/app/jotform",
 ];
 const DETAIL_LISTS = ["/app/students", "/app/leads", "/app/classes", "/app/courses", "/app/staff", "/app/branches", "/app/rooms", "/app/jotform"];
+// Optional focused rerun; the default still covers every page and live detail.
+const selectedPaths = process.env.STAFF_UI_PATHS?.split(",").map(value => value.trim()).filter(Boolean);
+if (selectedPaths?.some(path => !PAGES.includes(path)))
+  throw new Error("STAFF_UI_PATHS contains an unknown staff page.");
 
 function measure(touch) {
   const vw = window.innerWidth;
@@ -100,10 +105,11 @@ async function signedIn(options) {
 
 const browser = await chromium.launch();
 const desk = await signedIn({ viewport: { width: 1440, height: 900 } });
-for (const list of DETAIL_LISTS) {
+for (const list of selectedPaths?.length ? [] : DETAIL_LISTS) {
   await desk.page.goto(`${BASE}${list}`);
-  await desk.page.waitForSelector(`.staff-content a[href^='${list}/']`, { timeout: 15000 }).catch(() => {});
-  const href = await desk.page.locator(`.staff-content a[href^='${list}/']`).first().getAttribute("href").catch(() => null);
+  await desk.page.waitForLoadState("networkidle");
+  const href = await desk.page.locator(`.staff-content a[href^='${list}/']`)
+    .evaluateAll(links => links[0]?.getAttribute("href") ?? null);
   if (href) {
     PAGES.push(href.split("?")[0]);
     if (list === "/app/jotform") PAGES.push(`${href.split("?")[0]}/submissions`);
@@ -112,7 +118,7 @@ for (const list of DETAIL_LISTS) {
 const touch = await signedIn({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
 const problems = new Map();
-for (const path of PAGES) {
+for (const path of selectedPaths?.length ? selectedPaths : PAGES) {
   for (const [session, list, isTouch] of [[touch, widths(TOUCH), true], [desk, widths(DESK), false]]) {
     if (!list.length) continue;
     await session.page.setViewportSize({ width: list[0], height: height(list[0]) });

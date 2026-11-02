@@ -20,7 +20,7 @@ const suite = createSuite(`contrast-${LANGS.join("+")}`);
 const PUBLIC = ["/", "/courses", "/courses/arabic", "/book-free-trial", "/verify-certificate", "/faq", "/contact", "/about", "/privacy", "/terms", "/404", "/forms/free-trial-enquiry"];
 const AUTH = ["/auth/administration-login", "/auth/student-login", "/auth/forgot-password"];
 const STAFF = [
-  "/app/dashboard", "/app/reports", "/app/forms", "/app/notifications", "/app/profile", "/app/students", "/app/leads", "/app/leads?view=board",
+  "/app/dashboard", "/app/reports", "/app/forms", "/app/notifications", "/app/profile", "/app/guide", "/app/guide/read-reports", "/app/students", "/app/leads", "/app/leads?view=board",
   "/app/enrolments", "/app/placement-tests", "/app/trial-lessons", "/app/courses", "/app/classes", "/app/rooms",
   "/app/staff", "/app/branches", "/app/departments", "/app/lost-reasons", "/app/action-reasons",
   "/app/areas-of-study", "/app/custom-fields", "/app/moodle", "/app/system", "/app/audit", "/app/jotform",
@@ -280,7 +280,8 @@ for (const theme of THEMES) {
             for (const list of DETAIL_LISTS) {
               await page.goto(`${BASE}${list}`);
               await settle(page);
-              const href = await page.locator(`.staff-content a[href^='${list}/']`).first().getAttribute("href").catch(() => null);
+              const href = await page.locator(`.staff-content a[href^='${list}/']`)
+                .evaluateAll(links => links[0]?.getAttribute("href") ?? null);
               if (href) {
                 pages.push(href.split("?")[0]);
                 if (list === "/app/jotform") pages.push(`${href.split("?")[0]}/submissions`);

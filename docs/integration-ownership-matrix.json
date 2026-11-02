@@ -97,6 +97,28 @@
       }
     },
     {
+      "id": "staff_guide",
+      "name": "Role-aware staff guide",
+      "nileLearnAuthority": "read_model_only",
+      "moodleAuthority": "none",
+      "projectionDirection": "none",
+      "externalId": "none",
+      "conflictRule": "Versioned frontend prose describes existing workflows; live session roles gate visibility and operational pages retain their own authorization.",
+      "permittedRoles": [
+        "teacher",
+        "registrar",
+        "headofdepartment",
+        "branchadmin",
+        "superadmin"
+      ],
+      "auditOwner": "none_for_static_help",
+      "failureBehavior": "Show retry or inaccessible-scenario states; browser checklist and category preferences never authorize operational actions.",
+      "futureWriteStatus": "no_operational_writes",
+      "selectors": {
+        "clientRoutes": ["^/app/guide(?:/[^/]+)?$"]
+      }
+    },
+    {
       "id": "portal_overviews",
       "name": "Role portal overviews",
       "nileLearnAuthority": "read_model_only",

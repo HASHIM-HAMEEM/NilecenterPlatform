@@ -13,6 +13,7 @@ import {
   DoorOpen,
   GraduationCap,
   LayoutDashboard,
+  LifeBuoy,
   Library,
   ListChecks,
   Network,
@@ -45,27 +46,27 @@ export interface StaffNavGroup {
   items: StaffNavItem[];
 }
 
-const ALL: NccRole[] = [...ROLE_ORDER];
+export const ALL: NccRole[] = [...ROLE_ORDER];
 
-const ADMISSIONS: NccRole[] = [
+export const ADMISSIONS: NccRole[] = [
   "super_admin",
   "branch_admin",
   "vice_manager",
   "registrar",
 ];
 
-const STUDENTS: NccRole[] = [...ADMISSIONS, "ssa"];
+export const STUDENTS: NccRole[] = [...ADMISSIONS, "ssa"];
 
-const ENROLMENTS: NccRole[] = [
+export const ENROLMENTS: NccRole[] = [
   "super_admin",
   "branch_admin",
   "vice_manager",
   "ssa",
 ];
 
-const ROOM_READ: NccRole[] = [...ALL];
+export const ROOM_READ: NccRole[] = [...ALL];
 
-const REPORT_READ: NccRole[] = [
+export const REPORT_READ: NccRole[] = [
   "super_admin",
   "branch_admin",
   "vice_manager",
@@ -83,9 +84,9 @@ export const CLASS_READ: NccRole[] = [
   "teacher",
 ];
 
-const STAFF_AUDIT: NccRole[] = ["super_admin", "branch_admin", "vice_manager"];
+export const STAFF_AUDIT: NccRole[] = ["super_admin", "branch_admin", "vice_manager"];
 
-const BRANCH_PICKER: NccRole[] = [
+export const BRANCH_PICKER: NccRole[] = [
   "super_admin",
   "branch_admin",
   "vice_manager",
@@ -127,6 +128,13 @@ export function staffNav(): StaffNavGroup[] {
           roles: ALL,
           available: true,
           icon: Bell,
+        },
+        {
+          label: copy.nav.guide,
+          href: "/app/guide",
+          roles: ALL,
+          available: true,
+          icon: LifeBuoy,
         },
       ],
     },

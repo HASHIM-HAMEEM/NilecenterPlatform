@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { uploadNccFile } from "./api";
+import { NccFileUploadError, uploadNccFile } from "./api";
 
 const intent = {
   id: "file-1",
@@ -78,15 +78,52 @@ describe("uploadNccFile", () => {
         return jsonResponse({ file: { ...done.file, status: "archived" } });
       })
     );
-    await expect(
-      uploadNccFile({
+    let caught: unknown;
+    try {
+      await uploadNccFile({
         entityType: "student",
         entityId: "student-1",
         purpose: "passport",
         file,
-      })
-    ).rejects.toThrow(/403|failed/i);
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(NccFileUploadError);
+    expect((caught as NccFileUploadError).code).toBe("upload_failed");
     expect(calls.map(call => call.method)).toEqual(["POST", "PUT", "POST"]);
+    expect(calls[2].url).toBe("/api/ncc/files/file-1/archive");
+  });
+
+  it("maps a network/CORS rejection on the storage PUT to storage_unavailable", async () => {
+    const calls: { url: string; method: string }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({ url, method: init?.method ?? "GET" });
+        if (url === "/api/ncc/files/uploads")
+          return jsonResponse(intent);
+        if (url === intent.uploadUrl)
+          throw new TypeError("Failed to fetch");
+        return jsonResponse({ file: { ...done.file, status: "archived" } });
+      })
+    );
+    let caught: unknown;
+    try {
+      await uploadNccFile({
+        entityType: "student",
+        entityId: "student-1",
+        purpose: "passport",
+        file,
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(NccFileUploadError);
+    expect((caught as NccFileUploadError).code).toBe("storage_unavailable");
+    expect(calls.map(call => call.method)).toEqual(["POST", "PUT", "POST"]);
+    expect(calls[1].url).toBe(intent.uploadUrl);
     expect(calls[2].url).toBe("/api/ncc/files/file-1/archive");
   });
 });

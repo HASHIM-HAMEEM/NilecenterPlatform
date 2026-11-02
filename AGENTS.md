@@ -287,6 +287,10 @@ Use the commands that exist in `package.json`:
   app responsive gate (every page, 320 to 3840 px, touch emulated below
   1280). Set `STAFF_UI_LANG` to check one language; `npm run qa:staff` runs
   it for all six.
+- `node --env-file=.env.local scripts/staff-ui/guide.mjs` runs the separate
+  read-only Guide regression suite: all six languages, live role access,
+  search, category preferences, checklist storage failures, and chunk retry.
+  It does not create or modify operational EMS records.
 - `node --env-file=.env.local scripts/staff-ui/contrast.mjs` is the colour
   contrast gate for the staff app, public site and sign-in pages in light and
   dark themes (WCAG 2.2: 4.5:1 text, 3:1 large text, icons and field edges).

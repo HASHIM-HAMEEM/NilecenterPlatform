@@ -3859,6 +3859,12 @@ export async function uploadNccFile(input: {
     if (!put.ok) throw new NccFileUploadError(`Upload failed (${put.status}).`);
   } catch (error) {
     await archiveNccFileRequest(intent.id).catch(() => null);
+    if (error instanceof NccFileUploadError) throw error;
+    if (error instanceof TypeError)
+      throw new NccFileUploadError(
+        "File storage is not reachable yet.",
+        "storage_unavailable"
+      );
     throw error;
   }
   const done = await completeNccFileUploadRequest(intent.id);

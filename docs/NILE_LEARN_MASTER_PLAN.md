@@ -626,6 +626,14 @@ here rather than restating this checkpoint.
 
 Current status:
 
+- On 2026-11-03 the product owner authorized the staff Guide UI and its
+  refinement of the reference app's use-case guide. The bounded slice adds
+  `/app/guide` and `/app/guide/:scenarioId`, role-aware help for existing
+  workflows, and six-language frontend prose. The guide owns no operational
+  records, adds no backend endpoints or provider writes, and does not change
+  authentication or route-family cutover authority. Checklist completion and
+  collapsed categories are optional browser preferences, not school records.
+
 - On 2026-09-09 the product owner accepted ADR-012: NCC EMS is the target
   production authority for staff identity, sessions, and Nile-owned operational
   records; Supabase and snapshot persistence remain compatibility and test

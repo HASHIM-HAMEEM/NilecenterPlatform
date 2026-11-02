@@ -45,6 +45,8 @@
       "/app/forms/fill/:publicationId",
       "/app/forms/import",
       "/app/forms/responses/:submissionId",
+      "/app/guide",
+      "/app/guide/:scenarioId",
       "/app/hod",
       "/app/jotform",
       "/app/jotform/:rowId",

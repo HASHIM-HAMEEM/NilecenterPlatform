@@ -55,6 +55,10 @@ const StaffRoute = lazy(() =>
 const StaffNotificationsPage = lazy(
   () => import("./staff/pages/notifications-page")
 );
+const StaffGuidePage = lazy(() => import("./staff/pages/guide-page"));
+const StaffGuideDetailPage = lazy(
+  () => import("./staff/pages/guide-detail-page")
+);
 const StaffProfilePage = lazy(() => import("./staff/pages/profile-page"));
 const StaffBranchesPage = lazy(() => import("./staff/pages/branches-page"));
 const StaffBranchDetailPage = lazy(
@@ -298,6 +302,12 @@ function Router() {
         </StaffRoute>
         <StaffRoute path="/app/notifications">
           <StaffNotificationsPage />
+        </StaffRoute>
+        <StaffRoute path="/app/guide/:scenarioId">
+          <StaffGuideDetailPage />
+        </StaffRoute>
+        <StaffRoute path="/app/guide">
+          <StaffGuidePage />
         </StaffRoute>
         <StaffRoute path="/app/profile">
           <StaffProfilePage />

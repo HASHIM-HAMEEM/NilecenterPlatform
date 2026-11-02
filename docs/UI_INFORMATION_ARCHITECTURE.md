@@ -338,6 +338,7 @@ into the unified app through `legacyStaffTarget` in
 ### Routes
 
 - Overview: `/app/dashboard`, `/app/notifications`.
+- Guide: `/app/guide`, `/app/guide/:scenarioId`.
 - Profile: `/app/profile`.
 - Admissions: `/app/students`, `/app/students/:id`, `/app/leads`,
   `/app/leads/:id`, `/app/enrolments`, `/app/placement-tests`,
@@ -356,10 +357,13 @@ into the unified app through `legacyStaffTarget` in
 ### Role visibility
 
 `canAccess(path, activeRole)` gates every route. `/app/profile`,
-`/app/dashboard`, and `/app/notifications` are open to all seven EMS roles.
-Admissions items are visible to `super_admin`, `branch_admin`, `vice_manager`,
-`registrar`, and `ssa`. Rooms add `hod`; classes also add `teacher`. Sessions
-are teacher-only. Staff, audit, and the remaining organisation items are
+`/app/dashboard`, `/app/notifications`, and `/app/guide` are open to all
+seven EMS roles; guide scenarios filter further inside the page.
+Leads and bookings are visible to `super_admin`, `branch_admin`, `vice_manager`,
+and `registrar`. Students also allow `ssa`; enrolments allow those student
+roles except `registrar`. Rooms allow all seven roles. Classes allow
+`super_admin`, `branch_admin`, `vice_manager`, `ssa`, `hod`, and `teacher`.
+Sessions are teacher-only. Staff, audit, and the remaining organisation items are
 `super_admin`, `branch_admin`, and `vice_manager`; departments and the
 settings-style items are `super_admin` only. `branch_admin`, `vice_manager`,
 `registrar`, and `ssa` must pick a workspace branch before operating;

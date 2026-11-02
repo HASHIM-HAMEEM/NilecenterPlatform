@@ -7841,3 +7841,908 @@ fieldset.staff-dob {
     max-block-size: none;
   }
 }
+
+/* ---------- Staff guide -------------------------------------------------- */
+/* List: overview (stats, scenarios by area, coverage, journey), search, area
+   sections with scenario cards. Detail: step timeline, progress, notes. */
+.staff-guide {
+  --guide-tint: 14%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.staff-guide h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.staff-guide-note {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+
+.staff-guide-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Area icon tile: tone-tinted square, icon in a darker mix of the tone. */
+.staff-guide-icon {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--tone) var(--guide-tint, 14%), var(--paper-card));
+  color: color-mix(in oklab, var(--tone) 72%, var(--ink));
+}
+.staff-guide-icon[data-size="sm"] {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: var(--r-sm);
+}
+.staff-guide-icon[data-size="lg"] {
+  inline-size: 3.25rem;
+  block-size: 3.25rem;
+  border-radius: var(--r-lg);
+}
+
+.staff-guide-chip {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.5rem;
+  padding-inline: 0.5rem;
+  border-radius: 999px;
+  background: var(--paper-sunk);
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.staff-guide-chip[data-current] {
+  background: var(--ink);
+  color: var(--paper-raised);
+}
+
+.staff-guide-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.staff-guide-meta-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+}
+
+.staff-guide-mark {
+  border-radius: 3px;
+  background: rgb(var(--gold-rgb) / 0.32);
+  color: inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Super Admin role picker in the page header. */
+.staff-guide-rolepick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  white-space: normal;
+}
+.staff-guide-rolepick .ui-select {
+  min-inline-size: 11rem;
+}
+
+/* ---------- Overview ---------- */
+.staff-guide-overview {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) minmax(0, 2fr);
+  gap: 1rem;
+}
+
+.staff-guide-glance {
+  gap: 0.75rem;
+  align-self: start;
+}
+.staff-guide-glance-for {
+  margin: -0.5rem 0 0.25rem;
+  font-size: 0.875rem;
+  color: var(--ink-3);
+}
+.staff-guide-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+.staff-guide-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.125rem;
+  padding: 0.75rem;
+  border-radius: var(--r-md);
+  background: var(--paper-sunk);
+}
+.staff-guide-stats dt {
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+}
+.staff-guide-stats dd {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 2.25rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+html.staff-ui:is(:lang(ar), :lang(ur)) .staff-guide-stats dd {
+  font-family: var(--font-figures);
+  font-size: 1.875rem;
+}
+
+/* Horizontal bar chart: one row per area, each a jump link. */
+.staff-guide-bars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.staff-guide-bar {
+  display: grid;
+  grid-template-columns: auto minmax(5.5rem, 9rem) minmax(0, 1fr) 1.75rem;
+  align-items: center;
+  gap: 0.625rem;
+  inline-size: 100%;
+  min-block-size: 2.25rem;
+  padding: 0.25rem 0.375rem;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition-property: background-color;
+  transition-duration: var(--t-press);
+  transition-timing-function: var(--ease-out);
+}
+@media (hover: hover) {
+  .staff-guide-bar:hover {
+    background: var(--paper-sunk);
+  }
+}
+.staff-guide-bar-label {
+  overflow: hidden;
+  font-size: 0.875rem;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.staff-guide-bar-track {
+  display: block;
+  block-size: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--paper-sunk);
+}
+.staff-guide-bar-fill {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: color-mix(in oklab, var(--tone) 78%, var(--ink));
+}
+.staff-guide-bar-value {
+  font-family: var(--font-figures);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-align: end;
+}
+
+/* Roles × areas heatmap (Super Admin, All roles). */
+.staff-guide-matrix-scroll {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+.staff-guide-matrix table {
+  inline-size: 100%;
+  min-inline-size: 46rem;
+  border-collapse: separate;
+  border-spacing: 3px;
+}
+.staff-guide-matrix thead th {
+  padding: 0 0 0.375rem;
+  font-weight: 400;
+  vertical-align: bottom;
+}
+.staff-guide-matrix thead th .staff-guide-icon {
+  margin-inline: auto;
+}
+.staff-guide-matrix-area {
+  display: block;
+  margin-block-start: 0.25rem;
+  overflow: hidden;
+  max-inline-size: 5.5rem;
+  margin-inline: auto;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.staff-guide-matrix tbody th {
+  padding-inline-end: 0.5rem;
+  text-align: start;
+  white-space: nowrap;
+}
+.staff-guide-matrix-role {
+  padding: 0.25rem 0.375rem;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .staff-guide-matrix-role:hover {
+    background: var(--paper-sunk);
+  }
+}
+.staff-guide-matrix td {
+  block-size: 2.25rem;
+  border-radius: var(--r-sm);
+  background: color-mix(
+    in oklab,
+    var(--gold) calc(12% + var(--level, 0) * 58%),
+    var(--paper-card)
+  );
+  font-family: var(--font-figures);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-align: center;
+}
+.staff-guide-matrix td[data-empty] {
+  background: var(--paper-sunk);
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+/* Admissions journey: connected nodes, horizontal on wide screens. */
+.staff-guide-flow {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.staff-guide-flow-node {
+  position: relative;
+  min-inline-size: 0;
+}
+.staff-guide-flow-node + .staff-guide-flow-node::before {
+  content: "";
+  position: absolute;
+  inset-block-start: calc(0.5rem + 0.875rem);
+  inset-inline-start: calc(-50% + 1.25rem);
+  inset-inline-end: calc(50% + 1.25rem);
+  block-size: 2px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.staff-guide-flow-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  block-size: 100%;
+  padding: 0.5rem 0.375rem 0.625rem;
+  border-radius: var(--r-md);
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+}
+a.staff-guide-flow-link {
+  transition-property: background-color;
+  transition-duration: var(--t-press);
+  transition-timing-function: var(--ease-out);
+}
+@media (hover: hover) {
+  a.staff-guide-flow-link:hover {
+    background: var(--paper-sunk);
+  }
+}
+.staff-guide-flow-dot {
+  display: grid;
+  place-items: center;
+  padding: 0.125rem;
+  border-radius: var(--r-md);
+  background: var(--paper-card);
+}
+.staff-guide-flow-step {
+  font-family: var(--font-figures);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.staff-guide-flow-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.staff-guide-flow-area {
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--ink-3);
+}
+.staff-guide-flow-node:not([data-yours]) .staff-guide-flow-dot {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.staff-guide-flow-node:not([data-yours]) .staff-guide-flow-title {
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+/* ---------- Toolbar ---------- */
+.staff-guide-toolbar {
+  position: sticky;
+  inset-block-start: calc(var(--topbar) + 0.5rem);
+  z-index: 5;
+  gap: 0.75rem;
+  padding: 0.5rem;
+  border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--paper) 86%, transparent);
+  backdrop-filter: var(--material);
+  -webkit-backdrop-filter: var(--material);
+  box-shadow: var(--shadow-ring);
+}
+.staff-guide-search {
+  max-inline-size: none;
+}
+.staff-guide-search .staff-input {
+  inline-size: 100%;
+}
+.staff-guide-count {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* ---------- Area sections ---------- */
+.staff-guide-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+.staff-guide-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  scroll-margin-block-start: calc(var(--topbar) + 5rem);
+}
+.staff-guide-area-head {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  inline-size: 100%;
+  padding: 0.25rem;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.staff-guide-area-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-inline-size: 0;
+}
+.staff-guide-area-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.staff-guide-area-summary {
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+.staff-guide-area-count {
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.staff-guide-chevron {
+  flex-shrink: 0;
+  color: var(--ink-3);
+  rotate: -90deg;
+  transition-property: rotate;
+  transition-duration: var(--t-press);
+  transition-timing-function: var(--ease-out);
+}
+html[dir="rtl"] .staff-guide-chevron {
+  rotate: 90deg;
+}
+.staff-guide-chevron[data-open="true"],
+html[dir="rtl"] .staff-guide-chevron[data-open="true"] {
+  rotate: 0deg;
+}
+
+.staff-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.staff-guide-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  block-size: 100%;
+  padding: 1rem 1.125rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-xl);
+  background: var(--paper-card);
+  box-shadow: var(--shadow-card);
+  color: inherit;
+  text-decoration: none;
+  transition-property: box-shadow;
+  transition-duration: var(--t-press);
+  transition-timing-function: var(--ease-out);
+}
+@media (hover: hover) {
+  .staff-guide-card:hover {
+    box-shadow:
+      0 0 0 1px rgb(var(--shadow-rgb) / 0.12),
+      0 4px 14px rgb(var(--shadow-rgb) / 0.08);
+  }
+  .staff-guide-card:hover .staff-guide-card-go {
+    color: var(--ink);
+  }
+}
+.staff-guide-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.staff-guide-card-summary {
+  flex: 1;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.staff-guide-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block-start: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--ink-3);
+}
+.staff-guide-steps-pips {
+  display: inline-flex;
+  gap: 3px;
+}
+.staff-guide-steps-pips > span {
+  inline-size: 0.875rem;
+  block-size: 0.25rem;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.staff-guide-card-go {
+  margin-inline-start: auto;
+  color: var(--ink-3);
+}
+.staff-guide-card-roles {
+  padding-block-start: 0.625rem;
+  border-block-start: 1px solid var(--line);
+}
+
+/* ---------- Detail ---------- */
+.staff-guide-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--ink-3);
+}
+.staff-guide-crumbs a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.5rem;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+@media (hover: hover) {
+  .staff-guide-crumbs a:hover {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+}
+
+.staff-guide-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.staff-guide-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-block-start: 0.25rem;
+}
+.staff-guide-hero-roles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.staff-guide-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+  align-items: start;
+  gap: 1.5rem;
+}
+
+/* Timeline: numbered markers joined by a rail. */
+.staff-guide-timeline {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 1.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-xl);
+  background: var(--paper-card);
+  box-shadow: var(--shadow-card);
+  list-style: none;
+}
+.staff-guide-tstep {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  gap: 1rem;
+  padding-block-end: 1.5rem;
+}
+.staff-guide-tstep:last-child {
+  padding-block-end: 0;
+}
+.staff-guide-tstep:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  inset-block: 2.5rem 0.25rem;
+  inset-inline-start: calc(1.125rem - 1px);
+  inline-size: 2px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+.staff-guide-tstep[data-done]:not(:last-child)::before {
+  background: var(--positive);
+}
+.staff-guide-marker {
+  display: grid;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border: 2px solid var(--line-input);
+  border-radius: 999px;
+  background: var(--paper-card);
+  font-family: var(--font-figures);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  cursor: pointer;
+  transition-property: background-color, border-color, color, scale;
+  transition-duration: var(--t-press);
+  transition-timing-function: var(--ease-out);
+}
+.staff-guide-marker:not(:disabled):active {
+  scale: 0.96;
+}
+@media (hover: hover) {
+  .staff-guide-marker:hover {
+    border-color: var(--ink);
+  }
+}
+.staff-guide-tstep[data-done] .staff-guide-marker {
+  border-color: var(--positive);
+  background: var(--positive);
+  color: var(--on-tone);
+}
+.staff-guide-tbody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+  padding-block-start: 0.375rem;
+  min-inline-size: 0;
+}
+.staff-guide .staff-guide-ttitle {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.staff-guide-tdesc {
+  margin: 0;
+  max-inline-size: 44rem;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.staff-guide-tbody .staff-btn {
+  margin-block-start: 0.375rem;
+}
+.staff-guide-tstep[data-done] .staff-guide-ttitle {
+  color: var(--ink-2);
+}
+
+.staff-guide-aside {
+  position: sticky;
+  inset-block-start: calc(var(--topbar) + 1rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.staff-guide-progress {
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.125rem;
+}
+.staff-guide-progress-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+.staff-guide-ring {
+  position: relative;
+  flex-shrink: 0;
+  inline-size: 4.5rem;
+  block-size: 4.5rem;
+}
+.staff-guide-ring svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+.staff-guide-ring-track {
+  fill: none;
+  stroke: var(--paper-sunk);
+}
+.staff-guide-ring-fill {
+  fill: none;
+  stroke: var(--positive);
+  stroke-linecap: round;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .staff-guide-ring-fill {
+    transition: stroke-dasharray 300ms var(--ease);
+  }
+}
+.staff-guide-ring-value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-figures);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.staff-guide-callout {
+  gap: 0.625rem;
+  padding: 1.125rem;
+  border-inline-start: 3px solid var(--gold);
+}
+.staff-guide-callout h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.staff-guide-callout h2 svg {
+  color: color-mix(in oklab, var(--gold) 70%, var(--ink));
+}
+.staff-guide-callout ul,
+.staff-guide-related ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.staff-guide-callout li {
+  position: relative;
+  padding-inline-start: 1rem;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.staff-guide-callout li::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0.6em;
+  inset-inline-start: 0.125rem;
+  inline-size: 0.375rem;
+  block-size: 0.375rem;
+  border-radius: 999px;
+  background: var(--gold);
+}
+.staff-guide-related {
+  gap: 0.625rem;
+  padding: 1.125rem;
+}
+.staff-guide-related li > * {
+  display: block;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--r-sm);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.staff-guide-related [aria-current="page"] {
+  background: var(--paper-sunk);
+  font-weight: 600;
+  color: var(--ink);
+}
+@media (hover: hover) {
+  .staff-guide-related a:hover {
+    background: var(--paper-sunk);
+    color: var(--ink);
+  }
+}
+
+.staff-guide-pager {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.staff-guide-pager-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.875rem 1.125rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-xl);
+  background: var(--paper-card);
+  box-shadow: var(--shadow-card);
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+}
+.staff-guide-pager-link[data-next] {
+  grid-column: 2;
+  align-items: flex-end;
+  text-align: end;
+}
+@media (hover: hover) {
+  .staff-guide-pager-link:hover {
+    box-shadow:
+      0 0 0 1px rgb(var(--shadow-rgb) / 0.12),
+      0 4px 14px rgb(var(--shadow-rgb) / 0.08);
+  }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1180px) {
+  .staff-guide-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .staff-guide-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .staff-guide-aside {
+    position: static;
+  }
+}
+@media (max-width: 900px) {
+  .staff-guide-bars {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Journey turns into a vertical list with the rail on the start side. */
+  .staff-guide-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .staff-guide-flow-node + .staff-guide-flow-node::before {
+    inset-block-start: -0.5rem;
+    inset-inline-start: calc(0.375rem + 0.875rem + 1px);
+    inset-inline-end: auto;
+    inline-size: 2px;
+    block-size: 1rem;
+  }
+  .staff-guide-flow-link {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "dot title"
+      "dot area";
+    align-items: center;
+    column-gap: 0.75rem;
+    row-gap: 0;
+    text-align: start;
+  }
+  .staff-guide-flow-dot {
+    grid-area: dot;
+  }
+  .staff-guide-flow-step {
+    display: none;
+  }
+  .staff-guide-flow-title {
+    grid-area: title;
+  }
+  .staff-guide-flow-area {
+    grid-area: area;
+  }
+}
+@media (max-width: 640px) {
+  .staff-guide-toolbar {
+    position: static;
+  }
+  .staff-guide-hero {
+    flex-direction: column;
+  }
+  .staff-guide-timeline {
+    padding: 1.125rem;
+  }
+  .staff-guide-bar {
+    grid-template-columns: auto minmax(0, 1fr) 4rem 1.75rem;
+  }
+  .staff-guide-pager {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .staff-guide-pager-link[data-next] {
+    grid-column: 1;
+  }
+  .staff-guide-area-count {
+    display: none;
+  }
+}
